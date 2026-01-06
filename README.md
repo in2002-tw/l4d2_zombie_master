@@ -1,7 +1,7 @@
 # l4d2_zombie_master
-Replace Valve's AI director with a spectating player, the zombie master, in Coop and Survival.
+Replace Valve's AI director with an infected player, the zombie master, in Coop and Survival.
 
-WIP. Not ready for public release yet.
+Work in progress. Many features are still missing.
 
 If you have questions or would like to join the playtester channel contact me here:
 https://steamcommunity.com/id/gvazdass
