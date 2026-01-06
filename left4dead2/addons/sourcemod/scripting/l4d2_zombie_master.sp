@@ -3294,7 +3294,7 @@ public void OnPluginStart()
     // Commands -- all clients
     RegConsoleCmd("zm_vote", VoteZM, "zm_vote yes|no. Start a vote to enable/disable Zombie Master.");
 	RegConsoleCmd("zm", JoinZM, "Become the Zombie Master; if already ZM, open main ZM menu.");
-	RegConsoleCmd("zm_horde", ZM_Spawn_Horde, "zm_horde n type spawns n zombies; optional type: riot ceda clown mud road jimmy fallen");
+	RegConsoleCmd("zm_horde", ZM_Spawn_Horde, "zm_horde n type spawns n zombies; optional type: riot ceda clown mud road jimmy fallen (fallen is buggy)");
 	RegConsoleCmd("zm_witch", ZM_Spawn_Witch, "zm_witch n spawns witch; n=0 static, n=1 moving");
 	RegConsoleCmd("zm_smoker", ZM_Smoker, "Spawn SI where Zombie Master is pointing");
 	RegConsoleCmd("zm_hunter", ZM_Hunter, "Spawn SI where Zombie Master is pointing");
@@ -3309,13 +3309,13 @@ public void OnPluginStart()
     RegConsoleCmd("zm_delete_specials", ZM_Delete_Specials, "Delete all special infected.");
     RegConsoleCmd("zm_delete_witches", ZM_Delete_Witches, "Delete all witches.");
 	RegConsoleCmd("zm_quit", QuitZM_Command, "Give up Zombie Master and join Survivors.");
-	RegConsoleCmd("zm_panic", ZMPanic, "Zombie horde rushes survivor who has progressed the most.");
+	RegConsoleCmd("zm_panic", ZMPanic, "Zombie horde rushes survivor who has progressed the most. Bank rate is reduced by 10.");
 	RegConsoleCmd("zm_start", zm_start,"Allow survivors to leave safezone; if already so, force saferoom open and start round. Can be used by ZM and admins.");
 	RegConsoleCmd("zm_followme", ZM_Chase_ZM, "Panic horde will chase Zombie Master.");
-	RegConsoleCmd("zm_vision", ZM_Vision, "Toggle night vision for ZM.");
+	RegConsoleCmd("zm_vision", ZM_Vision, "Toggle night vision for ZM. Or press the flashlight button.");
 	RegConsoleCmd("zm_teleport", ZMTeleport, "ZM will teleport to farthest flow survivor.");
-	RegConsoleCmd("zm_control", ZMControlSI, "ZM will take control of last special infected they were looking at.");
-	RegConsoleCmd("zm_menu", ZM_Menu, "Open specific ZM menu: main common uncommon special boss cleanup other close.");
+	RegConsoleCmd("zm_control", ZMControlSI, "ZM will take control of last special infected they were looking at. Or press the USE button.");
+	RegConsoleCmd("zm_menu", ZM_Menu, "Open specific ZM menu: main common uncommon special boss cleanup other close. Use the RELOAD button to open the main menu.");
 	
 	// Commands -- admins only
 	RegAdminCmd("zm_addbank", zm_addbank, ADMFLAG_ROOT,"Add zombux to zombie master bank. Admins only.");
@@ -3328,22 +3328,22 @@ public void OnPluginStart()
 	g_hCvarAllow = CreateConVar("zm_enable", "0", "0=Plugin off, 1=Plugin on.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_hCvarAllow.AddChangeHook(ConVarChanged_Allow);
     
-    g_hBankRateBase = CreateConVar("g_fBankRateBase", "0.5", "Base ZM bank rate.",FCVAR_NOTIFY, true, 0.0, true, 1000000.0);
+    g_hBankRateBase = CreateConVar("zm_bank_rate_base", "0.5", "Base ZM bank rate.",FCVAR_NOTIFY, true, 0.0, true, 1000000.0);
     g_hBankRateBase.AddChangeHook(ConVarChanged_Cvars);
     
     g_hBankRatePlayer = CreateConVar("zm_bank_rate_player", "2.0", "Additional ZM bank rate per alive survivor.",FCVAR_NOTIFY, true, 0.0, true, 1000000.0);
     g_hBankRatePlayer.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hBankInitial = CreateConVar("zm_iBankInitial", "1200", "Initial ZM bank.",FCVAR_NOTIFY, true, 0.0, true, 1000000.0);
+    g_hBankInitial = CreateConVar("zm_bank_initial", "1200", "Initial ZM bank.",FCVAR_NOTIFY, true, 0.0, true, 1000000.0);
     g_hBankInitial.AddChangeHook(ConVarChanged_Cvars);
     
     g_hPanicCost = CreateConVar("zm_panic_cost", "300", "Horde panic cost.",FCVAR_NOTIFY, true, 0.0, true, 1000000.0);
     g_hPanicCost.AddChangeHook(ConVarChanged_Cvars_ZMenu);
     
-    g_hBankInitialPlayer = CreateConVar("zm_iBankInitial_player", "200", "Additional initial ZM bank per extra player.",FCVAR_NOTIFY, true, 0.0, true, 1000000.0);
+    g_hBankInitialPlayer = CreateConVar("zm_bank_initial_player", "200", "Additional initial ZM bank per extra player.",FCVAR_NOTIFY, true, 0.0, true, 1000000.0);
     g_hBankInitialPlayer.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hUpdateRate = CreateConVar("zm_fUpdateRate", "0.25", "Update rate for periodic ZM checks.",FCVAR_NOTIFY, true, 0.1, true, 10.0);
+    g_hUpdateRate = CreateConVar("zm_updaterate", "0.25", "Update rate for periodic ZM checks.",FCVAR_NOTIFY, true, 0.1, true, 10.0);
     g_hUpdateRate.AddChangeHook(ConVarChanged_Cvars);
     
     g_hMaxCommons = CreateConVar("zm_maxcommons", "100", "ZM max number of common zombies.",FCVAR_NOTIFY, true, 0.0, true, 1000.0);
@@ -3388,10 +3388,10 @@ public void OnPluginStart()
     g_hBonusCarAlarm = CreateConVar("zm_bonus_car_alarm", "350", "Award ZM points for triggered car alarm.",FCVAR_NOTIFY, true, 0.0, true, 10000.0);
     g_hBonusCarAlarm.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hBonusFinaleStage = CreateConVar("zm_bonus_finale", "250", "ZM bank reward per player for advancing to the next Finale stage. A tank usually spawns too!",FCVAR_NOTIFY, true, 0.0, true, 10000.0);
+    g_hBonusFinaleStage = CreateConVar("zm_bonus_finale", "250", "ZM bank reward per player for advancing to the next Finale stage. Free tanks spawn automatically.",FCVAR_NOTIFY, true, 0.0, true, 10000.0);
     g_hBonusFinaleStage.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hLockSaferoom = CreateConVar("zm_lock_saferoom", "1", "Prevent players from leaving safezone until zm prep time is over, ZM is present, and players have stopped joining.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hLockSaferoom = CreateConVar("zm_lock_saferoom", "1", "Prevent players from leaving safezone only if: there is a ZM, zm prep time is over, and players have stopped joining.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_hLockSaferoom.AddChangeHook(ConVarChanged_Cvars);
     
     g_hStopInactivity = CreateConVar("zm_inactivity", "90.0", "Seconds of inactivity before the ZM is replaced. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 10000000.0);
@@ -3400,7 +3400,7 @@ public void OnPluginStart()
     g_hMaxWitches = CreateConVar("zm_max_witches", "-1.0", "Max number of witches: -1 for automatic AliveSurvivors, otherwise whatever number is given.",FCVAR_NOTIFY, true, -1.0, true, 10000000.0);
     g_hMaxWitches.AddChangeHook(ConVarChanged_Cvars_ZMenu);
     
-    g_hMaxSI = CreateConVar("zm_max_SI", "-1.0", "Max number of total special infected: -1 for automatic AliveSurvivors, otherwise whatever number is given.",FCVAR_NOTIFY, true, -1.0, true, 10000000.0);
+    g_hMaxSI = CreateConVar("zm_max_SI", "-1.0", "Max number of total alive special infected: -1 for automatic AliveSurvivors, otherwise whatever number is given.",FCVAR_NOTIFY, true, -1.0, true, 10000000.0);
     g_hMaxSI.AddChangeHook(ConVarChanged_Cvars_ZMenu);
     
     g_hMaxUniqueSI = CreateConVar("zm_max_unique_SI", "-1.0", "Max number of each special infected class: -1 for automatic ceil(AliveSurvivors/2), otherwise whatever number is given.",FCVAR_NOTIFY, true, -1.0, true, 10000000.0);
@@ -3421,7 +3421,7 @@ public void OnPluginStart()
 	g_hSpecialCooldown = CreateConVar("zm_special_cooldown", "20.0", "Cooldown for special infected spawns.",FCVAR_NOTIFY, true, 0.0, true, 10000000.0);
 	g_hSpecialCooldown.AddChangeHook(ConVarChanged_Cvars);
 	
-	g_hMinFinaleStage = CreateConVar("zm_min_finale_stage", "60.0", "Minimum gap between rewards during Finale for ZM rewards.",FCVAR_NOTIFY, true, 0.0, true, 10000000.0);
+	g_hMinFinaleStage = CreateConVar("zm_min_finale_stage", "60.0", "Minimum gap between ZM rewards during Finale.",FCVAR_NOTIFY, true, 0.0, true, 10000000.0);
 	g_hMinFinaleStage.AddChangeHook(ConVarChanged_Cvars);
 	
 	GetCvars();
