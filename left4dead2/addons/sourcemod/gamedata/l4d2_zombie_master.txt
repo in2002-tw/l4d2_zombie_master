@@ -128,35 +128,6 @@
 				"windows"	"0"
 				"linux"		"1"
 			}
-			"FlashlightIsOn"
-			{
-				"windows"    "356"
-				"linux"        "357"
-			}  
-
-			/*Credit: Psykotikism-Mutant_Tanks*/
-			"Tank::GetIntentionInterface::Intention"
-			{
-				"linux"		"11940"
-				"mac"		"11940"
-				"windows"	"11924"
-			}
-
-			/*Credit: Psykotikism-Mutant_Tanks*/
-			"Action<Tank>::FirstContainedResponder"
-			{
-				"linux"		"2"
-				"mac"		"2"
-				"windows"	"1"
-			}
-
-			/*Credit: Psykotikism-Mutant_Tanks*/
-			"TankIdle::GetName"
-			{
-				"linux"		"36"
-				"mac"		"36"
-				"windows"	"35"
-			}
 		}
 	}
 	
@@ -173,21 +144,30 @@
 				}
 			}
 			
-			"CZombieManager"
+			"CBaseServer"
             {
-            "windows"
-            {
-            "signature" "InstallBotControl"	
-            "read" "2"
-            }
-            "linux"
-            {
-            "signature" "TheZombieManager"
-            }
-            "read" "0"
+                "signature"        "sv"
             }
 			
 		}
+		
+		"Offsets"
+        {
+            // CBaseServer::GetClient(int) - returns IClient*
+            "CBaseServer::GetClient"
+            {
+                "linux"        "7"
+                "windows"    "6"
+            }
+            // CBaseClient::UpdateAcknowledgedFramecount(int)
+            // Called with -1 to force full update (like cl_fullupdate)
+            "CBaseClient::UpdateAcknowledgedFramecount"
+            {
+                "linux"        "50"
+                "windows"    "4"
+            }
+        }
+		
 		
 		"Functions"
 		{
@@ -198,19 +178,43 @@
 				"return"		"void"
 				"this"			"entity"
 			}
+			
+			"l4d2_zombie_master::CBaseEntity::InputKill"
+            {
+                "signature"     "CBaseEntity::InputKill"
+                "callconv"      "thiscall"
+                "return"        "void"
+                "this"          "entity"
+                "arguments"
+                {
+                    "inputdata_t"
+                    {
+                        "type"  "object"
+                        "size"  "20"
+                    }
+                }
+            }
+
+            "l4d2_zombie_master::CBaseEntity::InputKillHierarchy"
+            {
+                "signature"     "CBaseEntity::InputKillHierarchy"
+                "callconv"      "thiscall"
+                "return"        "void"
+                "this"          "entity"
+                "arguments"
+                {
+                    "inputdata_t"
+                    {
+                        "type"  "object"
+                        "size"  "20"
+                    }
+                }
+            }
 		
 		}
 		
 		"Signatures"
 		{
-			"FlashLightTurnOn"
-			{
-				"library"	"server"
-				"windows"	"\x55\x8B\xEC\xA1\x2A\x2A\x2A\x2A\x83\xEC\x2A\x83\x78\x2A\x2A\x56\x8B\xF1\x0F\x8E\x2A\x2A\x2A\x2A\x8B\x16"
-				"linux"		"@_ZN9CCSPlayer16FlashlightTurnOnEb"
-				/* by Machine */
-				/* 55 8B EC A1 ? ? ? ? 83 EC ? 83 78 ? ? 56 8B F1 0F 8E ? ? ? ? 8B 16 */
-			}
 			
 			"CTerrorPlayer::ReplaceWithBot.jumptable"
 			{
@@ -287,30 +291,44 @@
 								// Search convar "z_cull_timeout"
 			}
 			
-		}
+			// windows sig:
+            // search for string "kickid %d CBaseEntity::InputKill()\n"
+            "CBaseEntity::InputKill"
+            {
+                "library"   "server"
+                "linux"     "@_ZN11CBaseEntity9InputKillER11inputdata_t"
+                "windows"   "\x56\x8B\xF1\x8B\x86\x0C\x02\x00\x00\x83\xF8\xFF\x74\x2A\x8B\x15\x2A\x2A\x2A\x2A\x8B\xC8\x81\xE1\xFF\x0F\x00\x00\x03\xC9\x8D\x4C\xCA\x04\x85\xC9\x74\x2A\xC1\xE8\x0C\x39\x41\x04\x75\x2A\x8B\x09\x85\xC9\x74\x2A\x8B\x01"
+                /* 56 8B F1 8B 86 0C 02 00 00 83 F8 FF 74 ? 8B 15 ? ? ? ? 8B C8 81 E1 FF 0F 00 00 03 C9 8D 4C CA 04 85 C9 74 ? C1 E8 0C 39 41 04 75 ? 8B 09 85 C9 74 ? 8B 01 */
+            }
 
-		"Offsets"
-		{
-			"Tank::GetIntentionInterface::Intention"
+            // windows sig:
+            // find CBaseEntity::InputKill like above, go xref it.
+            // you will see a data xref, click in. (the second one)
+            // down below you will see two strings "InputKillHierarchy" and "KillHierarchy", the call down near these strings is CBaseEntity::InputKillHierarchy.
+            "CBaseEntity::InputKillHierarchy"
+            {
+                "library"   "server"
+                "linux"     "@_ZN11CBaseEntity18InputKillHierarchyER11inputdata_t"
+                "windows"   "\x55\x8B\xEC\x53\x8B\xD9\x8B\x83\x78\x01\x00\x00"
+                /* 55 8B EC 53 8B D9 8B 83 78 01 00 00 */
+            }
+            
+            "Infected::AttackSurvivorTeam"
 			{
-				"linux"		"17176"
-				"mac"		"17176"
-				"windows"	"17204"
+				"library"	"server"
+				"linux"	"@_ZN8Infected18AttackSurvivorTeamEv"
+				"windows"	"\x56\x8B\x2A\x80\xBE\xC1\x1C\x00\x00\x01\x74\x2A\x80"
+				"mac"		"@_ZN8Infected18AttackSurvivorTeamEv"
 			}
-
-			"Action<Tank>::FirstContainedResponder"
-			{
-				"linux"		"2"
-				"mac"		"2"
-				"windows"	"1"
-			}
-
-			"TankIdle::GetName"
-			{
-				"linux"		"41"
-				"mac"		"41"
-				"windows"	"40"
-			}
+			
+			// CBaseServer global instance
+            "sv"
+            {
+                "library"    "engine"
+                "linux"        "@sv"
+            }
+            
+			
 		}
 	}
 }
