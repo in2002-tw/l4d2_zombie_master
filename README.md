@@ -1,4 +1,7 @@
 # l4d2_zombie_master
+
+![Poster by zyiks]([https://github.com/[username]/[reponame]/blob/[branch]/image.jpg?raw=true](https://raw.githubusercontent.com/gvazdas/l4d2_zombie_master/refs/heads/main/zm.png))
+
 Replace Valve's AI director with an infected player, the zombie master, in Coop and Survival.
 
 Work in progress. Many features are still missing.
