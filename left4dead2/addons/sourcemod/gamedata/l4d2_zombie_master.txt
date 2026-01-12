@@ -1,5 +1,19 @@
 "Games"
 {
+
+     "#default"
+	{
+		"Offsets"
+		{
+			"CBaseEntity::AcceptInput"
+			{
+				"windows"		"36"
+				"linux"			"37"
+				"mac"			"37"
+			}
+	     }
+	}
+     
 	"left4dead" // Credit: Forgetest
 	{
 		"Signatures" 
@@ -166,6 +180,15 @@
                 "linux"        "50"
                 "windows"    "4"
             }
+            
+            // https://github.com/Ilusion9/entityIO-sm
+            "CBaseEntity::AcceptInput"
+		  {
+				"windows"		"44"
+				"linux"			"45"
+				"mac"			"45"
+		  }
+            
         }
 		
 		
