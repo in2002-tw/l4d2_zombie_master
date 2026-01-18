@@ -1,0 +1,479 @@
+"Phrases"
+{
+	
+	"Zombie Master"
+	{
+		"en"			"Zombie Master"
+	}
+	
+	"Bank"
+	{
+		"en"			"Bank"
+	}
+	
+	"PANIC"
+	{
+		"en"			"PANIC"
+	}
+	
+	"PANIC ON"
+	{
+		"en"			"PANIC!"
+	}
+	
+	"PANIC ON time"
+	{
+		"#format"		"{1:.2f}"
+		"en"			"PANIC! {1}"
+	}
+	
+	
+	"PANIC OFF"
+	{
+		"en"			"No Panic"
+	}
+	
+	"Boomer"
+	{
+		"en"			"Boomer"
+	}
+	
+	"Smoker"
+	{
+		"en"			"Smoker"
+	}
+	
+	"Hunter"
+	{
+		"en"			"Hunter"
+	}
+	
+	"Spitter"
+	{
+		"en"			"Spitter"
+	}
+	
+	"Jockey"
+	{
+		"en"			"Jockey"
+	}
+	
+	"Charger"
+	{
+		"en"			"Charger"
+	}
+	
+	"Tank"
+	{
+		"en"			"Tank"
+	}
+	
+	"Witch"
+	{
+		"en"			"Witch"
+	}
+	
+	"Common"
+	{
+		"en"			"Common"
+	}
+	
+	"Uncommon"
+	{
+		"en"			"Uncommon"
+	}
+	
+	"Special"
+    {
+    		"en"			"Special"
+    }
+    	
+    "Boss"
+     {
+        	"en"			"Boss"
+     }
+     
+     "Cleanup"
+     {
+         	"en"			"Cleanup"
+     }
+     
+     "Other"
+     {
+         	"en"			"Other"
+     }
+    	
+    "Teleport"
+     {
+            	"en"			"Teleport"
+     }
+    	
+    "Survivors can leave"
+     {
+        		"en"			"Survivors can leave the safe zone!"
+     }
+     
+     "Round can start in"
+      {
+         		"#format"		"{1:d}"
+         		"en"			"Round will start in {1} seconds!"
+      }
+	
+	"Spawned X Y"
+	{
+		"#format"		"{1:d},{2:s}"
+		"en"			"Spawned {1} {2}"
+	}
+	
+	"Round started"
+	{
+		"en"			"The round has started!"
+	}
+	
+	"Round started short"
+	{
+		"en"			"Round started"
+	}
+	
+	"Finale started ZM"
+	{
+		"en"			"The Finale has started. Use up your bank to force the next stage."
+	}
+	
+	"Finale started"
+	{
+		"en"			"The Finale has started."
+	}
+	
+	"Inactivity notify kicked"
+	{
+		"en"			"You were removed from ZM due to inactivity."
+	}
+	
+	"Inactivity notify"
+	{
+		"en"			"The ZM was removed due to inactivity."
+	}
+	
+	"Inactivity hint"
+	{
+		"en"			"Type /zm in chat to spawn zombies."
+	}
+	
+	"No ZM"
+	{
+		"en"			"There is no Zombie Master. Type !zm to become ZM."
+	}
+	
+	"ZM joined"
+	{
+		"#format"		"{1:s}"
+		"en"			"{1} is the Zombie Master."
+	}
+	
+	"ZM quit"
+	{
+		"#format"		"{1:s}"
+		"en"			"{1} is no longer the Zombie Master."
+	}
+	
+	"ZM won"
+	{
+		"#format"		"{1:s}"
+		"en"			"{1} won the round!"
+	}
+	
+	"ZM join hint"
+	{
+		"en"			"You are the Zombie Master. Type /zm to open the menu."
+	}
+	
+	"ZM restrict notify"
+	{
+		"en"			"Zombie Master is available only for Coop and Survival."
+	}
+	
+	"Start delay notify"
+	{
+		"en"			"Round start delayed until Zombie Master joins."
+	}
+	
+	"Car alarm notify"
+	{
+		"#format"		"{1:d}"
+		"en"			"ZM awarded {1} zombux and free panic for car alarm!"
+	}
+	
+	"ZM finale advance"
+	{
+		"en"			"Finale has advanced. Bank added."
+	}
+	
+	"ZM panic notify"
+	{
+		"en"			"Horde PANIC!"
+	}
+	
+	"ZM taken"
+	{
+		"en"			"There is already a Zombie Master."
+	}
+	
+	"Weather failed"
+	{
+		"en"			"Weather could not be adjusted."
+	}
+	
+	"ZM control hint"
+	{
+		"en"			"Press the USE key to control Special Infected."
+	}
+	
+	"ZM win text"
+	{
+		"en"			"You're a real zombie master, and a real hero"
+	}
+	
+	"No ZM notify"
+	{
+		"en"			"There is no Zombie Master!"
+	}
+	
+	"Cannot start notify"
+	{
+		"en"			"The round cannot start yet."
+	}
+	
+	"Riot"
+	{
+		"en"			"Riot"
+	}
+	
+	"CEDA"
+	{
+		"en"			"CEDA"
+	}
+	
+	"Clown"
+	{
+		"en"			"Clown"
+	}
+	
+	"Mud"
+	{
+		"en"			"Mud"
+	}
+	
+	"Road"
+	{
+		"en"			"Road"
+	}
+	
+	"Witch Moving"
+	{
+		"en"			"Witch Moving"
+	}
+	
+	"Witch Static"
+	{
+		"en"			"Witch Static"
+	}
+	
+	"Jimmy Gibbs Jr"
+	{
+		"en"			"Jimmy Gibbs Jr"
+	}
+	
+	"Fallen Survivor"
+	{
+		"en"			"Fallen Survivor"
+	}
+	
+	"Delete Target"
+	{
+		"en"			"Delete Target"
+	}
+	
+	"Delete Commons"
+	{
+		"en"			"Delete Commons"
+	}
+	
+	"Delete Specials"
+	{
+		"en"			"Delete Specials"
+	}
+	
+	"Delete Witches"
+	{
+		"en"			"Delete Witches"
+	}
+	
+	"Delete ALL"
+	{
+		"en"			"Delete ALL"
+	}
+	
+	"Control (USE)"
+	{
+		"en"			"Control (USE)"
+	}
+	
+	"Start Round"
+	{
+		"en"			"Start Round"
+	}
+	
+	"Toggle Snow"
+	{
+		"en"			"Toggle Snow"
+	}
+	
+	"Toggle Rain"
+	{
+		"en"			"Toggle Rain"
+	}
+	
+	"Give Up"
+	{
+		"en"			"Give Up"
+	}
+	
+	"Witches illegal"
+	{
+		"en"			"Witches illegal"
+	}
+	
+	"Zombies illegal"
+	{
+		"en"			"Zombies illegal"
+	}
+	
+	"STOP SPAMMING"
+	{
+		"en"			"STOP SPAMMING"
+	}
+	
+	"Visible saferoom"
+	{
+		"en"			"Visible saferoom"
+	}
+	
+	"Visible survivors"
+	{
+		"en"			"Visible survivors"
+	}
+	
+	"Bad location"
+	{
+		"en"			"Bad location"
+	}
+	
+	"Too close"
+	{
+		"en"			"Too close"
+	}
+	
+	"Zombie spawns OFF"
+	{
+		"en"			"Zombie spawns OFF"
+	}
+	
+	"Chasing x"
+	{
+		"#format"		"{1:s}"
+		"en"			"Chasing {1}"
+	}
+	
+	"Panic is automatic"
+	{
+		"en"			"Panic is automatic"
+	}
+	
+	"Cannot afford"
+	{
+		"en"			"Cannot afford"
+	}
+	
+	"panic_rate_reduced"
+	{
+		"en"			"Panic ON, bank rate reduced"
+	}
+	
+	"panic_rate_normal"
+	{
+		"en"			"Panic OFF, bank rate normal"
+	}
+	
+	"Round not started"
+	{
+		"en"			"Round not started"
+	}
+	
+	"Invalid target"
+	{
+		"en"			"Invalid target"
+	}
+	
+	"Cannot control"
+	{
+		"en"			"Cannot control"
+	}
+	
+	"Panic must be ON"
+	{
+		"en"			"Panic must be ON"
+	}
+	
+	"Witch sighted"
+	{
+		"en"			"Witch sighted, no refund"
+	}
+	
+	"zm_menu_hint"
+	{
+		"en"			"Type /zm to open the menu"
+	}
+	
+	"Limit reached"
+	{
+		"en"			"Limit reached"
+	}
+	
+	"Cooldown active"
+	{
+		"en"			"Cooldown active"
+	}
+	
+	"afford_common"
+	{
+		"en"			"OH GOD WE'RE GONNA BE POOR"
+	}
+	
+	"Spawn failed"
+	{
+		"en"			"Spawned failed"
+	}
+	
+	"Spawned commons"
+	{
+		"#format"		"{1:d}"
+		"en"			"Spawned {1} Commons"
+	}
+	
+	"Cannot delete"
+	{
+		"en"			"Cannot delete"
+	}
+	
+	"Tank died reward"
+	{
+		"en"			"Tank died, dosh added"
+	}
+	
+	"afford_special"
+	{
+		"en"			"Try getting a job"
+	}
+	
+}

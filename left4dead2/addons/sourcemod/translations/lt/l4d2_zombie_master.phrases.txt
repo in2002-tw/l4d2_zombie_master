@@ -1,0 +1,479 @@
+"Phrases"
+{
+	
+	"Zombie Master"
+	{
+		"lt"           "Zombių Meistras"
+	}
+	
+	"Bank"
+	{
+		"lt"           "Bankas"
+	}
+	
+	"PANIC"
+	{
+		"lt"           "PANIKA"
+	}
+	
+	"PANIC ON"
+	{
+		"lt"           "PANIKA!"
+	}
+	
+	"PANIC ON time"
+	{
+		"#format"		"{1:.2f}"
+		"lt"           "PANIKA! {1}"
+	}
+	
+	
+	"PANIC OFF"
+	{
+		"lt"           "Nėra Panikos"
+	}
+	
+	"Boomer"
+	{
+		"lt"			"Būmeris"
+	}
+	
+	"Smoker"
+	{
+		"lt"			"Rūkytojas"
+	}
+	
+	"Hunter"
+	{
+		"lt"			"Medžiotojas"
+	}
+	
+	"Spitter"
+	{
+		"lt"			"Spjaudytoja"
+	}
+	
+	"Jockey"
+	{
+		"lt"			"Raitelis"
+	}
+	
+	"Charger"
+	{
+		"lt"			"Puolėjas"
+	}
+	
+	"Tank"
+	{
+		"lt"			"Tankas"
+	}
+	
+	"Witch"
+	{
+		"lt"			"Ragana"
+	}
+	
+	"Common"
+	{
+		"lt"			"Paprasti"
+	}
+	
+	"Uncommon"
+	{
+		"lt"            "Reti"
+	}
+	
+	"Special"
+    {
+    		"lt"            "Specialūs"
+    }
+    	
+    "Boss"
+     {
+        	"lt"            "Bosai"
+     }
+     
+     "Cleanup"
+     {
+         	"lt"            "Valymas"
+     }
+     
+     "Other"
+     {
+         	"lt"            "Kita"
+     }
+    	
+    	"Teleport"
+     {
+            	"lt"            "Teleportacija"
+     }
+    	
+    	"Survivors can leave"
+     {
+        		"lt"            "Išgyventojai gali palikti saugiąją zoną!"
+     }
+     
+     	"Round can start in"
+      {
+         		"#format"		"{1:d}"
+         		"lt"            "Partija prasidės už {1} sekundžių!"
+      }
+	
+	"Spawned X Y"
+	{
+		"#format"		"{1:d},{2:s}"
+		"lt"			"Sukurta {1} {2}"
+	}
+	
+	"Round started"
+	{
+		"lt"			"Partija prasidėjo!"
+	}
+	
+	"Round started short"
+	{
+		"lt"			"Partija prasidėjo"
+	}
+	
+	"Finale started ZM"
+	{
+		"lt"			"Finalas prasidėjo. Išnaudok banką, kad pradėti kitą stadiją."
+	}
+	
+	"Finale started"
+	{
+		"lt"			"Finalas prasidėjo."
+	}
+	
+	"Inactivity notify kicked"
+	{
+		"lt"			"Tu buvai išmestas iš Zombių Meistro dėl neaktyvumo."
+	}
+	
+	"Inactivity notify"
+	{
+		"lt"			"Zombių Meistras buvo išmestas dėl neaktyvumo."
+	}
+	
+	"Inactivity hint"
+	{
+		"lt"			"Parašyk /zm chate, kad sukurti zombius."
+	}
+	
+	"No ZM"
+	{
+		"lt"			"Zombių Meistro nėra. Parašyk /zm chate, kad tapti ZM."
+	}
+	
+	"ZM joined"
+	{
+		"#format"		"{1:s}"
+		"lt"			"{1} yra Zombių Meistras."
+	}
+	
+	"ZM quit"
+	{
+		"#format"		"{1:s}"
+		"lt"			"{1} nebėra Zombių Meistras."
+	}
+	
+	"ZM won"
+	{
+		"#format"		"{1:s}"
+		"lt"			"{1} laimėjo partiją!"
+	}
+	
+	"ZM join hint"
+	{
+		"lt"			"Tu esi Zombių Meistras. Rašyk /zm chate, kad atidaryti meniu."
+	}
+	
+	"ZM restrict notify"
+	{
+		"lt"			"Zombių Meistrą galima žaisti tik Coop ir Survival režimuose."
+	}
+	
+	"Start delay notify"
+	{
+		"lt"			"Partija prasidės, kai bus Zombių Meistras."
+	}
+	
+	"Car alarm notify"
+	{
+		"#format"		"{1:d}"
+		"lt"			"ZM gavo {1} banke ir nemokamą paniką dėl automobilio signalizacijos!"
+	}
+	
+	"ZM finale advance"
+	{
+		"lt"			"Finalas pažengė. Bankas padidintas."
+	}
+	
+	"ZM panic notify"
+	{
+		"lt"			"Zombių PANIKA!"
+	}
+	
+	"ZM taken"
+	{
+		"lt"			"Zombių Meistras yra užimtas."
+	}
+	
+	"Weather failed"
+	{
+		"lt"			"Oro pakeisti nepavyko."
+	}
+	
+	"ZM control hint"
+	{
+		"lt"			"Spausk USE mygtuką, kad valdyti Specialiuosius Zombius."
+	}
+	
+	"ZM win text"
+	{
+		"lt"			"You're a real zombie master, and a real hero"
+	}
+	
+	"No ZM notify"
+	{
+		"lt"			"Nėra Zombių Meistro!"
+	}
+	
+	"Cannot start notify"
+	{
+		"lt"			"Partija dar negali prasidėti."
+	}
+	
+	"Riot"
+	{
+		"lt"			"Policija"
+	}
+	
+	"CEDA"
+	{
+		"lt"			"CEDA"
+	}
+	
+	"Clown"
+	{
+		"lt"			"Klounas"
+	}
+	
+	"Mud"
+	{
+		"lt"			"Purvinas"
+	}
+	
+	"Road"
+	{
+		"lt"			"Kelininkas"
+	}
+	
+	"Witch Moving"
+	{
+		"lt"			"Judanti Ragana"
+	}
+	
+	"Witch Static"
+	{
+		"lt"			"Sėdinti Ragana"
+	}
+	
+	"Jimmy Gibbs Jr"
+	{
+		"lt"			"Jimmy Gibbs Jr"
+	}
+	
+	"Fallen Survivor"
+	{
+		"lt"			"Žuvęs Išgyventojas"
+	}
+	
+	"Delete Target"
+	{
+		"lt"			"Trinti Taikinį"
+	}
+	
+	"Delete Commons"
+	{
+		"lt"			"Trinti Paprastus"
+	}
+	
+	"Delete Specials"
+	{
+		"lt"			"Trinti Specialiuosius"
+	}
+	
+	"Delete Witches"
+	{
+		"lt"			"Trinti Raganas"
+	}
+	
+	"Delete ALL"
+	{
+		"lt"			"Trinti VISKĄ"
+	}
+	
+	"Control (USE)"
+	{
+		"lt"			"Valdyti (USE)"
+	}
+	
+	"Start Round"
+	{
+		"lt"			"Pradėti Partiją"
+	}
+	
+	"Toggle Snow"
+	{
+		"lt"			"Sniegas"
+	}
+	
+	"Toggle Rain"
+	{
+		"lt"			"Lietus"
+	}
+	
+	"Give Up"
+	{
+		"lt"			"Pasiduoti"
+	}
+	
+	"Witches illegal"
+	{
+		"lt"			"Raganos neleistinos"
+	}
+	
+	"Zombies illegal"
+	{
+		"lt"			"Zombiai neleistini"
+	}
+	
+	"STOP SPAMMING"
+	{
+		"lt"			"APSIRAMINK"
+	}
+	
+	"Visible saferoom"
+	{
+		"lt"			"Slėptuvė matosi"
+	}
+	
+	"Visible survivors"
+	{
+		"lt"			"Matosi išgyventojai"
+	}
+	
+	"Bad location"
+	{
+		"lt"			"Bloga vieta"
+	}
+	
+	"Too close"
+	{
+		"lt"			"Per arti"
+	}
+	
+	"Zombie spawns OFF"
+	{
+		"lt"			"Zombiai išjungti"
+	}
+	
+	"Chasing x"
+	{
+		"#format"		"{1:s}"
+		"lt"			"Vejasi {1}"
+	}
+	
+	"Panic is automatic"
+	{
+		"lt"			"Panika valdoma automatiškai"
+	}
+	
+	"Cannot afford"
+	{
+		"lt"			"Neužtenka banko"
+	}
+	
+	"panic_rate_reduced"
+	{
+		"lt"			"Panika aktyvi, banko prieaugis sumažintas"
+	}
+	
+	"panic_rate_normal"
+	{
+		"lt"			"Panika neaktyvi, banko prieaugis sugrąžintas"
+	}
+	
+	"Round not started"
+	{
+		"lt"			"Partija neprasidėjo"
+	}
+	
+	"Invalid target"
+	{
+		"lt"			"Blogas taikinys"
+	}
+	
+	"Cannot control"
+	{
+		"lt"			"Negalima valdyti"
+	}
+	
+	"Panic must be ON"
+	{
+		"lt"			"Panika turi būti aktyvi"
+	}
+	
+	"Witch sighted"
+	{
+		"lt"			"Ragana pastebėta, pinigai negrąžinami"
+	}
+	
+	"zm_menu_hint"
+	{
+		"lt"			"Atidaryti meniu rašyk /zm"
+	}
+	
+	"Limit reached"
+	{
+		"lt"			"Pasiekta riba"
+	}
+	
+	"Cooldown active"
+	{
+		"lt"			"Pauzė aktyvi"
+	}
+	
+	"afford_common"
+	{
+		"lt"			"Nubiednėjom"
+	}
+	
+	"Spawn failed"
+	{
+		"lt"			"Nepavyko sukurti"
+	}
+	
+	"Spawned commons"
+	{
+		"#format"		"{1:d}"
+		"lt"			"Sukurti {1} Paprasti"
+	}
+	
+	"Cannot delete"
+	{
+		"lt"			"Negalima trinti"
+	}
+	
+	"Tank died reward"
+	{
+		"lt"			"Tankas žuvo, bankas padidintas"
+	}
+	
+	"afford_special"
+	{
+		"lt"			"Ieškok geresnio darbo"
+	}
+	
+}
