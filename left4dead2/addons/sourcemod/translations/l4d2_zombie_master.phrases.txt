@@ -206,7 +206,7 @@
 	
 	"ZM finale advance"
 	{
-		"en"			"Finale has advanced. Bank added."
+		"en"			"Finale advanced. Bank added."
 	}
 	
 	"ZM panic notify"
@@ -226,7 +226,7 @@
 	
 	"ZM control hint"
 	{
-		"en"			"Press the USE key to control Special Infected."
+		"en"			"Press USE key to control Specials."
 	}
 	
 	"ZM win text"
@@ -452,7 +452,7 @@
 	
 	"Spawn failed"
 	{
-		"en"			"Spawned failed"
+		"en"			"Spawn failed"
 	}
 	
 	"Spawned commons"
