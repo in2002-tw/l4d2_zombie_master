@@ -475,5 +475,21 @@
 	{
 		"en"			"Try getting a job"
 	}
+
+        "Angry"
+	{
+		"en"			"Angry"
+	}
+
+        "Obstacle"
+	{
+		"en"			"Obstacle"
+	}
+
+        "Selected Special"
+	{
+		"#format"		"{1:s},{2:d},{3:d}"
+		"en"			"{1} {2}/{3} HP"
+	}
 	
 }

@@ -473,7 +473,23 @@
 	
 	"afford_special"
 	{
-		"lt"			"Ieškok geresnio darbo"
+		"lt"			"Susirask darbą"
+	}
+
+        "Angry"
+	{
+		"lt"			"Piktas"
+	}
+
+        "Obstacle"
+	{
+		"lt"			"Kliūtis"
+	}
+
+        "Selected Special"
+	{
+		"#format"		"{1:s},{2:d},{3:d}"
+		"lt"			"{1} {2}/{3} HP"
 	}
 	
 }
