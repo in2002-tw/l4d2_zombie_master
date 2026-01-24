@@ -23,10 +23,10 @@ bool DEBUG = false;
 // ZM can now see infected ladders.
 // New survivor glows
 // Damage messages (zombie master hit survivor etc...) are now disabled for ZM to prevent the sourcemod menu from being blocked visually.
+// Going into observer after controlling special infected bugs have been fixed, namely the stuttering and lag issues related to shove and 3rd person camera animations.
 
 
 // TO DO LIST:
-// 1. Observer camera bugs after dying as Special
 // 3. Gameplay balance
 // 4. Better easier to read zombie spawner visuals (done by zyiks, not implemented)
 // 5. Gas station tornado (done by zyiks, not implemented)
@@ -43,9 +43,10 @@ bool DEBUG = false;
 // 24. Dynamic light for ZM instead of annoying saturated night vision
 // 25. Fix available SI exploit
 // 26. No fog for ZM
+// 27. Check for l4d1 rules and enforce them.
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.5.7 2026-01-23"
+#define PLUGIN_VERSION 			"0.5.7 2026-01-24"
 #define GAMEDATA_FILE           PLUGIN_NAME
 
 #define FOG_DISTANCE 5000.0
@@ -3323,7 +3324,7 @@ Action CountClients(Handle timer = null)
 	
 	if (!g_bCvarAllow) return Plugin_Stop;
 	
-	PrintToServer("[zm] CountClients");
+	if (DEBUG) PrintToServer("[zm] CountClients");
 	
 	clients_timer = INVALID_HANDLE;
 	
@@ -3332,6 +3333,7 @@ Action CountClients(Handle timer = null)
 	
 	int temp_SI = 0;
 	int new_AllPlayerCount = 0;
+	int clientcount = 0;
 	int new_AliveSurvivors = 0;
 	int zClass, health;
 	reset_live_zombie_arr(false,false,true);
@@ -3339,7 +3341,9 @@ Action CountClients(Handle timer = null)
 	int last_valid_target = -1; // if only one SI on the field, auto select them for ZM control
 	for (int i=1;i<=MaxClients;i++)
 	{
+		//PrintToServer("[zm] CountClients %d", i);
 		if (!IsClientConnected(i)) continue;
+		clientcount += 1;
         if (!IsFakeClient(i))
         {
             new_AllPlayerCount += 1;
@@ -3382,7 +3386,7 @@ Action CountClients(Handle timer = null)
 			}
 		}
 		
-		if (new_AllPlayerCount>=allplayers) break;
+		if (clientcount>=allplayers) break;
 		
 	}
 	
@@ -3447,7 +3451,7 @@ Action ZMTeleport(int client, int args)
     return Plugin_Continue;
 }
 
-void transfer_SI_properties(int entity_new, char[] modelname, float vOrigin[3], float vAngles[3], float vVelocity[3], int health, int fFlags, float timestamp_cooldown, char targetname[64] = "")
+void transfer_SI_properties(int entity_new, char[] modelname, float vOrigin[3], float vAngles[3], float vVelocity[3], int health, int maxhealth, int fFlags, float timestamp_cooldown, char targetname[64] = "")
 {
    if (!IsValidClient(entity_new)) return;
    int zClass = GetEntProp(entity_new, Prop_Send, "m_zombieClass");
@@ -3455,6 +3459,7 @@ void transfer_SI_properties(int entity_new, char[] modelname, float vOrigin[3], 
    
    TeleportEntity(entity_new,vOrigin,vAngles,vVelocity);
    SetEntProp(entity_new,Prop_Data,"m_iHealth",health);
+   SetEntProp(entity_new,Prop_Data,"m_iMaxHealth",maxhealth);
    float cooldown_remaining = timestamp_cooldown - GetGameTime();
    if (cooldown_remaining<=0.0) cooldown_remaining = 0.0;
    else
@@ -3526,6 +3531,9 @@ void remove_ZM_glow(int entity)
     if (DEBUG) PrintToServer("[zm] remove_ZM_glow %d unexpectedly did nothing", entity);
 }
 
+
+//CTerrorPlayer->m_vomitStart (16152) changed from 0.0000 to 574.6000
+//CTerrorPlayer->m_vomitFadeStart (16156) changed from 0.0000 to 579.6000
 Action UpdateSurvivorGlow(Handle timer, int client)
 {
     if (!IsValidClient(client)) return Plugin_Stop;
@@ -3851,6 +3859,7 @@ Action ZMControlSI(int client, int args)
             GetClientEyePosition(zm_client, vEye);
             GetEntPropVector(zm_client, Prop_Data, "m_vecAbsVelocity", vVelocity);
             int health = GetEntProp(zm_client,Prop_Data,"m_iHealth");
+            int maxhealth = GetEntProp(zm_client,Prop_Data,"m_iMaxHealth");
             int fFlags = GetEntProp(zm_client, Prop_Data, "m_fFlags");
             zm_use_notify = true;
             
@@ -3901,7 +3910,7 @@ Action ZMControlSI(int client, int args)
                 live_zombie_arr[zClass] -= 1;
                 
                 int bot = ZM_Spawn_SI(zm_client,zClass,true,true,vOrigin);
-                if (IsValidEntity(bot)) transfer_SI_properties(bot,sModelName,vOrigin,vAngles,vVelocity,health,fFlags,timestamp_cooldown,targetName);
+                if (IsValidEntity(bot)) transfer_SI_properties(bot,sModelName,vOrigin,vAngles,vVelocity,health,maxhealth,fFlags,timestamp_cooldown,targetName);
                 
             }
             
@@ -3910,10 +3919,16 @@ Action ZMControlSI(int client, int args)
             SetEntProp(zm_client, Prop_Send, "m_zombieClass", 0);
             SetEntProp(zm_client, Prop_Data, "m_iObserverMode", 6);
             if (clients_timer==INVALID_HANDLE) clients_timer = CreateTimer(0.1,CountClients,TIMER_FLAG_NO_MAPCHANGE);
-            TeleportEntity(zm_client, vEye, vAngles, NULL_VECTOR);
             L4D_CleanupPlayerState(zm_client);
             //remove_attached_lights(zm_client);
-            JoinZM(zm_client,0);
+            SetEntityMoveType(zm_client, MOVETYPE_NONE);
+            SetEntPropVector(zm_client, Prop_Data, "m_vecVelocity", {0.0,0.0,0.0});
+            SetEntPropVector(zm_client, Prop_Data, "m_vecAngVelocity", {0.0,0.0,0.0});
+            SetEntPropFloat(zm_client, Prop_Send, "m_flFallVelocity", 0.0);
+            TeleportEntity(zm_client, vEye, vAngles, NULL_VECTOR);
+            //RequestFrame(OnNextFrame_FixCamera, GetClientUserId(zm_client));
+            CreateTimer(0.1,ZM_FixCamera,GetClientUserId(zm_client),TIMER_FLAG_NO_MAPCHANGE);
+            //JoinZM(zm_client,0);
             
             //cleanup_bad_glows();
         
@@ -3958,6 +3973,7 @@ Action ZMControlSI(int client, int args)
              update_hint("%T", "Cannot control", zm_client);
              return Plugin_Continue;
          }
+         int maxhealth = GetEntProp(entity,Prop_Data,"m_iMaxHealth");
          int fFlags = GetEntProp(entity, Prop_Data, "m_fFlags");
          zClass = GetEntProp(entity, Prop_Send, "m_zombieClass");
          
@@ -3989,7 +4005,7 @@ Action ZMControlSI(int client, int args)
          else L4D_TakeOverZombieBot(zm_client,entity);
          L4D_CleanupPlayerState(zm_client);
          
-         transfer_SI_properties(zm_client,sModelName,vOrigin,vAngles,vVelocity,health,fFlags,timestamp_cooldown,targetName);
+         transfer_SI_properties(zm_client,sModelName,vOrigin,vAngles,vVelocity,health,maxhealth,fFlags,timestamp_cooldown,targetName);
          
          already_replaced_SI = false;
          zm_use_notify = true;
@@ -4076,6 +4092,8 @@ Action OnTakeDamage_ZM(int victim, int &attacker, int &inflictor, float &damage,
                 live_SI -= 1;
                 live_zombie_arr[zClass] -= 1;
                 
+                int maxhealth = GetEntProp(victim, Prop_Data, "m_iMaxHealth");
+                
                 //ChangeClientTeam(zm_client,TEAM_SPECTATOR);
                 //SetEntityFlags(zm_client, GetEntityFlags(zm_client) & FL_FROZEN);
                 //SetEntityMoveType(zm_client, MOVETYPE_NONE);
@@ -4121,7 +4139,7 @@ Action OnTakeDamage_ZM(int victim, int &attacker, int &inflictor, float &damage,
                 {
                     if (attacker==zm_client) attacker = bot;
                     if (DEBUG) PrintToServer("[zm] OnTakeDamage_ZM replaced with bot, bool %d", already_replaced_SI);
-                    transfer_SI_properties(bot,sModelName,vOrigin,vAngles,vVelocity,health,fFlags,timestamp_cooldown,targetName);
+                    transfer_SI_properties(bot,sModelName,vOrigin,vAngles,vVelocity,health,maxhealth,fFlags,timestamp_cooldown,targetName);
                     //SetClientName(bot, "bozo");
                     //SetEntProp(bot, Prop_Send, "m_bSurvivorGlowEnabled", 0);
                     //SetEntProp(bot, Prop_Send, "m_glowColorOverride", 0);
@@ -4151,9 +4169,6 @@ Action OnTakeDamage_ZM(int victim, int &attacker, int &inflictor, float &damage,
             
             //L4D_SetClass(int client, int zombieClass)
             //L4D_BecomeGhost(int client);
-             
-            SetEntPropVector(zm_client, Prop_Data, "m_vecVelocity", {0.0,0.0,0.0});
-            SetEntPropVector(zm_client, Prop_Data, "m_vecAngVelocity", {0.0,0.0,0.0});
             
             L4D_State_Transition(zm_client, STATE_OBSERVER_MODE);
             SetEntProp(zm_client, Prop_Send, "m_zombieClass", 0);
@@ -4164,11 +4179,15 @@ Action OnTakeDamage_ZM(int victim, int &attacker, int &inflictor, float &damage,
        	    SetEntProp(zm_client, Prop_Send, "m_iFOV", 0);
    	        SetEntProp(zm_client, Prop_Send, "m_iFOVStart", 0);
        	    SetEntPropFloat(zm_client, Prop_Send, "m_flFOVRate", 0.0);
-            JoinZM(zm_client,0);
+            //JoinZM(zm_client,0);
             L4D_CleanupPlayerState(zm_client);
+            SetEntityMoveType(zm_client, MOVETYPE_NONE);
+            SetEntPropVector(zm_client, Prop_Data, "m_vecVelocity", {0.0,0.0,0.0});
+            SetEntPropVector(zm_client, Prop_Data, "m_vecAngVelocity", {0.0,0.0,0.0});
+            SetEntPropFloat(zm_client, Prop_Send, "m_flFallVelocity", 0.0);
             TeleportEntity(zm_client, zm_deathPos, zm_deathAngles, NULL_VECTOR);
-            SetEntityMoveType(zm_client, MOVETYPE_NOCLIP);
-            //RequestFrame(OnNextFrame_UpdateDeathTime, GetClientUserId(zm_client));
+            //RequestFrame(OnNextFrame_FixCamera, GetClientUserId(zm_client));
+            CreateTimer(0.30,ZM_FixCamera,GetClientUserId(zm_client),TIMER_FLAG_NO_MAPCHANGE);
             
             ////L4D_RespawnPlayer(zm_client);
             //L4D_SetBecomeGhostAt(zm_client,0.0);
@@ -4179,6 +4198,45 @@ Action OnTakeDamage_ZM(int victim, int &attacker, int &inflictor, float &damage,
         return Plugin_Continue;
 } 
 
+Action ZM_FixCamera(Handle timer, int userid)
+{
+    if (!IsValidClientZM()) return Plugin_Stop;
+    int client = GetClientOfUserId(userid);
+    if (client!=zm_client) return Plugin_Stop;
+    SetEntPropVector(zm_client, Prop_Data, "m_vecVelocity", {0.0,0.0,0.0});
+    SetEntPropVector(zm_client, Prop_Data, "m_vecAngVelocity", {0.0,0.0,0.0});
+    SetEntPropFloat(zm_client, Prop_Send, "m_flFallVelocity", 0.0);
+        
+    //baseclass->m_flProgressBarStartTime (10500) changed from 2931.5334 to 2941.5668
+    ///m_stunTimer->m_timestamp (13020) changed from -1.0000 to 2941.5668
+    //terrorlocaldata->m_TimeForceExternalView (16412) changed from -1.0000 to 2947.3334
+    //m_staggerTimer->m_timestamp (12792) changed from -1.0000 to 2947.5668
+    //CTerrorPlayer->m_staggerStart (12796) changed from 0.0000 0.0000 0.0000 to -6851.1694 -1033.1778 384.0312
+    //CTerrorPlayer->m_staggerDir (12808) changed from 0.0000 0.0000 0.0000 to 0.5364 -0.8439 0.0000
+    //CTerrorPlayer->m_staggerDist (12820) changed from 0.0000 to 400.0000
+    // m_Collision->m_usSolidFlags (436) changed from 16 to 20
+    // serveranimdata->m_flCycle (1168) changed from 0.1042 to 0.0000
+    // baseclass->m_hGroundEntity (600) changed from 125337600 to -1
+    // terrorlocaldata->m_scrimmageSphereCenter (11268) changed from -6855.1640 -1066.9466 419.5312 to -6858.5883 -1132.8811 418.0312
+    //terrorlocaldata->m_scrimmageSphereInitialRadius (11280) changed from 2438.6347 to 2433.9594
+    //terrorlocaldata->m_scrimmageStartTime (11288) changed from 2902.7001 to 2931.5334
+    
+    //SetEntProp(zm_client, Prop_Send, "m_CollisionGroup", 0),
+    //SetEntProp(zm_client, Prop_Send, "m_nSolidType", 0),
+    //SetEntProp(zm_client, Prop_Send, "m_usSolidFlags", 0x0004);
+    SetEntPropFloat(zm_client, Prop_Send, "m_scrimmageSphereInitialRadius", 0.0);
+    SetEntPropFloat(zm_client, Prop_Send, "m_scrimmageStartTime", 0.0);
+    SetEntPropFloat(zm_client, Prop_Send, "m_TimeForceExternalView", 0.0);
+    SetEntPropFloat(zm_client, Prop_Send, "m_staggerDist", 0.0); 
+    SetEntPropVector(zm_client, Prop_Send, "m_scrimmageSphereCenter", {0.0,0.0,0.0});
+    
+    JoinZM(zm_client,0);
+    
+    EmitSoundToClient(zm_client,SOUND_VISION);
+    
+    return Plugin_Stop;
+}
+
 void OnNextFrame_Damage(any packed)
 {
     DataPack pack = view_as<DataPack>(packed);
@@ -4187,6 +4245,7 @@ void OnNextFrame_Damage(any packed)
     int client = GetClientOfUserId(userid);
     if (!IsValidClient(client))
     {
+        PrintToServer("[zm] OnNextFrame_Damage failed, report this to mod authors");
         CloseHandle(pack);
         return;
     }
@@ -4476,6 +4535,8 @@ Action zm_update(Handle timer)
    t_last_update = t_now;
    
     // Check if witches were spotted to prevent refunds.
+    // asdf future:
+    // CTerrorPlayer->m_hasVisibleThreats (12616) changed from 1 to 0
     float witch_pos[3];
     int entity = -1;
     int counted_witches = 0;
