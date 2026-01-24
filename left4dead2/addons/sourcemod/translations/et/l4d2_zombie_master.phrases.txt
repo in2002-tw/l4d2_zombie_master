@@ -1,0 +1,495 @@
+"Phrases"
+{
+	
+	"Zombie Master"
+	{
+		"et"			"Zombimeister"
+	}
+	
+	"Bank"
+	{
+		"et"			"Pank"
+	}
+	
+	"PANIC"
+	{
+		"et"			"PAANIKA"
+	}
+	
+	"PANIC ON"
+	{
+		"et"			"PAANIKA!"
+	}
+	
+	"PANIC ON time"
+	{
+		"#format"		"{1:.2f}"
+		"et"			"PAANIKA! {1}"
+	}
+	
+	
+	"PANIC OFF"
+	{
+		"et"			"Paanikat pole"
+	}
+	
+	"Boomer"
+	{
+		"et"			"Boomer"
+	}
+	
+	"Smoker"
+	{
+		"et"			"Suitsetaja"
+	}
+	
+	"Hunter"
+	{
+		"et"			"Kütt"
+	}
+	
+	"Spitter"
+	{
+		"et"			"Sülitaja"
+	}
+	
+	"Jockey"
+	{
+		"et"			"Ratsanik"
+	}
+	
+	"Charger"
+	{
+		"et"			"Rammija"
+	}
+	
+	"Tank"
+	{
+		"et"			"Tank"
+	}
+	
+	"Witch"
+	{
+		"et"			"Nõid"
+	}
+	
+	"Common"
+	{
+		"et"			"Tavalised"
+	}
+	
+	"Uncommon"
+	{
+		"et"			"Haruldased"
+	}
+	
+	"Special"
+    {
+		"et"			"Erilised"
+    }
+    	
+    "Boss"
+     {
+		"et"			"Bossid"
+     }
+     
+     "Cleanup"
+     {
+		"et"			"Puhastus"
+     }
+     
+     "Other"
+     {
+		"et"			"Muu"
+     }
+    	
+    "Teleport"
+     {
+		"et"			"Teleporteeri"
+     }
+    	
+    "Survivors can leave"
+     {
+		"et"			"Ellujääjad võivad lahkuda turvatsoonist!"
+     }
+     
+     "Round can start in"
+      {
+		"#format"		"{1:d}"
+		"et"			"Voor algab {1} sekundi pärast!"
+      }
+	
+	"Spawned X Y"
+	{
+		"#format"		"{1:d},{2:s}"
+		"et"			"Loodi {1} {2}"
+	}
+	
+	"Round started"
+	{
+		"et"			"Voor on alanud!"
+	}
+	
+	"Round started short"
+	{
+		"et"			"Voor alanud"
+	}
+	
+	"Finale started ZM"
+	{
+		"et"			"Finaal on alanud. Kuluta kogu pank järgmise etappi alustamiseks."
+	}
+	
+	"Finale started"
+	{
+		"et"			"Finaal on alanud."
+	}
+	
+	"Inactivity notify kicked"
+	{
+		"et"			"Sind eemaldati ZM-ist tegevusetuse tõttu."
+	}
+	
+	"Inactivity notify"
+	{
+		"et"			"ZM eemaldati tegevusetuse tõttu."
+	}
+	
+	"Inactivity hint"
+	{
+		"et"			"Zombide loomiseks kirjuta chatti /zm."
+	}
+	
+	"No ZM"
+	{
+		"et"			"Zombimeistrit pole. ZM-iks saamiseks kirjuta !zm."
+	}
+	
+	"ZM joined"
+	{
+		"#format"		"{1:s}"
+		"et"			"{1} on Zombimeister."
+	}
+	
+	"ZM quit"
+	{
+		"#format"		"{1:s}"
+		"et"			"{1} ei ole enam Zombimeister."
+	}
+	
+	"ZM won"
+	{
+		"#format"		"{1:s}"
+		"et"			"{1} võitis vooru!"
+	}
+	
+	"ZM join hint"
+	{
+		"et"			"Sa oled Zombimeister. Menüü avamiseks kirjuta /zm."
+	}
+	
+	"ZM restrict notify"
+	{
+		"et"			"Zombimeister on saadaval ainult Coop ja Survival režiimides."
+	}
+	
+	"Start delay notify"
+	{
+		"et"			"Voor ei saa alata ilma Zombimeistrita."
+	}
+	
+	"Car alarm notify"
+	{
+		"#format"		"{1:d}"
+		"et"			"ZM sai {1} zombiraha ja tasuta paanika autoalarmist!"
+	}
+	
+	"ZM finale advance"
+	{
+		"et"			"Finaal edenes - Zombiraha panka lisatud."
+	}
+	
+	"ZM panic notify"
+	{
+		"et"			"Hordi PAANIKA!"
+	}
+	
+	"ZM taken"
+	{
+		"et"			"Zombimeister on juba olemas."
+	}
+	
+	"Weather failed"
+	{
+		"et"			"Ilma ei õnnestunud muuta."
+	}
+	
+	"ZM control hint"
+	{
+		"et"			"Eriliste juhtimiseks vajuta USE nuppu."
+	}
+	
+	"ZM win text"
+	{
+		"et"			"Sa oled tõeline zombimeister ja ehtne kalevipoeg"
+	}
+	
+	"No ZM notify"
+	{
+		"et"			"Zombimeistrit pole!"
+	}
+	
+	"Cannot start notify"
+	{
+		"et"			"Voor ei saa veel alata."
+	}
+	
+	"Riot"
+	{
+		"et"			"Riot"
+	}
+	
+	"CEDA"
+	{
+		"et"			"CEDA"
+	}
+	
+	"Clown"
+	{
+		"et"			"Kloun"
+	}
+	
+	"Mud"
+	{
+		"et"			"Muda"
+	}
+	
+	"Road"
+	{
+		"et"			"Tee"
+	}
+	
+	"Witch Moving"
+	{
+		"et"			"Liikuv nõid"
+	}
+	
+	"Witch Static"
+	{
+		"et"			"Paigal nõid"
+	}
+	
+	"Jimmy Gibbs Jr"
+	{
+		"et"			"Jimmy Gibbs Jr"
+	}
+	
+	"Fallen Survivor"
+	{
+		"et"			"Langenud ellujäänu"
+	}
+	
+	"Delete Target"
+	{
+		"et"			"Kustuta sihtmärk"
+	}
+	
+	"Delete Commons"
+	{
+		"et"			"Kustuta tavalised"
+	}
+	
+	"Delete Specials"
+	{
+		"et"			"Kustuta erilised"
+	}
+	
+	"Delete Witches"
+	{
+		"et"			"Kustuta nõiad"
+	}
+	
+	"Delete ALL"
+	{
+		"et"			"Kustuta KÕIK"
+	}
+	
+	"Control (USE)"
+	{
+		"et"			"Juhi (USE)"
+	}
+	
+	"Start Round"
+	{
+		"et"			"Alusta vooru"
+	}
+	
+	"Toggle Snow"
+	{
+		"et"			"Lülita Lund"
+	}
+	
+	"Toggle Rain"
+	{
+		"et"			"Lülita vihma"
+	}
+	
+	"Give Up"
+	{
+		"et"			"Anna alla"
+	}
+	
+	"Witches illegal"
+	{
+		"et"			"Nõiad keelatud"
+	}
+	
+	"Zombies illegal"
+	{
+		"et"			"Zombid keelatud"
+	}
+	
+	"STOP SPAMMING"
+	{
+		"et"			"ÄRA SPÄMMI"
+	}
+	
+	"Visible saferoom"
+	{
+		"et"			"Turvatuba nähtav"
+	}
+	
+	"Visible survivors"
+	{
+		"et"			"Ellujäänud nähtavad"
+	}
+	
+	"Bad location"
+	{
+		"et"			"Halb asukoht"
+	}
+	
+	"Too close"
+	{
+		"et"			"Liiga lähedal"
+	}
+	
+	"Zombie spawns OFF"
+	{
+		"et"			"Zombide tekitamine VÄLJALÜLITATUD"
+	}
+	
+	"Chasing x"
+	{
+		"#format"		"{1:s}"
+		"et"			"Jälitab {1}"
+	}
+	
+	"Panic is automatic"
+	{
+		"et"			"Paanika on automaatne"
+	}
+	
+	"Cannot afford"
+	{
+		"et"			"Pole piisavalt zombiraha"
+	}
+	
+	"panic_rate_reduced"
+	{
+		"et"			"Paanika SEES, zombiraha kasv vähendatud"
+	}
+	
+	"panic_rate_normal"
+	{
+		"et"			"Paanika VÄLJAS, zombiraha kasv normaalne"
+	}
+	
+	"Round not started"
+	{
+		"et"			"Voor pole alanud"
+	}
+	
+	"Invalid target"
+	{
+		"et"			"Vigane sihtmärk"
+	}
+	
+	"Cannot control"
+	{
+		"et"			"Ei saa juhtida"
+	}
+	
+	"Panic must be ON"
+	{
+		"et"			"Paanika peab olema SEES"
+	}
+	
+	"Witch sighted"
+	{
+		"et"			"Nõid nähtud, raha ei tagastata"
+	}
+	
+	"zm_menu_hint"
+	{
+		"et"			"Menüü avamiseks kirjuta /zm"
+	}
+	
+	"Limit reached"
+	{
+		"et"			"Piirang käes"
+	}
+	
+	"Cooldown active"
+	{
+		"et"			"Ooteaeg aktiivne"
+	}
+	
+	"afford_common"
+	{
+		"et"			"OH JUMAL, ME JÄÄME VAESEKS"
+	}
+	
+	"Spawn failed"
+	{
+		"et"			"Loomine ebaõnnestus"
+	}
+	
+	"Spawned commons"
+	{
+		"#format"		"{1:d}"
+		"et"			"Loodi {1} tavalist"
+	}
+	
+	"Cannot delete"
+	{
+		"et"			"Ei saa kustutada"
+	}
+	
+	"Tank died reward"
+	{
+		"et"			"Tank suri, raha lisatud"
+	}
+	
+	"afford_special"
+	{
+		"et"			"Hangi endale töökoht"
+	}
+
+	"Angry"
+	{
+		"et"			"Vihane"
+	}
+
+	"Obstacle"
+	{
+		"et"			"Takistus"
+	}
+
+	"Selected Special"
+	{
+		"#format"		"{1:s},{2:d},{3:d}"
+		"et"			"{1} {2}/{3} HP"
+	}
+	
+}
