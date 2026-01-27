@@ -1,0 +1,494 @@
+// Credit: in2002
+"Phrases"
+{
+	"Zombie Master"
+	{
+		"zho"			"殭屍大師"
+	}
+	
+	"Bank"
+	{
+		"zho"			"點數銀行"
+	}
+	
+	"PANIC"
+	{
+		"zho"			"屍走爆發"
+	}
+	
+	"PANIC ON"
+	{
+		"zho"			"暴走中！"
+	}
+	
+	"PANIC ON time"
+	{
+		"#format"		"{1:.2f}"
+		"zho"			"暴走中！ {1}"
+	}
+	
+	"PANIC OFF"
+	{
+		"zho"			"冷靜期"
+	}
+	
+	"Boomer"
+	{
+		"zho"			"嘔吐者 (Boomer)"
+	}
+	
+	"Smoker"
+	{
+		"zho"			"牽制者 (Smoker)"
+	}
+	
+	"Hunter"
+	{
+		"zho"			"獵人 (Hunter)"
+	}
+	
+	"Spitter"
+	{
+		"zho"			"噴吐者 (Spitter)"
+	}
+	
+	"Jockey"
+	{
+		"zho"			"騎師 (Jockey)"
+	}
+	
+	"Charger"
+	{
+		"zho"			"衝鋒者 (Charger)"
+	}
+	
+	"Tank"
+	{
+		"zho"			"坦克 (Tank)"
+	}
+	
+	"Witch"
+	{
+		"zho"			"女巫 (Witch)"
+	}
+	
+	"Common"
+	{
+		"zho"			"一般感染者"
+	}
+	
+	"Uncommon"
+	{
+		"zho"			"特殊小怪"
+	}
+	
+	"Special"
+    {
+    		"zho"			"特感"
+    }
+    	
+    "Boss"
+     {
+        	"zho"			"Boss"
+     }
+     
+     "Cleanup"
+     {
+         	"zho"			"清理"
+     }
+     
+     "Other"
+     {
+         	"zho"			"其他"
+     }
+    	
+    "Teleport"
+     {
+            	"zho"			"傳送"
+     }
+    	
+    "Survivors can leave"
+     {
+        		"zho"			"倖存者可以離開安全區了！"
+     }
+     
+     "Round can start in"
+      {
+         		"#format"		"{1:d}"
+         		"zho"			"回合將在 {1} 秒後開始！"
+      }
+	
+	"Spawned X Y"
+	{
+		"#format"		"{1:d},{2:s}"
+		"zho"			"已生成 {1} 個 {2}"
+	}
+	
+	"Round started"
+	{
+		"zho"			"回合開始！"
+	}
+	
+	"Round started short"
+	{
+		"zho"			"回合開始"
+	}
+	
+	"Finale started ZM"
+	{
+		"zho"			"終局已開始。用光點數來強制進入下個階段。"
+	}
+	
+	"Finale started"
+	{
+		"zho"			"終局已開始。"
+	}
+	
+	"Inactivity notify kicked"
+	{
+		"zho"			"你因長時間閒置已被解除殭屍大師身分。"
+	}
+	
+	"Inactivity notify"
+	{
+		"zho"			"殭屍大師因閒置而被解除。"
+	}
+	
+	"Inactivity hint"
+	{
+		"zho"			"在對話框輸入 /zm 來生成殭屍。"
+	}
+	
+	"No ZM"
+	{
+		"zho"			"目前沒有殭屍大師。輸入 !zm 來成為大師。"
+	}
+	
+	"ZM joined"
+	{
+		"#format"		"{1:s}"
+		"zho"			"{1} 已成為殭屍大師。"
+	}
+	
+	"ZM quit"
+	{
+		"#format"		"{1:s}"
+		"zho"			"{1} 不再擔任殭屍大師。"
+	}
+	
+	"ZM won"
+	{
+		"#format"		"{1:s}"
+		"zho"			"{1} 贏得了這場比賽！"
+	}
+	
+	"ZM join hint"
+	{
+		"zho"			"你是殭屍大師。輸入 /zm 來開啟選單。"
+	}
+	
+	"ZM restrict notify"
+	{
+		"zho"			"殭屍大師模式僅限於戰役與生存模式。"
+	}
+	
+	"Start delay notify"
+	{
+		"zho"			"回合將延遲到殭屍大師加入後開始。"
+	}
+	
+	"Car alarm notify"
+	{
+		"#format"		"{1:d}"
+		"zho"			"因觸發警報，獎勵大師 {1} 點殭屍幣並贈送免費暴走！"
+	}
+	
+	"ZM finale advance"
+	{
+		"zho"			"終局推進。點數已增加。"
+	}
+	
+	"ZM panic notify"
+	{
+		"zho"			"殭屍大暴走！"
+	}
+	
+	"ZM taken"
+	{
+		"zho"			"已經有人擔任殭屍大師了。"
+	}
+	
+	"Weather failed"
+	{
+		"zho"			"無法調整天氣。"
+	}
+	
+	"ZM control hint"
+	{
+		"zho"			"按下「使用鍵 (E)」來控制特感。"
+	}
+	
+	"ZM win text"
+	{
+		"zho"			"你是真正的殭屍大師，也是真正的英雄"
+	}
+	
+	"No ZM notify"
+	{
+		"zho"			"目前沒有殭屍大師！"
+	}
+	
+	"Cannot start notify"
+	{
+		"zho"			"回合現在還不能開始。"
+	}
+	
+	"Riot"
+	{
+		"zho"			"鎮暴警察"
+	}
+	
+	"CEDA"
+	{
+		"zho"			"CEDA 人員"
+	}
+	
+	"Clown"
+	{
+		"zho"			"小丑"
+	}
+	
+	"Mud"
+	{
+		"zho"			"泥巴人"
+	}
+	
+	"Road"
+	{
+		"zho"			"道路工人"
+	}
+	
+	"Witch Moving"
+	{
+		"zho"			"遊走的女巫"
+	}
+	
+	"Witch Static"
+	{
+		"zho"			"坐著的女巫"
+	}
+	
+	"Jimmy Gibbs Jr"
+	{
+		"zho"			"吉米吉布斯二世"
+	}
+	
+	"Fallen Survivor"
+	{
+		"zho"			"墮落倖存者"
+	}
+	
+	"Delete Target"
+	{
+		"zho"			"刪除目標"
+	}
+	
+	"Delete Commons"
+	{
+		"zho"			"刪除一般殭屍"
+	}
+	
+	"Delete Specials"
+	{
+		"zho"			"刪除特感"
+	}
+	
+	"Delete Witches"
+	{
+		"zho"			"刪除女巫"
+	}
+	
+	"Delete ALL"
+	{
+		"zho"			"刪除全部"
+	}
+	
+	"Control (USE)"
+	{
+		"zho"			"控制 (使用鍵)"
+	}
+	
+	"Start Round"
+	{
+		"zho"			"開始回合"
+	}
+	
+	"Toggle Snow"
+	{
+		"zho"			"切換下雪"
+	}
+	
+	"Toggle Rain"
+	{
+		"zho"			"切換下雨"
+	}
+	
+	"Give Up"
+	{
+		"zho"			"放棄大師身分"
+	}
+	
+	"Witches illegal"
+	{
+		"zho"			"此處禁止放置女巫"
+	}
+	
+	"Zombies illegal"
+	{
+		"zho"			"此處禁止放置殭屍"
+	}
+	
+	"STOP SPAMMING"
+	{
+		"zho"			"請勿洗畫面"
+	}
+	
+	"Visible saferoom"
+	{
+		"zho"			"可看見安全室"
+	}
+	
+	"Visible survivors"
+	{
+		"zho"			"可看見倖存者"
+	}
+	
+	"Bad location"
+	{
+		"zho"			"無效的位置"
+	}
+	
+	"Too close"
+	{
+		"zho"			"距離太近"
+	}
+	
+	"Zombie spawns OFF"
+	{
+		"zho"			"殭屍生成已關閉"
+	}
+	
+	"Chasing x"
+	{
+		"#format"		"{1:s}"
+		"zho"			"正在追逐 {1}"
+	}
+	
+	"Panic is automatic"
+	{
+		"zho"			"暴走為自動觸發"
+	}
+	
+	"Cannot afford"
+	{
+		"zho"			"點數不足"
+	}
+	
+	"panic_rate_reduced"
+	{
+		"zho"			"暴走中，點數獲取率降低"
+	}
+	
+	"panic_rate_normal"
+	{
+		"zho"			"冷靜期，點數獲取率正常"
+	}
+	
+	"Round not started"
+	{
+		"zho"			"回合尚未開始"
+	}
+	
+	"Invalid target"
+	{
+		"zho"			"無效目標"
+	}
+	
+	"Cannot control"
+	{
+		"zho"			"無法控制"
+	}
+	
+	"Panic must be ON"
+	{
+		"zho"			"必須在暴走期間"
+	}
+	
+	"Witch sighted"
+	{
+		"zho"			"女巫已被目擊，無法退款"
+	}
+	
+	"zm_menu_hint"
+	{
+		"zho"			"輸入 /zm 開啟選單"
+	}
+	
+	"Limit reached"
+	{
+		"zho"			"已達上限"
+	}
+	
+	"Cooldown active"
+	{
+		"zho"			"冷卻中"
+	}
+	
+	"afford_common"
+	{
+		"zho"			"喔不，我們要破產了！"
+	}
+	
+	"Spawn failed"
+	{
+		"zho"			"生成失敗"
+	}
+	
+	"Spawned commons"
+	{
+		"#format"		"{1:d}"
+		"zho"			"已生成 {1} 隻一般殭屍"
+	}
+	
+	"Cannot delete"
+	{
+		"zho"			"無法刪除"
+	}
+	
+	"Tank died reward"
+	{
+		"zho"			"坦克死亡，點數已撥款"
+	}
+	
+	"afford_special"
+	{
+		"zho"			"沒錢？去找份工作吧"
+	}
+
+	"Angry"
+	{
+		"zho"			"Angry"
+	}
+
+        "Obstacle"
+	{
+		"zho"			"Obstacle"
+	}
+
+        "Selected Special"
+	{
+		"#format"		"{1:s},{2:d},{3:d}"
+		"zho"			"{1} {2}/{3} HP"
+	}
+
+}
