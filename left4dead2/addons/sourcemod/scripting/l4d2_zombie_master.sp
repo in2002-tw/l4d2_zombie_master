@@ -5943,12 +5943,12 @@ void CreateShake(float intensity, float range, float vPos[3])
 Action Open_Saferoom(Handle timer, bool scary = false)
 {
     if (!IsValidEntRef(g_iLockedDoor)) return Plugin_Stop;
-    start_zm_round(false); // doesnt play sound
     if (scary && zm_stage<ZM_STARTED)
     {
         //EmitSoundToAll(SOUND_PANIC_ON,g_iLockedDoor,_,SNDLEVEL_ROCKET,_,SNDVOL_NORMAL,GetRandomInt(90,110),_,_,_,_,_);
         EmitSoundToAll(SOUND_PANIC_ON,_,_,_,_,SNDVOL_NORMAL);
     }
+    start_zm_round(false); // doesnt play sound
     //if (GetEntProp(g_iLockedDoor,Prop_Send,"m_eDoorState")!=DOOR_STATE_CLOSED) return Plugin_Stop;
     //AcceptEntityInput(g_iLockedDoor, "Break");
     SetEntProp(g_iLockedDoor, Prop_Send, "m_spawnflags", GetEntProp(g_iLockedDoor,Prop_Send,"m_spawnflags")|DOOR_FLAG_IGNORE_USE);
