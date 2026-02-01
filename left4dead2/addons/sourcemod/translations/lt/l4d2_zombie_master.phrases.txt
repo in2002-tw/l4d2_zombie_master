@@ -493,4 +493,16 @@
 		"lt"			"{1} {2}/{3} HP"
 	}
 	
+	"Offered ZM Ticker"
+	{
+		"#format"		"{1:s},{2:d}"
+		"lt"			"ZM pasiūlytas: {1} ({2})"
+	}
+	
+	"Offer ZM"
+	{
+		"lt"			"Tau siūlomas Zombių Meistras. Ar sutinki?"
+	}
+
+	
 }

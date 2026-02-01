@@ -486,10 +486,22 @@
 		"en"			"Obstacle"
 	}
 
-        "Selected Special"
+    "Selected Special"
 	{
 		"#format"		"{1:s},{2:d},{3:d}"
 		"en"			"{1} {2}/{3} HP"
 	}
+	
+	"Offered ZM Ticker"
+	{
+		"#format"		"{1:s},{2:d}"
+		"en"			"ZM offered: {1} ({2})"
+	}
+	
+	"Offer ZM"
+	{
+		"en"			"You are offered Zombie Master. Accept?"
+	}
+	
 	
 }

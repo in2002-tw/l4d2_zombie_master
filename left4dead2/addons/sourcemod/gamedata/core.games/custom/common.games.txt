@@ -1,0 +1,10 @@
+"Games"
+{
+	"#default"
+	{		
+		"Keys"
+		{
+			"RadioMenuTimeout"		"0.5"
+		}
+	}
+}

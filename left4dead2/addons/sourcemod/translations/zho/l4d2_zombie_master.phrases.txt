@@ -491,4 +491,15 @@
 		"zho"			"{1} {2}/{3} HP"
 	}
 
+	"Offered ZM Ticker"
+	{
+		"#format"		"{1:s},{2:d}"
+		"zho"			"ZM offered: {1} ({2})"
+	}
+	
+	"Offer ZM"
+	{
+		"zho"			"You are offered Zombie Master. Accept?"
+	}
+
 }
