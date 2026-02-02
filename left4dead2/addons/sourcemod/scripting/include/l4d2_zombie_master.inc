@@ -281,6 +281,7 @@ stock void infected_panic(Handle hInfectedAttackSurvivorTeam)
     }
 }
 
+// Delay Elapsed Time only. Onslaught events regularly reset Elapsed time but not remaining time.
 stock void invalidate_natural_mob(float duration = 3600.0)
 {
     CountdownTimer MobSpawnTimer = L4D2Direct_GetMobSpawnTimer();
@@ -290,6 +291,31 @@ stock void invalidate_natural_mob(float duration = 3600.0)
         //CTimer_Start(MobSpawnTimer,duration); 
         CTimer_SetDuration(MobSpawnTimer,3600.0);
     }
+}
+
+stock Action infinite_delay_natural_mob(Handle timer = null)
+{
+    CountdownTimer MobSpawnTimer = L4D2Direct_GetMobSpawnTimer();
+    if (MobSpawnTimer)
+    {
+        CTimer_Invalidate(MobSpawnTimer);
+        CTimer_Start(MobSpawnTimer,3600.0); 
+        CTimer_SetDuration(MobSpawnTimer,3600.0);
+    }
+    return Plugin_Stop;
+}
+
+stock bool is_survivor_vomited(int client)
+{
+    float t_start = GetEntPropFloat(client, Prop_Send, "m_vomitStart");
+    if (t_start<=0.0) return false;
+    //float t_end = GetEntPropFloat(client, Prop_Send, "m_vomitFadeStart");
+    float t_end = GetEntPropFloat(client, Prop_Send, "m_itTimer", 1); 
+    if (t_end<=0.0) return false;
+    t_end -= 1.0;
+    float t_now = GetGameTime();
+    if (t_now<t_end && t_now>=t_start) return true;
+    return false;
 }
 
 stock bool get_client_auth(int client, char auth[65])
@@ -389,10 +415,15 @@ static int RGB_CRITICAL[3] =    {160,24,24};
 static int RGB_LOW[3] =         {178,63,0};
 static int RGB_MEDIUM[3] =      {150,122,8};
 static int RGB_HIGH[3] =        {9,175,49};
-stock void GetSurvivorHealthColor(int client, int hp, int color[3])
+static int RGB_RESCUE[3] =      {255,102,0};
+stock void GetSurvivorHealthColor(int hp,int color[3],bool rescue=false,bool critical=false)
 {
-      
-      if ( hp<=1 || L4D_IsPlayerHangingFromLedge(client) || L4D_IsPlayerIncapacitated(client) )
+      if (rescue)
+      {
+          color = RGB_RESCUE;
+          return;
+      }
+      else if ( critical || hp<=1 )
       {
           color = RGB_CRITICAL;
           return;

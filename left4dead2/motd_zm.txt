@@ -1,0 +1,19 @@
+/zm_horde n type angry flow
+Spawn n common infected.
+optional type: riot ceda clown mud road
+optional angry: chase survivors on spawn even if PANIC is OFF. More expensive than non-angry variant.
+optional flow: spawn in a random place ahead of furthest survivor instead of spawner position.
+
+/zm_witch n flow
+Spawn witch.
+n=0 static, n=1 moving
+optional flow: spawn ahead of the survivor with the most progress in the map.
+
+/zm_smoker flow
+/zm_hunter flow
+/zm_jockey flow
+/zm_spitter flow
+/zm_boomer flow
+/zm_charger flow
+/zm_tank flow
+optional flow: spawn any of the specials ahead of the speedrunning survivor instead of where your spawner is pointing.
