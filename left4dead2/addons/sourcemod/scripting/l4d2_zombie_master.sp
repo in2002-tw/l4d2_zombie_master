@@ -24,8 +24,7 @@
 // 1. Cooldown of units is working correctly now: when the unit dies, the cooldown timer starts ticking to free up the slot for spawning.
 // Previously the cooldown would begin counting down as soon as the unit was spawned, not when killed.
 // This fixes an exploit where zombies could be made available to spawn faster than they should be by deleting them.
-// 2. Improved finale logic - stages should change a little faster, and escape stage (when the rescue vehicle arrives) will always give ZM a reward.
-// 3. Scripted panic bug fixed - panic should not last forever for some scripted events now.
+// 2. Improved finale logic - stages should change a little faster when the ZM runs out of resources. Escape stage (when the rescue vehicle arrives) will always give ZM a reward.
 // 4. "Fair Queue" system. New cvars: zm_fair_queue zm_fair_queue_wait
 // 6. ZM flashlight.
 // 7. Less janky ZM control. Players will now see that they killed the ZM.
@@ -33,6 +32,8 @@
 // 9. Panic overhaul
 // 10. Tidied up code.
 // 11. Survivor glow overhaul.
+// 12. Better "ZM looking at survivor" detection for automatic zombie spawns.
+// 13. ZM hint added for automatic zombie spawns.
 
 bool DEBUG = false;
 
@@ -40,13 +41,12 @@ bool DEBUG = false;
 // 3. Gameplay balance
 // 4. Better easier to read zombie spawner visuals (done by zyiks, not implemented)
 // 5. Gas station tornado (done by zyiks, not implemented)
-// 7. More models for Specials -- maybe l4d2_random_si_model is enough
 // 10. Fixing stuck zombies -- hull checks by zyiks
 // 12. Better navmesh integration
 // 15. Performance bottlenecks.
 // 16. Is there a way to prevent observers from being able to see the ZM info?
 // 19. Improve ZM experience: spawning zombies, traversing map, reading survivor flow
-// 21. Survivor bots will sometimes teleport to ZM and fall to their death
+// 21. Survivor bots teleport to ZM and fall to their death
 // 26. No fog for ZM
 // 27. Add Louis and Ellis "This is just like Zombie Master!" sounds
 // 29. Lag due to too many commons.
@@ -56,9 +56,10 @@ bool DEBUG = false;
 // Disable for finales: L4D_IsMissionFinalMap
 // L4D2Direct_GetMapMaxFlowDistance
 // 33. MOTD
+// 34. Incoming attack jingle fix
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.7.1 2026-02-01"
+#define PLUGIN_VERSION 			"0.7.1 2026-02-02"
 #define GAMEDATA_FILE           PLUGIN_NAME
 
 public Plugin myinfo =
@@ -215,13 +216,17 @@ char g_sCvarMPGameMode[32];
 // Notify ZM about being able to control units with USE
 bool zm_use_notify = false;
 
+// Notify ZM about being able to spawn zombies automatically by looking at survivors.
+bool zm_flow_notify = false; // "Flow hint"
+
 ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer, g_hStopInactivity, g_hMaxUniqueSI,
        g_hUpdateRate, g_hMaxCommons, g_hSpawnMinDistance, g_hBonusCarAlarm, g_hBonusFinaleStage, g_hPanicCost, g_hBonusSurvival,
        g_hCostBoomer, g_hCostSpitter, g_hCostHunter, g_hCostSmoker, g_hCostJockey, g_hMaxWitches, g_hMaxSI, g_hSpecialCooldown,
        g_hCostCharger, g_hCostTank, g_hCostWitchStatic, g_hCostWitchMoving, g_hCostCommon, g_hCostUncommon, g_hLockSaferoom,
-       g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait;
+       g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait,
+       g_hMenuTimeout;
 float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fStopInactivity,g_fSpecialCooldown,
-g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait;
+g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout;
 
 bool g_bFairQueue;
 
@@ -737,6 +742,9 @@ public void OnPluginStart()
 	
 	g_hFairQueueWait = CreateConVar("zm_fair_queue_wait", "10.0", "How long a client has to respond to ZM offer.",FCVAR_NOTIFY, true, 0.0, true, 30.0);
 	g_hFairQueueWait.AddChangeHook(ConVarChanged_Cvars);
+	
+	g_hMenuTimeout = CreateConVar("zm_menu_reopen_ping", "0.05", "Threshold ping in seconds to periodically re-open ZM sourcemod menu. Prevents menu from closing unexpectedly for high pings. Lower values are more aggressive about reopening. 0.0 will always periodically reopen the menu. -1.0 to disable.",FCVAR_NOTIFY, true, -1.0, true, 1000.0);
+	g_hMenuTimeout.AddChangeHook(ConVarChanged_Cvars);
 	
 	GetCvars();
 
@@ -1794,6 +1802,11 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
             //{
                 update_ZM_spawner(vPos,vPos_spawner,SPAWNER_CONDITIONAL);
                 //if (hint) update_hint("%T", "Visible survivors", zm_client);
+                if (hint && !zm_flow_notify)
+                {
+                    update_hint("%T", "Flow hint", zm_client);
+                    if (IsValidClientZM()) PrintHintText(zm_client, "%t", "Flow hint");
+                }
                 return SPAWNER_SIGHT;
             //}
         }
@@ -1961,7 +1974,7 @@ void can_zm_start()
        {
            saferoom_lock(false);
            if (zm_stage<ZM_STARTED) EmitSoundToAll(SOUND_READY);
-           update_EMS_HUD();
+           update_EMS_HUD(); 
        }
    }
    else if (g_bLockSaferoom && !saferoom_locked)
@@ -3671,6 +3684,7 @@ Action ZMControlSI(int client, int args)
             int health = GetEntProp(zm_client,Prop_Data,"m_iHealth");
             int maxhealth = GetEntProp(zm_client,Prop_Data,"m_iMaxHealth");
             int fFlags = GetEntProp(zm_client, Prop_Data, "m_fFlags");
+            //L4D2_StopInstructorHint("use_hint");
             zm_use_notify = true;
             
             zm_deathPos = vEye;
@@ -3808,6 +3822,7 @@ Action ZMControlSI(int client, int args)
          
          transfer_SI_properties(zm_client,sModelName,vOrigin,vAngles,vVelocity,health,maxhealth,fFlags,timestamp_cooldown,targetName);
          if (stagger) L4D_StaggerPlayer(zm_client,zm_client,NULL_VECTOR);
+         //L4D2_StopInstructorHint("use_hint");
          zm_use_notify = true;
   	 }
   	 else update_hint("%T", "Cannot control", zm_client);
@@ -3816,7 +3831,6 @@ Action ZMControlSI(int client, int args)
 }
 
 float t_stutter = 0.0;
-
 bool verify_stutter_fixed()
 {
     if (!IsValidClientZM()) return true;
@@ -3826,24 +3840,30 @@ bool verify_stutter_fixed()
         t_stutter = GetEngineTime() + latency;
         return false;
     }
-    if (IsPlayerAlive(zm_client))
+    if ( IsPlayerAlive(zm_client) &&
+         (GetEntProp(zm_client,Prop_Send,"m_zombieClass")!=ZOMBIECLASS_TANK || GetClientTeam(zm_client)!=TEAM_INFECTED) )
     {
-        if (GetClientTeam(zm_client)!=TEAM_INFECTED) return true;
-        if (GetEntProp(zm_client, Prop_Send, "m_zombieClass")==ZOMBIECLASS_BOOMER) return true;
+        return true;
+    }
+    if ( GetEngineTime()>(t_stutter+5.0) )
+    {
+        LogMessage("[zm] Tank stutter fix timed out, report this to mod authors");
+        EmitSoundToAll(SOUND_BUG);
+        return true;
     }
     return false;
 }
 
-void NextFrame_Check_Stutter()
+void NextFrame_Check_Stutter(int stored_roundcount)
 {
     if (DEBUG) LogMessage("[zm] NextFrame_Check_Stutter");
+    if (stored_roundcount!=roundcount) return;
     if (verify_stutter_fixed() && GetEngineTime()>t_stutter) RequestFrame(ZM_FixCamera,false);
-    else RequestFrame(NextFrame_Check_Stutter);
+    else RequestFrame(NextFrame_Check_Stutter,stored_roundcount);
 }
 
 void ZM_FixTankStutter(bool freeze = true)
 {
-
     if (!IsValidClientZM()) return;
     if (GetClientTeam(zm_client)==TEAM_SURVIVOR && IsPlayerAlive(zm_client)) return;
 
@@ -3864,7 +3884,7 @@ void ZM_FixTankStutter(bool freeze = true)
     t_stutter = GetEngineTime() + latency;
     
     if (DEBUG) LogMessage("[zm] ZM_FixTankStutter, latency %f", latency);
-    RequestFrame(NextFrame_Check_Stutter);
+    RequestFrame(NextFrame_Check_Stutter,roundcount);
 }
 
 Action Unfreeze_ZM(Handle timer=null)
@@ -4042,9 +4062,7 @@ void update_entref_control(int new_entref)
     
 }
 
-// asdf future: make trace through world geometry to select units through walls
 int entref_lastlook = -1;
-// asdf lastlook not registering survivors properly
 void update_ZM_looktarget(bool draw = true)
 {
    entref_lastlook = -1;
@@ -4198,7 +4216,7 @@ Action zm_update(Handle timer)
        		temp_navArea = L4D_GetNearestNavArea(pos,500.0,true,false,true,TEAM_SURVIVOR);
        		if (!navArea_validStart(temp_navArea))
        		{
-           		if (IsValidClientZM())
+           		if (IsValidClientZM() && !force_started)
            		{
                		start_zm_round();
                		break;
@@ -4273,7 +4291,11 @@ Action zm_update(Handle timer)
           survival_activated = false;
       }
       
-      if (zm_menu_state>ZM_MENU_CLOSED) RequestFrame(reopen_zm_menu,false);
+      if (zm_menu_state>ZM_MENU_CLOSED)
+      {
+          bool force_reopen = g_fMenuTimeout>=0.0 && GetClientAvgLatency(zm_client,NetFlow_Both)>=g_fMenuTimeout;
+          RequestFrame(reopen_zm_menu,force_reopen);
+      }
       
       zm_just_died = false;
       
@@ -4327,7 +4349,7 @@ Action zm_update(Handle timer)
       
       if ((t_now-t_zm_activity)>=10.0)
       {
-         if (zm_stage<ZM_END) PrintToChatAll("[zm] %t", "No ZM");
+         if (zm_stage<ZM_END && L4D_IsInIntro()<=0) PrintToChatAll("[zm] %t", "No ZM");
          update_t_zm_activity(t_now);
       }
       zm_client = -1;
@@ -4574,6 +4596,7 @@ void GetCvars()
     
     g_bFairQueue = g_hFairQueue.BoolValue;
     g_fFairQueueWait = g_hFairQueueWait.FloatValue;
+    g_fMenuTimeout = g_hMenuTimeout.FloatValue;
     
     zm_update(zm_timer);
     
@@ -4676,6 +4699,8 @@ Action JoinZM(int client, int args)
     GetClientName(client,name,sizeof(name));
     int playcount = get_rounds(client);
     PrintToChatAll("[zm] %t (%d)", "ZM joined", name, playcount);
+    zm_use_notify = playcount>0;
+    zm_flow_notify = playcount>0;
     DispatchKeyValue(zm_client, "targetname", "zm_client");
     SetEntProp(client, Prop_Send, "m_zombieClass", 0);
     SetEntProp(client, Prop_Data, "m_iObserverMode", 6);
@@ -5768,6 +5793,7 @@ public Action evtPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     {
         if (panic_target==zm_client) panic_target = -1;
         DispatchKeyValue(zm_client, "targetname", "zm_client");
+        zm_just_died = true;
         RequestFrame(ZM_FixCamera,true);
     }
     
@@ -5848,6 +5874,7 @@ void mark_flow_survivor_and_zombie(int survivor=-1, int zombie=-1)
 {
     
     if (!IsValidClientZM()) return;
+    zm_flow_notify = true;
      
     float vOrigin[3], draw_start[3], draw_end[3];
     
@@ -5870,6 +5897,48 @@ void mark_flow_survivor_and_zombie(int survivor=-1, int zombie=-1)
     }
     
 }
+
+//Action CloseEventHandle(Handle timer, Event event)
+//{
+//    if (event==null) return Plugin_Stop;
+//    CloseHandle(event);
+//    return Plugin_Stop;
+//}
+
+// Special Infected: USE key hint
+// Survivor: look at survivor to spawn zombies
+//stock bool CreateZMHint(int target)				
+//{
+//	if (!IsValidClient(target) || !IsValidClientZM()) return false;
+//	
+//	Event event = CreateEvent("instructor_server_hint_create", true);
+//	if (event == null) return false;
+//    
+//	char finalizedColor[16];
+//	Format(finalizedColor, 16, "%d,%d,%d", 255, 255, 255);
+//
+//	event.SetString("hint_name", "zm_hint");
+//	event.SetInt("hint_target", target);
+//	//event.SetInt("hint_activator_userid",activator_userid);
+//	event.SetString("hint_caption", "Control Special Infected");
+//	event.SetString("hint_color", finalizedColor);
+//	event.SetString("hint_icon_onscreen", "icon_tip");
+//	event.SetString("hint_icon_offscreen", "icon_tip");
+//	event.SetString("hint_binding", "");
+//	event.SetFloat("hint_icon_offset", 0.0);
+//	event.SetFloat("hint_range", 10000.0);
+//	event.SetInt("hint_timeout", 0);
+//	event.SetBool("hint_allow_nodraw_target", true);
+//	event.SetBool("hint_nooffscreen", false);
+//	event.SetBool("hint_forcecaption", true);
+//	event.SetInt("hint_flags", L4D2_IHFLAG_STATIC);
+//	//event.Fire();
+//	event.FireToClient(zm_client);
+//	//FireEvent(event, client); 
+//	LogMessage("[zm] CreateZMHint");
+//	CreateTimer(30.0,CloseEventHandle,event);
+//	return true;
+//}
 
 int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=false, float pos[3] = {0.0,0.0,0.0}, bool glow = true, bool flow = false)
 {
@@ -5981,12 +6050,17 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
             active_looktarget = true;
             add_available_zombie(ZOMBIECLASS,-1);
             L4D2_SetCustomAbilityCooldown(bot,0.0); //spitter fix
+            //CreateZMHint(bot); 
             
             if (!zm_use_notify && zm_stage>=ZM_STARTED)
             {
                 update_hint("%T", "ZM control hint", zm_client);
-                if (IsValidClientZM()) PrintHintText(zm_client, "%t", "ZM control hint");
-                zm_use_notify = true;
+                if (IsValidClientZM())
+                {
+                    PrintHintText(zm_client, "%t", "ZM control hint");
+                    //CreateZMHint(bot); 
+                    //zm_use_notify = true;
+                }
             }
             else 
             {
@@ -6673,13 +6747,13 @@ void IsAllowed()
 	    HookEvent("triggered_car_alarm", Event_TriggeredCarAlarm, EventHookMode_Post);
 		HookEvent("player_death", evtPlayerDeath, EventHookMode_Post);
 		HookEvent("player_incapacitated", evtPlayerIncap, EventHookMode_Post);
-		HookEvent("player_team", evtPlayerTeam);
+		HookEvent("player_team", evtPlayerTeam, EventHookMode_Post);
 		HookEvent("finale_start", 			evtFinaleStart, EventHookMode_PostNoCopy); //final starts, some of final maps won't trigger
 		HookEvent("finale_radio_start", 	evtFinaleStart, EventHookMode_PostNoCopy); //final starts, all final maps trigger
 		HookEvent("gauntlet_finale_start", 	evtFinaleStart, EventHookMode_PostNoCopy); //final starts, only rushing maps trigger (C5M5, C13M4)
-		HookEvent("player_spawn", evtPlayerSpawned);
-		HookEvent("player_left_start_area", evt_ZM_start_imminent);
-		HookEvent("player_left_checkpoint", evt_ZM_start_imminent);
+		HookEvent("player_spawn", evtPlayerSpawned, EventHookMode_Post);
+		HookEvent("player_left_start_area", evt_ZM_start_imminent, EventHookMode_Post);
+		HookEvent("player_left_checkpoint", evt_ZM_start_imminent, EventHookMode_Post);
 		HookEvent("player_activate", Event_PlayerActivate, EventHookMode_Post);
 		HookEvent("finale_vehicle_ready", EvtFinaleEnding, EventHookMode_PostNoCopy);
 		HookEvent("finale_vehicle_incoming", EvtFinaleEnding, EventHookMode_PostNoCopy);
@@ -6755,13 +6829,13 @@ void IsAllowed()
 	    UnhookEvent("triggered_car_alarm", Event_TriggeredCarAlarm, EventHookMode_Post);
 		UnhookEvent("player_death", evtPlayerDeath, EventHookMode_Post);
 		UnhookEvent("player_incapacitated", evtPlayerIncap, EventHookMode_Post);
-		UnhookEvent("player_team", evtPlayerTeam);
+		UnhookEvent("player_team", evtPlayerTeam, EventHookMode_Post);
 		UnhookEvent("finale_start", 			evtFinaleStart, EventHookMode_PostNoCopy); //final starts, some of final maps won't trigger
 		UnhookEvent("finale_radio_start", 	evtFinaleStart, EventHookMode_PostNoCopy); //final starts, all final maps trigger
 		UnhookEvent("gauntlet_finale_start", 	evtFinaleStart, EventHookMode_PostNoCopy); //final starts, only rushing maps trigger (C5M5, C13M4)
-		UnhookEvent("player_spawn", evtPlayerSpawned);
-		UnhookEvent("player_left_start_area", evt_ZM_start_imminent);
-		UnhookEvent("player_left_checkpoint", evt_ZM_start_imminent);
+		UnhookEvent("player_spawn", evtPlayerSpawned, EventHookMode_Post);
+		UnhookEvent("player_left_start_area", evt_ZM_start_imminent, EventHookMode_Post);
+		UnhookEvent("player_left_checkpoint", evt_ZM_start_imminent, EventHookMode_Post);
 		UnhookEvent("player_activate", Event_PlayerActivate, EventHookMode_Post);
 		UnhookEvent("finale_vehicle_ready", EvtFinaleEnding, EventHookMode_PostNoCopy);
 		UnhookEvent("finale_vehicle_incoming", EvtFinaleEnding, EventHookMode_PostNoCopy);
@@ -7135,7 +7209,8 @@ void evt_ZM_start_imminent(Event event, const char[] name, bool dontBroadcast)
         float pos[3];
         GetClientAbsOrigin(client,pos);
         Address temp_navArea = L4D_GetNearestNavArea(pos,500.0,true,false,true,TEAM_SURVIVOR);
-        if (zm_can_start && !navArea_validStart(temp_navArea) && IsValidClientZM()) start_zm_round();
+        if (zm_can_start && !navArea_validStart(temp_navArea) && IsValidClientZM() && !force_started)
+            start_zm_round();
         else if (g_bLockSaferoom && saferoom_locked && L4D_IsInIntro()<=0)
         {
             tp_survivor_start(client);

@@ -502,6 +502,11 @@
 	{
 		"en"			"You are offered Zombie Master. Accept?"
 	}
+
+        "Flow hint"
+	{
+		"en"			"Target a survivor for automatic spawns."
+	}
 	
 	
 }

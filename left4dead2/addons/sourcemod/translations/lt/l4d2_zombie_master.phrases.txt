@@ -504,5 +504,10 @@
 		"lt"			"Tau siūlomas Zombių Meistras. Ar sutinki?"
 	}
 
+        "Flow hint"
+	{
+		"lt"			"Taikyk į išgyventoją, kad sukurti zombius automatiškai."
+	}
+
 	
 }

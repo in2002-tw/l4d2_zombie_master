@@ -502,4 +502,9 @@
 		"zho"			"You are offered Zombie Master. Accept?"
 	}
 
+        "Flow hint"
+	{
+		"zho"			"Target a survivor for automatic spawns."
+	}
+
 }
