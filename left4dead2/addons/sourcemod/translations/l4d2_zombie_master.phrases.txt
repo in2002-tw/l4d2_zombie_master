@@ -508,5 +508,10 @@
 		"en"			"Target a survivor for automatic spawns."
 	}
 	
+	"Max tank discount"
+	{
+		"en"			"Tank discount maximized!"
+	}
+	
 	
 }

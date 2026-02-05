@@ -507,4 +507,9 @@
 		"zho"			"Target a survivor for automatic spawns."
 	}
 
+	"Max tank discount"
+	{
+		"zho"			"Tank discount has been maximized!"
+	}
+
 }

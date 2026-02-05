@@ -301,6 +301,7 @@ stock Action infinite_delay_natural_mob(Handle timer = null)
         CTimer_Invalidate(MobSpawnTimer);
         CTimer_Start(MobSpawnTimer,3600.0); 
         CTimer_SetDuration(MobSpawnTimer,3600.0);
+        // native void CTimer_SetTimestamp(CountdownTimer timer, float timestamp); 
     }
     return Plugin_Stop;
 }
@@ -676,7 +677,7 @@ stock void DumpPlayerState(int client, int target = -1)
 
 stock bool IsValidClient(int client, bool replaycheck = true)
 {
-	if (client < 1 || client > MaxClients) return false;
+	if (client<1 || client>MaxClients) return false;
 	if (!IsClientInGame(client)) return false;
 	if (replaycheck)
 	{
