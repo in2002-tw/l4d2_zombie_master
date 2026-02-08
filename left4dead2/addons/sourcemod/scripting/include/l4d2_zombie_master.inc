@@ -97,8 +97,8 @@
 #define SOUND_PANIC_ON "npc/mega_mob/mega_mob_incoming.wav"
 #define SOUND_PANIC_OFF "ui/pickup_secret01.wav"
 
-#define SOUND_ELLIS_ZM "zm/ellis_zm.wav"
-#define SOUND_LOUIS_ZM "zm/louis_zm.wav"
+#define SOUND_ELLIS_ZM "zm/ellis_zm.mp3"
+#define SOUND_LOUIS_ZM "zm/louis_zm.mp3"
 
 // These are played whenever the ZM forces the round to start by slamming the saferoom door open.
 #define SOUND_SCARY1 "ambient/creatures/town_moan1.wav"
@@ -289,7 +289,7 @@ stock void invalidate_natural_mob(float duration = 3600.0)
     {
         //CTimer_Invalidate(MobSpawnTimer);
         //CTimer_Start(MobSpawnTimer,duration); 
-        CTimer_SetDuration(MobSpawnTimer,3600.0);
+        CTimer_SetDuration(MobSpawnTimer,3700.0);
     }
 }
 
@@ -300,8 +300,10 @@ stock Action infinite_delay_natural_mob(Handle timer = null)
     {
         CTimer_Invalidate(MobSpawnTimer);
         CTimer_Start(MobSpawnTimer,3600.0); 
-        CTimer_SetDuration(MobSpawnTimer,3600.0);
-        // native void CTimer_SetTimestamp(CountdownTimer timer, float timestamp); 
+        //CTimer_SetDuration(MobSpawnTimer,3600.0);
+        //CTimer_SetTimestamp(MobSpawnTimer,GetGameTime()+3600.0);
+        //CTimer_SetDuration(MobSpawnTimer,3600.0);
+        RequestFrame(invalidate_natural_mob);
     }
     return Plugin_Stop;
 }
@@ -321,7 +323,8 @@ stock bool is_survivor_vomited(int client)
 
 stock bool get_client_auth(int client, char auth[65])
 {
-    if (!IsValidClient(client)) return false;
+    //if (!IsValidClient(client)) return false;
+    if (client<=0 || client>MaxClients) return false;
     if (!GetClientAuthId(client,AuthId_Engine,auth,sizeof(auth))) return false;
     return true;
 }
@@ -403,8 +406,9 @@ stock void transfer_SI_properties(int entity_new, char[] modelname, float vOrigi
    }
    
    L4D2_SetCustomAbilityCooldown(entity_new,cooldown_remaining);
-   //SetEntProp(entity_new, Prop_Data, "m_fFlags", fFlags);
-   if ((fFlags & FL_ONFIRE)>0) IgniteEntity(entity_new, IGNITE_TIME);
+   //SetEntProp(entity_new, Prop_Data, "m_fFlags", fFlags); // causes charger to be stuck forever
+   if (fFlags & FL_ONFIRE) IgniteEntity(entity_new, IGNITE_TIME);
+   if (fFlags & FL_DUCKING) SetEntityFlags(entity_new, GetEntityFlags(entity_new) | FL_DUCKING);
    
    TrimString(targetname);
    if (targetname[0]!=0)
@@ -470,7 +474,8 @@ stock void GetSurvivorHealthColor(int hp,int color[3],bool rescue=false,bool cri
 
 stock bool valid_uncommon(char arg[32])
 {
-    if (strcmp(arg,"riot")==0) return true;
+    if (strcmp(arg,"random")==0) return true;
+    else if (strcmp(arg,"riot")==0) return true;
 	else if (strcmp(arg,"ceda")==0) return true;
 	else if (strcmp(arg,"clown")==0) return true;
 	else if (strcmp(arg,"mud")==0) return true;
