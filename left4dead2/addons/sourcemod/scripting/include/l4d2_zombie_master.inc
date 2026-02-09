@@ -53,6 +53,7 @@
 
 #define IGNITE_TIME 3600.0
 
+
 // enum for spawner state
 #define SPAWNER_BLOCKED 0 // can never spawn infected here
 #define SPAWNER_CONDITIONAL 1 // cannot spawn here temporarily because survivors can see or are too close
@@ -97,8 +98,17 @@
 #define SOUND_PANIC_ON "npc/mega_mob/mega_mob_incoming.wav"
 #define SOUND_PANIC_OFF "ui/pickup_secret01.wav"
 
-#define SOUND_ELLIS_ZM "zm/ellis_zm.mp3"
-#define SOUND_LOUIS_ZM "zm/louis_zm.mp3"
+#define SOUND_ELLIS_ZM "zm/ellis_zm.wav"
+#define SOUND_ELLIS_ZM_MP3 "zm/ellis_zm.mp3"
+#define VCD_ELLIS_ZM   "scenes/custom/ellis_zm.vcd"
+#define SS_ELLIS_ZM    "CustomVoice_Ellis_ZM"
+
+#define SOUND_LOUIS_ZM "zm/louis_zm.wav"
+#define SOUND_LOUIS_ZM_MP3 "zm/louis_zm.mp3"
+#define VCD_LOUIS_ZM   "scenes/custom/louis_zm.vcd"
+#define SS_LOUIS_ZM    "CustomVoice_Louis_ZM"
+
+#define SCENE_SAFETY_TIMEOUT 30.0
 
 // These are played whenever the ZM forces the round to start by slamming the saferoom door open.
 #define SOUND_SCARY1 "ambient/creatures/town_moan1.wav"

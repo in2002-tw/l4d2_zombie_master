@@ -188,6 +188,7 @@ bool clients_active[MAXPLAYERS] = {false,...};
 bool meme_delivered = false;
 float clients_t_join[MAXPLAYERS] = {0.0,...};
 Handle fq_timer = INVALID_HANDLE;
+bool lipsync_available = false; // custom funny louis and ellis voice lines
 
 #define FIRST_TANK_SPAWNED 1
 #define FIRST_TANK_DEAD 2
@@ -4072,6 +4073,59 @@ Action CountCommons(Handle timer = null, bool fast = true)
     return Plugin_Continue;
 }
 
+
+
+
+bool PlaySceneOnSurvivor(int survivor, const char[] sceneFile)
+{
+	int scene = CreateEntityByName("instanced_scripted_scene");
+	if (!IsEntitySafe(scene)) return false;
+
+	PrintToServer("[VoiceLipsync] Created scene entity %d for '%s'", scene, sceneFile);
+
+	// Set the VCD file path
+	DispatchKeyValue(scene, "SceneFile", sceneFile);
+
+	// Spawn the scene entity
+	DispatchSpawn(scene);
+
+	// Assign the target survivor as the scene owner/actor
+	SetEntPropEnt(scene, Prop_Data, "m_hOwner", survivor);
+
+	// Start the scene with the survivor as both activator and caller
+	AcceptEntityInput(scene, "Start", survivor, survivor);
+
+	PrintToServer("[VoiceLipsync] Scene %d started on client %d", scene, survivor);
+
+	// Hook completion output to clean up the scene entity
+	HookSingleEntityOutput(scene, "OnCompletion", OnSceneComplete, true);
+
+	// Safety timer: kill the scene entity if OnCompletion never fires
+	CreateTimer(SCENE_SAFETY_TIMEOUT, Timer_KillScene, EntIndexToEntRef(scene));
+
+	return true;
+}
+
+/**
+ * Called when the scene finishes playing. Removes the scene entity.
+ */
+void OnSceneComplete(const char[] output, int caller, int activator, float delay)
+{
+	PrintToServer("[VoiceLipsync] OnCompletion fired! caller=%d activator=%d delay=%.2f", caller, activator, delay);
+	if (IsValidEntity(caller)) RemoveEntity(caller);
+}
+
+/**
+ * Safety timer to remove scene entities that never fired OnCompletion.
+ */
+Action Timer_KillScene(Handle timer, int sceneRef)
+{
+	int scene = EntRefToEntIndex(sceneRef);
+	if (scene != INVALID_ENT_REFERENCE && IsValidEntity(scene)) RemoveEntity(scene);
+	return Plugin_Stop;
+}
+
+
 Action random_meme(Handle timer = null)
 {
 	if (meme_delivered) return Plugin_Stop;
@@ -4092,18 +4146,30 @@ Action random_meme(Handle timer = null)
 	listplayers.Sort(Sort_Random, Sort_Integer);
 	char model[PLATFORM_MAX_PATH];
     char sound[PLATFORM_MAX_PATH];
+    char vcdPath[PLATFORM_MAX_PATH];
 	for(int x = 0; x < listplayers.Length; x++)
     {
         i = listplayers.Get(x);
         sound = "";
 		GetClientModel(i, model, sizeof(model));
-		if (StrContains(model,"survivor_mechanic",false)!=-1) sound = SOUND_ELLIS_ZM;
-		else if (StrContains(model,"survivor_manager",false)!=-1) sound = SOUND_LOUIS_ZM;
+		if (StrContains(model,"survivor_mechanic",false)!=-1)
+		{
+    		if (lipsync_available) sound = SOUND_ELLIS_ZM;
+    		else sound = SOUND_ELLIS_ZM_MP3;
+    		vcdPath = VCD_ELLIS_ZM;
+		}
+		else if (StrContains(model,"survivor_manager",false)!=-1)
+		{
+    		if (lipsync_available) sound = SOUND_LOUIS_ZM;
+            else sound = SOUND_LOUIS_ZM_MP3;
+    		vcdPath = VCD_LOUIS_ZM;
+		}
 		if ( sound[0]!=0 && GetEntProp(i,Prop_Send,"m_NetGestureActivity")==-1 && GetRandomFloat(0.0,1.0)>=0.5 ) 
 		{
     		if (DEBUG) LogMessage("[zm] Playing %s", sound);
     		SetEntProp(i,Prop_Send,"m_NetGestureActivity",400);
     		EmitSoundToAll(sound,i,SNDCHAN_VOICE,SNDLEVEL_SCREAMING,_,1.0);
+    		if (lipsync_available) PlaySceneOnSurvivor(i, vcdPath);
     		meme_delivered = true;
     		break;
 		}
@@ -6756,12 +6822,29 @@ public void OnMapStart()
 	PrecacheSound(SOUND_DOORSLAM);
 	PrecacheSound(SOUND_DOORSLAM2);
 	PrecacheSound(SOUND_DOORSLAM3);
-	//PrecacheSound(SOUND_INACTIVITY);
     PrecacheSound(SOUND_START);
     PrecacheSound(SOUND_VISION);
     
-    PrecacheSound(SOUND_ELLIS_ZM);
-    PrecacheSound(SOUND_LOUIS_ZM);
+    //lipsync_available = FileExists(VCD_ELLIS_ZM) && FileExists(VCD_LOUIS_ZM);
+    lipsync_available = false; // vcd is failing, reverting to mp3 for now
+    if (lipsync_available)
+    {
+        bool check1 = PrecacheSound(SOUND_ELLIS_ZM);
+        bool check2 = PrecacheSound(SOUND_LOUIS_ZM);
+        //int ssEllis = PrecacheScriptSound(SS_ELLIS_ZM);
+        //int ssLouis = PrecacheScriptSound(SS_LOUIS_ZM);
+        PrecacheGeneric(VCD_ELLIS_ZM, true);
+        PrecacheGeneric(VCD_LOUIS_ZM, true);
+        //lipsync_available = check1 && check2 && ssEllis!=0 && ssLouis!=0;
+        lipsync_available = check1 && check2;
+        //LogMessage("[zm] lipsync state: %d %d %d %d", check1, check2, ssEllis, ssLouis);
+    }
+    
+    if (!lipsync_available)
+    {
+       PrecacheSound(SOUND_ELLIS_ZM_MP3);
+       PrecacheSound(SOUND_LOUIS_ZM_MP3);
+    }
     
     //fastdl is necessary otherwise client will hang FOREVER on a black screen.
     if (FindConVar("sv_allowdownload").BoolValue)
@@ -6774,12 +6857,25 @@ public void OnMapStart()
             TrimString(currentUrl);
             if (currentUrl[0]=='\0') g_hDownloadUrl.SetString("https://gvazdas.github.io/l4d2_zombie_master/left4dead2", false, false);
         }
+        
         char buffer[128];
-        Format(buffer, sizeof(buffer), "sound/%s", SOUND_ELLIS_ZM);
+        if (lipsync_available) Format(buffer, sizeof(buffer), "sound/%s", SOUND_ELLIS_ZM);
+        else Format(buffer, sizeof(buffer), "sound/%s", SOUND_ELLIS_ZM_MP3);
         AddFileToDownloadsTable(buffer);
-        Format(buffer, sizeof(buffer), "sound/%s", SOUND_LOUIS_ZM);
+        
+        if (lipsync_available) Format(buffer, sizeof(buffer), "sound/%s", SOUND_LOUIS_ZM);
+        else Format(buffer, sizeof(buffer), "sound/%s", SOUND_LOUIS_ZM_MP3);
         AddFileToDownloadsTable(buffer); 
+    
+        if (lipsync_available)
+        {
+            AddFileToDownloadsTable(VCD_ELLIS_ZM);
+        	AddFileToDownloadsTable(VCD_LOUIS_ZM); 
+    	}
     }
+    else lipsync_available = false;
+    
+    if (!lipsync_available) LogMessage("[zm] custom lipsynced voice lines cannot be played."); 
     
     PrecacheSound(SOUND_PANIC_ON);
     PrecacheSound(SOUND_PANIC_OFF);
