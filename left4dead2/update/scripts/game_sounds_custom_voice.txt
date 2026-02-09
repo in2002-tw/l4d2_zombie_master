@@ -1,0 +1,17 @@
+"CustomVoice_Ellis_ZM"
+{
+	"channel"		"CHAN_VOICE"
+	"volume"		"0.80"
+	"pitch"			"PITCH_NORM"
+	"soundlevel"		"SNDLVL_70dB"
+	"wave"			"zm/ellis_zm.wav"
+}
+
+"CustomVoice_Louis_ZM"
+{
+	"channel"		"CHAN_VOICE"
+	"volume"		"0.80"
+	"pitch"			"PITCH_NORM"
+	"soundlevel"		"SNDLVL_70dB"
+	"wave"			"zm/louis_zm.wav"
+}
