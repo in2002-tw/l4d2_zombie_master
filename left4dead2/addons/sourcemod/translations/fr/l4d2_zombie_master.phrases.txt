@@ -1,0 +1,517 @@
+"Phrases"
+{
+	
+	"Zombie Master"
+	{
+		"fr"			"Maître des zombies"
+	}
+	
+	"Bank"
+	{
+		"fr"			"Banque"
+	}
+	
+	"PANIC"
+	{
+		"fr"			"PANIQUE"
+	}
+	
+	"PANIC ON"
+	{
+		"fr"			"PANIQUE!"
+	}
+	
+	"PANIC ON time"
+	{
+		"#format"		"{1:.2f}"
+		"fr"			"PANIQUE! {1}"
+	}
+	
+	
+	"PANIC OFF"
+	{
+		"fr"			"PANIQUE désactivé"
+	}
+	
+	"Boomer"
+	{
+		"fr"			"Boomer"
+	}
+	
+	"Smoker"
+	{
+		"fr"			"Smoker"
+	}
+	
+	"Hunter"
+	{
+		"fr"			"Hunter"
+	}
+	
+	"Spitter"
+	{
+		"fr"			"Spitter"
+	}
+	
+	"Jockey"
+	{
+		"fr"			"Jockey"
+	}
+	
+	"Charger"
+	{
+		"fr"			"Charger"
+	}
+	
+	"Tank"
+	{
+		"fr"			"Tank"
+	}
+	
+	"Witch"
+	{
+		"fr"			"Witch"
+	}
+	
+	"Common"
+	{
+		"fr"			"Commun"
+	}
+	
+	"Uncommon"
+	{
+		"fr"			"Rare"
+	}
+	
+	"Special"
+    {
+    		"fr"			"Spécial"
+    }
+    	
+    "Boss"
+     {
+        	"fr"			"Boss"
+     }
+     
+     "Cleanup"
+     {
+         	"fr"			"Nettoyage"
+     }
+     
+     "Other"
+     {
+         	"fr"			"Autre"
+     }
+    	
+    "Teleport"
+     {
+            	"fr"			"Téléportation"
+     }
+    	
+    "Survivors can leave"
+     {
+        		"fr"			"Les survivants peuvent sortir de l'abri!"
+     }
+     
+     "Round can start in"
+      {
+         		"#format"		"{1:d}"
+         		"fr"			"La manche va commencer dans {1} secondes!"
+      }
+	
+	"Spawned X Y"
+	{
+		"#format"		"{1:d},{2:s}"
+		"fr"			"Apparu au {1} {2}"
+	}
+	
+	"Round started"
+	{
+		"fr"			"La manche a commencé!"
+	}
+	
+	"Round started short"
+	{
+		"fr"			"Manche commencé"
+	}
+	
+	"Finale started ZM"
+	{
+		"fr"			"La Finale a commencé. Utilise tout ton argent pour passer à la prochaine étape."
+	}
+	
+	"Finale started"
+	{
+		"fr"			"La Finale a commencé."
+	}
+	
+	"Inactivity notify kicked"
+	{
+		"fr"			"Vous n'êtes plus le MdZ car vous êtes absent."
+	}
+	
+	"Inactivity notify"
+	{
+		"fr"			"Le MdZ a perdu sa place à cause de son absence."
+	}
+	
+	"Inactivity hint"
+	{
+		"fr"			"Écrivez /zm dan le tchat pour faire apparaître des zombies."
+	}
+	
+	"No ZM"
+	{
+		"fr"			"Il n'y a pas de Maître des Zombies. Écrivez !zm pour devenir le MdZ."
+	}
+	
+	"ZM joined"
+	{
+		"#format"		"{1:s}"
+		"fr"			"{1} est le Maître des Zombies."
+	}
+	
+	"ZM quit"
+	{
+		"#format"		"{1:s}"
+		"fr"			"{1} n'est plus le Maître des Zombies."
+	}
+	
+	"ZM won"
+	{
+		"#format"		"{1:s}"
+		"fr"			"{1} a gagné la manche!"
+	}
+	
+	"ZM join hint"
+	{
+		"fr"			"Vous êtes le Maître des Zombies. Écrivez /zm pour ouvrir le menu."
+	}
+	
+	"ZM restrict notify"
+	{
+		"fr"			"le Maître des Zombies est disponible que dans le mode coopération et le mode survie."
+	}
+	
+	"Start delay notify"
+	{
+		"fr"			"La manche commencera quand un Maître des Zombies est choisi."
+	}
+	
+	"Car alarm notify"
+	{
+		"#format"		"{1:d}"
+		"fr"			"Le MdZ a obtenu {1} sous et une PANIQUE gratuite grâce à l'alarme de la voiture!"
+	}
+	
+	"ZM finale advance"
+	{
+		"fr"			"La Finale a franchi une étape. Gain d'argent."
+	}
+	
+	"ZM panic notify"
+	{
+		"fr"			"PANIQUE d'une horde!"
+	}
+	
+	"ZM taken"
+	{
+		"fr"			"Il y a déjà un Maître des Zombies."
+	}
+	
+	"Weather failed"
+	{
+		"fr"			"La météo n'a pas pu être changé."
+	}
+	
+	"ZM control hint"
+	{
+		"fr"			"Appuyez sur le bouton utiliser pour contrôler les infectés spéciaux."
+	}
+	
+	"ZM win text"
+	{
+		"fr"			"Vous êtes un vrai Maître des Zombies, et un vrai héro"
+	}
+	
+	"No ZM notify"
+	{
+		"fr"			"Il n'y a pas de Maître des Zombies!"
+	}
+	
+	"Cannot start notify"
+	{
+		"fr"			"La manche ne peut pas commencer pour l'instant."
+	}
+	
+	"Riot"
+	{
+		"fr"			"Anti-émeute"
+	}
+	
+	"CEDA"
+	{
+		"fr"			"CEDA"
+	}
+	
+	"Clown"
+	{
+		"fr"			"Clown"
+	}
+	
+	"Mud"
+	{
+		"fr"			"Boueux"
+	}
+	
+	"Road"
+	{
+		"fr"			"Ouvrier routier"
+	}
+	
+	"Witch Moving"
+	{
+		"fr"			"Witch ambulante"
+	}
+	
+	"Witch Static"
+	{
+		"fr"			"Witch statique"
+	}
+	
+	"Jimmy Gibbs Jr"
+	{
+		"fr"			"Jimmy Gibbs Jr"
+	}
+	
+	"Fallen Survivor"
+	{
+		"fr"			"Survivant infecté"
+	}
+	
+	"Delete Target"
+	{
+		"fr"			"Supprimer la cible"
+	}
+	
+	"Delete Commons"
+	{
+		"fr"			"Supprimer les communs"
+	}
+	
+	"Delete Specials"
+	{
+		"fr"			"Supprimer les spéciaux"
+	}
+	
+	"Delete Witches"
+	{
+		"fr"			"Supprimer les witches"
+	}
+	
+	"Delete ALL"
+	{
+		"fr"			"TOUT Supprimer"
+	}
+	
+	"Control (USE)"
+	{
+		"fr"			"Contrôler (UTILISER)"
+	}
+	
+	"Start Round"
+	{
+		"fr"			"Commencer la manche"
+	}
+	
+	"Toggle Snow"
+	{
+		"fr"			"Basculer la neige"
+	}
+	
+	"Toggle Rain"
+	{
+		"fr"			"Basculer la pluie"
+	}
+	
+	"Give Up"
+	{
+		"fr"			"Abandonner"
+	}
+	
+	"Witches illegal"
+	{
+		"fr"			"Witches interdit"
+	}
+	
+	"Zombies illegal"
+	{
+		"fr"			"Zombies interdit"
+	}
+	
+	"STOP SPAMMING"
+	{
+		"fr"			"ARRÊTEZ DE SPAMMER"
+	}
+	
+	"Visible saferoom"
+	{
+		"fr"			"Abri visible"
+	}
+	
+	"Visible survivors"
+	{
+		"fr"			"Survivants visible"
+	}
+	
+	"Bad location"
+	{
+		"fr"			"Mauvaise position"
+	}
+	
+	"Too close"
+	{
+		"fr"			"Trop près"
+	}
+	
+	"Zombie spawns OFF"
+	{
+		"fr"			"Apparition des Zombies désactivé"
+	}
+	
+	"Chasing x"
+	{
+		"#format"		"{1:s}"
+		"fr"			"En poursuite {1}"
+	}
+	
+	"Panic is automatic"
+	{
+		"fr"			"La PANIQUE est automatique"
+	}
+	
+	"Cannot afford"
+	{
+		"fr"			"Peut pas être acheté"
+	}
+	
+	"panic_rate_reduced"
+	{
+		"fr"			"PANIQUE activé, taux de banque réduit"
+	}
+	
+	"panic_rate_normal"
+	{
+		"fr"			"PANIQUE désactivé, taux de banque normal"
+	}
+	
+	"Round not started"
+	{
+		"fr"			"La manche n'a pas débuté"
+	}
+	
+	"Invalid target"
+	{
+		"fr"			"Cible invalide"
+	}
+	
+	"Cannot control"
+	{
+		"fr"			"Peut pas être contrôlé"
+	}
+	
+	"Panic must be ON"
+	{
+		"fr"			"La PANIQUE doit être activé"
+	}
+	
+	"Witch sighted"
+	{
+		"fr"			"Witch vu, aucun remboursement"
+	}
+	
+	"zm_menu_hint"
+	{
+		"fr"			"Écrivez /zm pour ouvrir le menu"
+	}
+	
+	"Limit reached"
+	{
+		"fr"			"Limite atteinte"
+	}
+	
+	"Cooldown active"
+	{
+		"fr"			"Temps de recharge actif"
+	}
+	
+	"afford_common"
+	{
+		"fr"			"OH MON DIEU, ON EST À COURS D'ARGENT"
+	}
+	
+	"Spawn failed"
+	{
+		"fr"			"Apparition raté"
+	}
+	
+	"Spawned commons"
+	{
+		"#format"		"{1:d}"
+		"fr"			"{1} Communs apparus"
+	}
+	
+	"Cannot delete"
+	{
+		"fr"			"Peut pas être supprimé"
+	}
+	
+	"Tank died reward"
+	{
+		"fr"			"Tank mort, gain d'argent"
+	}
+	
+	"afford_special"
+	{
+		"fr"			"Pas assez pour un spécial"
+	}
+
+        "Angry"
+	{
+		"fr"			"Énervé"
+	}
+
+        "Obstacle"
+	{
+		"fr"			"Obstacle"
+	}
+
+    "Selected Special"
+	{
+		"#format"		"{1:s},{2:d},{3:d}"
+		"fr"			"{1} {2}/{3} HP"
+	}
+	
+	"Offered ZM Ticker"
+	{
+		"#format"		"{1:s},{2:d}"
+		"fr"			"MdZ donné à : {1} ({2})"
+	}
+	
+	"Offer ZM"
+	{
+		"fr"			"Vous pouvez devenir le Maître des Zombies. Accepter?"
+	}
+
+        "Flow hint"
+	{
+		"fr"			"Visez un survivant pour avoir des apparitions automatique."
+	}
+	
+	"Max tank discount"
+	{
+		"fr"			"Remise du Tank maximisé!"
+	}
+	
+	
+}

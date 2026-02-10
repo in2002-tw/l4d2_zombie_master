@@ -504,7 +504,7 @@
 		"et"			"You are offered Zombie Master. Accept?"
 	}
 
-    "Flow hint"
+        "Flow hint"
 	{
 		"et"			"Target a survivor for automatic spawns."
 	}

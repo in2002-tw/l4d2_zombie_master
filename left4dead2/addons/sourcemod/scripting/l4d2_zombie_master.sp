@@ -20,18 +20,26 @@
 #include <adt_trie>
 #include <l4d2_zombie_master>
 
-// Changelog for 0.7.6
+// Changelog for 0.7.7
 // 1. ZM flashlight improvements
 // 2. "Incoming attack" jingle playing when it shouldn't fixed.
 // 3. SI control crouch bug fixed.
-// 4. New commands: zm_help and zm_tutorial. Prints the Zombie Master tutorial.
-// 5. Added player activity detection for ZM offer system. Players who haven't started moving around are given a few seconds to show signs of life.
+// 4. New commands: zm_help and zm_tutorial. Prints the Zombie Master tutorial. Admins get a list of cvars as well.
+// 5. Added player activity detection for ZM fair queue. After ClientPutInServer(), players who haven't started moving around are given a few seconds to show signs of life before they are offered ZM.
 // 6. New /zm_horde type: random. Each spawn is a random uncommon.
 // 7. Toggle Rain and Toggle Snow removed due to client crashes.
-// 8. Custom campaigns are currently being tested. So far we tested Daybreak.
+// 8. Custom campaigns tested and confirmed to be working. Incorrectly placed or disconnected NAV_SPAWN_PLAYER_START navmeshes will break the warmup phase in coop.
 // 9. Tank music bug fixed.
 // 10. Less "spawn failed" errors on flow spawns when survivors are at the end of the map.
-// 11. Delete all not killing zombies because of L4D_Dissolve fixed hopefully
+// 11. Delete_all sometimes not deleting a handful of common zombies should be fixed.
+// 12. Added funny voice lines for Ellis and Louis. To turn them off, and to disable file downloads related to this custom content, set the cvar zm_memes 0.
+// This adds two new custom voice lines in sound/zm. You need sv_allowdownload 1 in server.cfg for clients to download the files.
+// Fastdl needs to be enabled otherwise clients will be stuck loading forever unless they reconnect twice (once for each file).
+// If fastdl is not configured in server.cfg, the github repository will be automatically linked which will download the files for all clients connecting to the server.
+// If you have your own fastdl make sure the custom sound files are in there!
+// We also added (currently unused) lipsynced .wav files and .vcd (scene) files, but it requires recompiling the scenes Images file for them to play so we decided to play it safe.
+// Hopefully somebody in the future will find a better plug-and-play solution for playing custom lipsynced audio.
+// 13. Flow spawns by looking at survivor should be easier to trigger now even when a survivor is standing on an invalid navmesh.
 
 bool DEBUG = false;
 
@@ -47,10 +55,10 @@ bool DEBUG = false;
 // 26. No fog for ZM
 // 30. Bring back inputkill prevention. Might not need it though.
 // 38. Check why witches and uncommons can't spawn, sometimes get auto killed
-// 39. Lipsync
+// 39. Make "flow near survivor ground" work even in bad nav mesh areas
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.7.6 2026-02-08"
+#define PLUGIN_VERSION 			"0.7.7 2026-02-10"
 #define GAMEDATA_FILE           PLUGIN_NAME
 
 public Plugin myinfo =
@@ -185,10 +193,11 @@ bool clients_in_server = false; // track whether HUD needs to be updated
 float t_round_start = 0.0;
 bool natural_first_wait = true; // wait for first natural mob timer reset, when survivors leave saferoom usually.
 bool clients_active[MAXPLAYERS] = {false,...};
-bool meme_delivered = false;
 float clients_t_join[MAXPLAYERS] = {0.0,...};
 Handle fq_timer = INVALID_HANDLE;
-bool lipsync_available = false; // custom funny louis and ellis voice lines
+
+bool meme_delivered = false;
+//bool lipsync_available = false; // custom funny louis and ellis voice lines
 
 #define FIRST_TANK_SPAWNED 1
 #define FIRST_TANK_DEAD 2
@@ -227,11 +236,11 @@ ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer,
        g_hCostBoomer, g_hCostSpitter, g_hCostHunter, g_hCostSmoker, g_hCostJockey, g_hMaxWitches, g_hMaxSI, g_hSpecialCooldown,
        g_hCostCharger, g_hCostTank, g_hCostWitchStatic, g_hCostWitchMoving, g_hCostCommon, g_hCostUncommon, g_hLockSaferoom,
        g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait,
-       g_hMenuTimeout, g_hDiscountTank;
+       g_hMenuTimeout, g_hDiscountTank, g_hMemes;
 float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fStopInactivity,g_fSpecialCooldown,
 g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout;
 
-bool g_bFairQueue, g_bDiscountTank;
+bool g_bFairQueue, g_bDiscountTank, g_bMemes;
 
 int g_iBankInitial,g_iBankInitialPlayer, g_iPanicCost;
 
@@ -769,6 +778,9 @@ public void OnPluginStart()
 	
 	g_hDiscountTank = CreateConVar("zm_discount_tank", "1.0", "Dynamic first tank pricing on maps where tanks are allowed: 50% off when survivors reach 66.6% progress.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	g_hDiscountTank.AddChangeHook(ConVarChanged_Cvars);
+	
+	g_hMemes = CreateConVar("zm_memes", "1.0", "Enable funny Louis and Ellis voice lines. In server.cfg sv_allowdownload must be 1. If you do not have fastdl the plugin github repository will be linked automatically. Otherwise you must add the .mp3 files to your fastdl.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+	g_hMemes.AddChangeHook(ConVarChanged_Cvars);
 	
 	GetCvars();
 
@@ -1469,8 +1481,9 @@ void update_ZM_spawner(float target_pos[3], float spawner_pos[3], int state, boo
             char sound_name[64];
             if (state==SPAWNER_BLOCKED) sound_name = SOUND_BLOCKED;
             else if (state==SPAWNER_CONDITIONAL) sound_name = SOUND_CONDITIONAL;
-            else sound_name = SOUND_ALLOWED;
-            EmitSoundToClient(zm_client,sound_name,zm_client,ATTN_TO_SNDLEVEL(SNDATTN_NORMAL),_,_,0.1,_,_,draw_pos,_,true);
+            else sound_name = "";
+            if (sound_name[0]!=0)
+                EmitSoundToClient(zm_client,sound_name,zm_client,ATTN_TO_SNDLEVEL(SNDATTN_NORMAL),_,_,0.09,_,_,draw_pos,_,true);
             t_last_spawner_sound = t_now;
         }
         
@@ -1734,7 +1747,7 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
     
     // bools: anyz los checkground
     float check_dist = 1000.0;
-    if (witch) check_dist = 20.0;
+    if (witch) check_dist = 50.0;
     zm_spawner_navArea = L4D_GetNearestNavArea(vPos,check_dist,true,true,true,TEAM_INFECTED);
     if (zm_spawner_navArea)
     {
@@ -1769,6 +1782,10 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
         }
     }
     
+    latest_distance = -1.0;
+    float min_distance = min_distance_to_survivors(vPos,hint);
+    if (min_distance>=0.0) latest_distance = min_distance;
+    
     if (!nav_can_spawn_zombies(zm_spawner_navAttrFlags,zm_spawner_navSpawnAttrs,witch))
     {
         if (hint)
@@ -1788,28 +1805,22 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
         return SPAWNER_NAV;
     }
     
+    if (zm_spawner_navSpawnAttrs & NAV_SPAWN_NO_MOBS) min_distance /= 2.0; // 2x the usual survivor distance for areas marked "NO MOBS".
+    else if (zm_stage<ZM_STARTED) min_distance *= 2.0; // if not started, players won't get swarmed so easily by initial wave
+    
+    if (min_distance<g_fSpawnMinDistance)
+    {
+        if (hint) update_hint("%T %d", "Too close", zm_client, RoundFloat(min_distance));
+        update_ZM_spawner(vPos,vPos_spawner,SPAWNER_CONDITIONAL);
+        return SPAWNER_DISTANCE;
+    }
+    
     //if (IsObstructed(vPos_spawner))
     //{
     //    if (hint) update_hint("Not enough space");
     //	update_ZM_spawner(vPos,vPos_spawner,SPAWNER_CONDITIONAL);
     //	return false;
     //}
-    
-    latest_distance = -1.0;
-    float min_distance = min_distance_to_survivors(vPos,hint);
-    if (min_distance>=0.0)
-    {
-        latest_distance = min_distance;
-        if (zm_spawner_navSpawnAttrs & NAV_SPAWN_NO_MOBS) min_distance /= 2.0; // 2x the usual survivor distance for areas marked "NO MOBS".
-        else if (zm_stage<ZM_STARTED) min_distance *= 2.0; // if not started, players won't get swarmed so easily by initial wave
-        
-        if (min_distance<g_fSpawnMinDistance)
-        {
-            if (hint) update_hint("%T %d", "Too close", zm_client, RoundFloat(min_distance));
-            update_ZM_spawner(vPos,vPos_spawner,SPAWNER_CONDITIONAL);
-            return SPAWNER_DISTANCE;
-        }
-    }
     
     // If obscured, we prevent line of sight from blocking spawns.
     bool obscured = ( (zm_spawner_navSpawnAttrs & NAV_SPAWN_OBSCURED) || (zm_spawner_navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
@@ -1992,7 +2003,7 @@ void can_zm_start()
        {
            saferoom_lock(false);
            if (zm_stage<ZM_STARTED) EmitSoundToAll(SOUND_READY);
-           if (!meme_delivered)
+           if (g_bMemes && !meme_delivered)
            {
                float delay = GetRandomFloat(0.1,10.0);
                CreateTimer(delay,random_meme,TIMER_FLAG_NO_MAPCHANGE);
@@ -2971,7 +2982,7 @@ Action zm_new_round(Handle timer = null)
 {
     if (!g_bCvarAllow) return Plugin_Stop;
 	
-	force_started = false;
+    force_started = false;
 	meme_delivered = false;
 	
 	GameRules_SetProp("m_bChallengeModeActive", 1); // Enable the HUD drawing
@@ -4074,50 +4085,24 @@ Action CountCommons(Handle timer = null, bool fast = true)
 }
 
 
-
-
 bool PlaySceneOnSurvivor(int survivor, const char[] sceneFile)
 {
 	int scene = CreateEntityByName("instanced_scripted_scene");
 	if (!IsEntitySafe(scene)) return false;
-
-	PrintToServer("[VoiceLipsync] Created scene entity %d for '%s'", scene, sceneFile);
-
-	// Set the VCD file path
 	DispatchKeyValue(scene, "SceneFile", sceneFile);
-
-	// Spawn the scene entity
 	DispatchSpawn(scene);
-
-	// Assign the target survivor as the scene owner/actor
 	SetEntPropEnt(scene, Prop_Data, "m_hOwner", survivor);
-
-	// Start the scene with the survivor as both activator and caller
 	AcceptEntityInput(scene, "Start", survivor, survivor);
-
-	PrintToServer("[VoiceLipsync] Scene %d started on client %d", scene, survivor);
-
-	// Hook completion output to clean up the scene entity
 	HookSingleEntityOutput(scene, "OnCompletion", OnSceneComplete, true);
-
-	// Safety timer: kill the scene entity if OnCompletion never fires
 	CreateTimer(SCENE_SAFETY_TIMEOUT, Timer_KillScene, EntIndexToEntRef(scene));
-
 	return true;
 }
 
-/**
- * Called when the scene finishes playing. Removes the scene entity.
- */
 void OnSceneComplete(const char[] output, int caller, int activator, float delay)
 {
-	PrintToServer("[VoiceLipsync] OnCompletion fired! caller=%d activator=%d delay=%.2f", caller, activator, delay);
 	if (IsValidEntity(caller)) RemoveEntity(caller);
 }
 
-/**
- * Safety timer to remove scene entities that never fired OnCompletion.
- */
 Action Timer_KillScene(Handle timer, int sceneRef)
 {
 	int scene = EntRefToEntIndex(sceneRef);
@@ -4125,10 +4110,9 @@ Action Timer_KillScene(Handle timer, int sceneRef)
 	return Plugin_Stop;
 }
 
-
 Action random_meme(Handle timer = null)
 {
-	if (meme_delivered) return Plugin_Stop;
+	if (!g_bMemes || meme_delivered) return Plugin_Stop;
 	int i;
 	ArrayList listplayers = new ArrayList();
 	for (i = 1; i <= MaxClients; i++)
@@ -4143,38 +4127,59 @@ Action random_meme(Handle timer = null)
     	delete listplayers;
     	return Plugin_Stop;
 	}
+	
+	int scene;
+	ArrayList actors = new ArrayList();
+	while ( ((scene = FindEntityByClassname(scene, "instanced_scripted_scene")) != -1) )
+    {
+    	   i = GetEntPropEnt(scene, Prop_Data, "m_hOwner");
+    	   if (!IsValidClient(i)) continue;
+    	   if (DEBUG) LogMessage("[zm] instanced_scripted_scene %d", i);
+    	   actors.Push(i); 
+    }
+	
 	listplayers.Sort(Sort_Random, Sort_Integer);
 	char model[PLATFORM_MAX_PATH];
     char sound[PLATFORM_MAX_PATH];
-    char vcdPath[PLATFORM_MAX_PATH];
+    char soundFake[PLATFORM_MAX_PATH];
+    //char vcdPath[PLATFORM_MAX_PATH];
+    char PathFake[PLATFORM_MAX_PATH];
 	for(int x = 0; x < listplayers.Length; x++)
     {
         i = listplayers.Get(x);
+        if (actors.FindValue(i)>=0) continue;
         sound = "";
 		GetClientModel(i, model, sizeof(model));
 		if (StrContains(model,"survivor_mechanic",false)!=-1)
 		{
-    		if (lipsync_available) sound = SOUND_ELLIS_ZM;
-    		else sound = SOUND_ELLIS_ZM_MP3;
-    		vcdPath = VCD_ELLIS_ZM;
+    		//if (lipsync_available) sound = SOUND_ELLIS_ZM;
+    		sound = SOUND_ELLIS_ZM_MP3;
+    		//vcdPath = VCD_ELLIS_ZM;
+    		soundFake = "player/survivor/voice/mechanic/dlc1_communitye20.wav";
+    		PathFake = "scenes/mechanic/dlc1_communitye20.vcd";
 		}
 		else if (StrContains(model,"survivor_manager",false)!=-1)
 		{
-    		if (lipsync_available) sound = SOUND_LOUIS_ZM;
-            else sound = SOUND_LOUIS_ZM_MP3;
-    		vcdPath = VCD_LOUIS_ZM;
+    		//if (lipsync_available) sound = SOUND_LOUIS_ZM;
+            sound = SOUND_LOUIS_ZM_MP3;
+    		//vcdPath = VCD_LOUIS_ZM;
+    		soundFake = "player/survivor/voice/Manager/TakeSubMachineGun03.wav";
+    		PathFake = "scenes/manager/takesubmachinegun03.vcd";
 		}
-		if ( sound[0]!=0 && GetEntProp(i,Prop_Send,"m_NetGestureActivity")==-1 && GetRandomFloat(0.0,1.0)>=0.5 ) 
+		if ( sound[0]!=0 && GetRandomFloat(0.0,1.0)>=0.5 ) 
 		{
-    		if (DEBUG) LogMessage("[zm] Playing %s", sound);
-    		SetEntProp(i,Prop_Send,"m_NetGestureActivity",400);
-    		EmitSoundToAll(sound,i,SNDCHAN_VOICE,SNDLEVEL_SCREAMING,_,1.0);
-    		if (lipsync_available) PlaySceneOnSurvivor(i, vcdPath);
+    		if (DEBUG) LogMessage("[zm] Playing %d %s", i, sound);
     		meme_delivered = true;
+    		//EmitSoundToAll(sound,i,SNDCHAN_VOICE,SNDLEVEL_SCREAMING,_,1.0);
+    		EmitSoundToAll(soundFake,i,SNDCHAN_VOICE,SNDLEVEL_RUSTLE,_,0.0);
+    		EmitSoundToAll(sound,i,SNDCHAN_AUTO,SNDLEVEL_SCREAMING,_,1.0);
+    		//if (lipsync_available) PlaySceneOnSurvivor(i, vcdPath);
+    		PlaySceneOnSurvivor(i,PathFake);
     		break;
 		}
 	}
 	delete listplayers;
+	delete actors;
 	return Plugin_Stop;
 }
 
@@ -4188,7 +4193,7 @@ void start_zm_round(bool play_sound = true)
      if (play_sound) EmitSoundToAll(SOUND_START);
      t_round_start = GetEngineTime();
      L4D2Direct_SetPendingMobCount(0);
-     if (!meme_delivered)
+     if (g_bMemes && !meme_delivered)
      {
          float delay = GetRandomFloat(0.1,10.0);
          CreateTimer(delay,random_meme,TIMER_FLAG_NO_MAPCHANGE);
@@ -4215,6 +4220,8 @@ void start_zm_round(bool play_sound = true)
  update_director_script_scopes(false);
  fair_exhausted = true;
  //scope_changed = false;
+ force_started = false;
+ 
 }
 
 void update_ZM_looktarget_HP(int health_manual = -1)
@@ -4375,17 +4382,20 @@ Action zm_update(Handle timer)
    
    float t_now = GetEngineTime();
    float dt = t_now - t_last_update;
-   if (zm_stage==ZM_STARTED && dt>0.0)
+   if (dt>0.0)
    {
         
         if (g_bDiscountTank) update_dynamic_tank();
         
-        bank_add += dt*get_bank_rate();
-        if (bank_add>=1.0)
+        if (zm_stage==ZM_STARTED)
         {
-            int add_int = RoundToFloor(bank_add);
-            bank += add_int;
-            bank_add -= add_int;
+            bank_add += dt*get_bank_rate();
+            if (bank_add>=1.0)
+            {
+                int add_int = RoundToFloor(bank_add);
+                bank += add_int;
+                bank_add -= add_int;
+            }
         }
         
         if (available_zombie_arr[ZOMBIECLASS_COMMON]<max_zombie_arr[ZOMBIECLASS_COMMON])
@@ -4417,7 +4427,8 @@ Action zm_update(Handle timer)
         sanity_check_available(ZOMBIECLASS_TANK,t_now);
         
    }
-   else if (zm_stage<ZM_STARTED && !zm_can_start) can_zm_start();
+   
+   if (zm_stage<ZM_STARTED && !zm_can_start) can_zm_start();
    
    // Double check that survivors havent left start area
    if ( zm_stage<ZM_STARTED && zm_can_start && !L4D_IsSurvivalMode() && L4D_HasAnySurvivorLeftSafeArea() )
@@ -4933,6 +4944,7 @@ void GetCvars()
     g_fMenuTimeout = g_hMenuTimeout.FloatValue;
     
     g_bDiscountTank = g_hDiscountTank.BoolValue;
+    g_bMemes = g_hMemes.BoolValue;
     
     zm_update(zm_timer);
     
@@ -5528,6 +5540,7 @@ void Force_Saferoom_Scary()
     L4D_GetEntityWorldSpaceCenter(EntRefToEntIndex(g_iLockedDoor),vPos);
     
     force_started = true;
+    AddNormalSoundHook(SwapSound);
     saferoom_lock(true);
     //if (IsValidEntRef(g_iLockedDoor) && !saferoom_interacted) AcceptEntityInput(g_iLockedDoor, "Use");
     float delay_accumulate = 3.0;
@@ -5661,12 +5674,12 @@ int get_spawner_target_survivor(bool flow = false, int spawner_state = SPAWNER_D
                 target_client = lastlook;
         }
         
-        if (target_client<0 && spawner_state==SPAWNER_DISTANCE)
-    	   {
-            	target_client = spawner_nearest_survivor;
-            	float test_pos[3];
-            	test_pos = zm_spawner_pos;
-            	test_pos[2] += 25.0;
+        if (target_client<0 && spawner_state!=SPAWNER_OK)
+	    {
+            target_client = spawner_nearest_survivor;
+            float test_pos[3];
+            test_pos = zm_spawner_pos;
+            test_pos[2] += 25.0;
            	if (latest_distance<0.0 || latest_distance>250.0 || 
            	!IsValidClient(target_client) || !IsPlayerAlive(target_client) ||
            	( latest_distance>50.0 && !L4D2_IsVisibleToPlayer(target_client,TEAM_SURVIVOR,3,0,test_pos) ) )
@@ -6825,57 +6838,60 @@ public void OnMapStart()
     PrecacheSound(SOUND_START);
     PrecacheSound(SOUND_VISION);
     
-    //lipsync_available = FileExists(VCD_ELLIS_ZM) && FileExists(VCD_LOUIS_ZM);
-    lipsync_available = false; // vcd is failing, reverting to mp3 for now
-    if (lipsync_available)
+    if (g_bMemes)
     {
-        bool check1 = PrecacheSound(SOUND_ELLIS_ZM);
-        bool check2 = PrecacheSound(SOUND_LOUIS_ZM);
-        //int ssEllis = PrecacheScriptSound(SS_ELLIS_ZM);
-        //int ssLouis = PrecacheScriptSound(SS_LOUIS_ZM);
-        PrecacheGeneric(VCD_ELLIS_ZM, true);
-        PrecacheGeneric(VCD_LOUIS_ZM, true);
-        //lipsync_available = check1 && check2 && ssEllis!=0 && ssLouis!=0;
-        lipsync_available = check1 && check2;
-        //LogMessage("[zm] lipsync state: %d %d %d %d", check1, check2, ssEllis, ssLouis);
-    }
-    
-    if (!lipsync_available)
-    {
-       PrecacheSound(SOUND_ELLIS_ZM_MP3);
-       PrecacheSound(SOUND_LOUIS_ZM_MP3);
-    }
-    
-    //fastdl is necessary otherwise client will hang FOREVER on a black screen.
-    if (FindConVar("sv_allowdownload").BoolValue)
-    {
-        ConVar g_hDownloadUrl = FindConVar("sv_downloadurl");
-        if (g_hDownloadUrl!=null)
+        //lipsync_available = FileExists(VCD_ELLIS_ZM) && FileExists(VCD_LOUIS_ZM);
+        //lipsync_available = false; // vcd is failing, reverting to mp3 for now
+        //if (lipsync_available)
+        //{
+            //bool check1 = PrecacheSound(SOUND_ELLIS_ZM);
+            //bool check2 = PrecacheSound(SOUND_LOUIS_ZM);
+            //int ssEllis = PrecacheScriptSound(SS_ELLIS_ZM);
+            //int ssLouis = PrecacheScriptSound(SS_LOUIS_ZM);
+            //PrecacheGeneric(VCD_ELLIS_ZM, true);
+            //PrecacheGeneric(VCD_LOUIS_ZM, true);
+            //lipsync_available = check1 && check2 && ssEllis!=0 && ssLouis!=0;
+           // lipsync_available = check1 && check2;
+            //LogMessage("[zm] lipsync state: %d %d %d %d", check1, check2, ssEllis, ssLouis);
+        //}
+        
+        //if (!lipsync_available)
+        //{
+           PrecacheSound(SOUND_ELLIS_ZM_MP3);
+           PrecacheSound(SOUND_LOUIS_ZM_MP3);
+        //}
+        
+        //fastdl is necessary otherwise client will hang FOREVER on a black screen.
+        if (FindConVar("sv_allowdownload").BoolValue)
         {
-            char currentUrl[256];
-            g_hDownloadUrl.GetString(currentUrl,sizeof(currentUrl));
-            TrimString(currentUrl);
-            if (currentUrl[0]=='\0') g_hDownloadUrl.SetString("https://gvazdas.github.io/l4d2_zombie_master/left4dead2", false, false);
+            ConVar g_hDownloadUrl = FindConVar("sv_downloadurl");
+            if (g_hDownloadUrl!=null)
+            {
+                char currentUrl[256];
+                g_hDownloadUrl.GetString(currentUrl,sizeof(currentUrl));
+                TrimString(currentUrl);
+                if (currentUrl[0]=='\0') g_hDownloadUrl.SetString("https://gvazdas.github.io/l4d2_zombie_master/left4dead2", false, false);
+            }
+            
+            char buffer[128];
+            //if (lipsync_available) Format(buffer, sizeof(buffer), "sound/%s", SOUND_ELLIS_ZM);
+            Format(buffer, sizeof(buffer), "sound/%s", SOUND_ELLIS_ZM_MP3);
+            AddFileToDownloadsTable(buffer);
+            
+            //if (lipsync_available) Format(buffer, sizeof(buffer), "sound/%s", SOUND_LOUIS_ZM);
+            Format(buffer, sizeof(buffer), "sound/%s", SOUND_LOUIS_ZM_MP3);
+            AddFileToDownloadsTable(buffer); 
+        
+            //if (lipsync_available)
+            //{
+            //    AddFileToDownloadsTable(VCD_ELLIS_ZM);
+            //	AddFileToDownloadsTable(VCD_LOUIS_ZM); 
+        	//}
         }
+        //else lipsync_available = false;
         
-        char buffer[128];
-        if (lipsync_available) Format(buffer, sizeof(buffer), "sound/%s", SOUND_ELLIS_ZM);
-        else Format(buffer, sizeof(buffer), "sound/%s", SOUND_ELLIS_ZM_MP3);
-        AddFileToDownloadsTable(buffer);
-        
-        if (lipsync_available) Format(buffer, sizeof(buffer), "sound/%s", SOUND_LOUIS_ZM);
-        else Format(buffer, sizeof(buffer), "sound/%s", SOUND_LOUIS_ZM_MP3);
-        AddFileToDownloadsTable(buffer); 
-    
-        if (lipsync_available)
-        {
-            AddFileToDownloadsTable(VCD_ELLIS_ZM);
-        	AddFileToDownloadsTable(VCD_LOUIS_ZM); 
-    	}
+        //if (!lipsync_available) LogMessage("[zm] custom lipsynced voice lines cannot be played."); 
     }
-    else lipsync_available = false;
-    
-    if (!lipsync_available) LogMessage("[zm] custom lipsynced voice lines cannot be played."); 
     
     PrecacheSound(SOUND_PANIC_ON);
     PrecacheSound(SOUND_PANIC_OFF);
@@ -7222,7 +7238,7 @@ public void L4D_OnFinishIntro()
 public Action L4D_OnSpawnMob()
 {
     if (!g_bCvarAllow || zm_stage!=ZM_STARTED) return Plugin_Continue;
-    if (!meme_delivered)
+    if (g_bMemes && !meme_delivered)
     {
         float delay = GetRandomFloat(0.1,10.0);
         CreateTimer(delay,random_meme,TIMER_FLAG_NO_MAPCHANGE);
@@ -7325,8 +7341,6 @@ void IsAllowed()
     	
     	HookUserMessage(GetUserMessageId("PZDmgMsg"), OnPZDmgMsg, true);
     	HookUserMessage(GetUserMessageId("Damage"), OnPZDmgMsg, true);
-    	
-    	AddNormalSoundHook(SwapSound);
 		
 	}
     
@@ -7403,8 +7417,6 @@ void IsAllowed()
 		UnhookUserMessage(GetUserMessageId("PZDmgMsg"), OnPZDmgMsg, true);
 		UnhookUserMessage(GetUserMessageId("Damage"), OnPZDmgMsg, true);
 		
-		RemoveNormalSoundHook(SwapSound);
-		
 	}
 
 	
@@ -7473,7 +7485,11 @@ public Action SwapSound(int clients[MAXPLAYERS], int &numClients, char sample[PL
                     	  int &entity, int &channel, float &volume, int &level, int &pitch, int &flags,
                     	  char soundEntry[PLATFORM_MAX_PATH], int &seed)
 {
-    if (!g_bCvarAllow) return Plugin_Continue;
+    if (!g_bCvarAllow || !force_started)
+    {
+        RemoveNormalSoundHook(SwapSound);
+        return Plugin_Continue;
+    }
     if (force_started && zm_stage<ZM_STARTED)
     {
         if (StrContains(sample,"survivor",false)!=-1 && StrContains(sample,"voice",false)!=-1 && StrContains(sample,"world",false)!=-1)
@@ -7482,6 +7498,21 @@ public Action SwapSound(int clients[MAXPLAYERS], int &numClients, char sample[PL
             return Plugin_Handled;
         }
     }
+    //if (meme_pending && StrContains(sample,"survivor",false)!=-1)
+    //{
+    //    if (strcmp(sample,"player/survivor/voice/mechanic/dlc1_communitye20.wav")==0)
+    //    {
+    //        EmitSoundToAll(SOUND_ELLIS_ZM_MP3,entity,SNDCHAN_AUTO,SNDLEVEL_SCREAMING,_,1.0);
+    //        meme_pending = false;
+    //        //return Plugin_Handled;
+    //    }
+    //    else if (strcmp(sample,"player/survivor/voice/Manager/TakeSubMachineGun03.wav")==0)
+    //    {
+    //        EmitSoundToAll(SOUND_LOUIS_ZM_MP3,entity,SNDCHAN_AUTO,SNDLEVEL_SCREAMING,_,1.0);
+    //        meme_pending = false;
+    //        //return Plugin_Handled;
+    //    }
+    //}
     return Plugin_Continue;
 }
 
