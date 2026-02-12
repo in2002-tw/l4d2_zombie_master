@@ -41,8 +41,10 @@
 // Hopefully somebody in the future will find a better plug-and-play solution for playing custom lipsynced audio.
 // 13. Flow spawns by looking at survivor should be easier to trigger now even when a survivor is standing on an invalid navmesh.
 // 14. Fixed exception: Game event "finale_vehicle_incoming" does not exist
-// 15. Clowns spawned by ZM will glow a soft red color visible to survivors so they are easy targets. To turn this off set the cvar zm_clown_glow 0.
-// We added this because clowns can be abused to make panic useless.
+// 15. Clowns spawned by ZM that are chasing survivors will glow a soft red color. To turn this off set the cvar zm_clown_glow 0.
+// We added this because clowns can be abused to make panic useless. This makes clowns easy targets for the survivors, after they die the horde becomes calm.
+// 16. French translation added. Thank you Raykeno
+// 17. A few bugs with survivor glows were fixed.
 
 bool DEBUG = false;
 
@@ -465,7 +467,7 @@ Action fair_queue_update(Handle timer = null)
     }
     
     delete candidates;
-    if (!IsClientInGame(client_offer) || !clients_active[client_offer])
+    if (!IsClientInGame(client_offer) || !clients_active[client_offer] || GetEntProp(client_offer,Prop_Send,"m_fFlags")&FL_FROZEN)
     {
         client_offer = -1;
         fq_timer = CreateTimer(1.0,fair_queue_update,TIMER_FLAG_NO_MAPCHANGE);
@@ -2031,15 +2033,15 @@ void freeze_player(int client, bool state = true, int team = TEAM_SURVIVOR)
         {
             if (team == TEAM_SURVIVOR) SetEntProp(client, Prop_Data, "m_takedamage", 0);
     		SetEntityMoveType(client, MOVETYPE_NONE);
-    		if (team == TEAM_INFECTED) SetEntProp(client, Prop_Send, "m_fFlags", GetEntProp(client, Prop_Send, "m_fFlags")|FL_FROZEN);
-    		else if (team == TEAM_SURVIVOR) TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, view_as<float>({0.0, 0.0, 0.0}));
+    		SetEntProp(client, Prop_Send, "m_fFlags", GetEntProp(client, Prop_Send, "m_fFlags")|FL_FROZEN);
+    		if (team == TEAM_SURVIVOR) TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, view_as<float>({0.0, 0.0, 0.0}));
     		
 		}
 		else
 		{
     		SetEntityMoveType(client, MOVETYPE_WALK);
-    		if (team == TEAM_INFECTED) SetEntProp(client, Prop_Send, "m_fFlags", (GetEntProp(client, Prop_Send, "m_fFlags")&~FL_FROZEN));
-            else if (team == TEAM_SURVIVOR) SetEntProp(client,Prop_Data,"m_takedamage",2);
+    		SetEntProp(client, Prop_Send, "m_fFlags", (GetEntProp(client, Prop_Send, "m_fFlags")&~FL_FROZEN));
+            if (team == TEAM_SURVIVOR) SetEntProp(client,Prop_Data,"m_takedamage",2);
 		}
     }
 }
@@ -5733,6 +5735,29 @@ int get_spawner_target_survivor(bool flow = false, int spawner_state = SPAWNER_D
 	return target_client;
 }
 
+Action clown_check_rush(Handle timer, int entref)
+{
+    if (!IsValidEntRef(entref)) return Plugin_Stop;
+    if (!HasEntProp(entref, Prop_Send, "m_mobRush")) return Plugin_Stop;
+    if (panic) return Plugin_Continue;
+    bool glow = false;
+    if ((GetEntProp(entref, Prop_Send, "m_mobRush"))>0) glow = true;
+    else
+    {
+       	int looktarget = GetEntPropEnt(entref, Prop_Send, "m_clientLookatTarget");
+       	if (IsValidClient(looktarget) && IsPlayerAlive(looktarget) && GetClientTeam(looktarget)==TEAM_SURVIVOR)
+           	glow = true;
+    }
+    if (glow)
+    {
+       	int eFlags = GetEdictFlags(entref);
+        if ((eFlags & FL_EDICT_ALWAYS)<=0) SetEdictFlags(entref, eFlags | FL_EDICT_ALWAYS);
+       	L4D2_SetEntityGlow(entref,L4D2Glow_Constant,3000,0,{160,40,40},false);
+       	return Plugin_Stop;
+   	}
+    return Plugin_Continue;
+}
+
 void ZM_Horde(int client, int count=10, char type[64]="", bool angry = false, bool flow = false)
 {
 	if (!g_bCvarAllow || !IsValidClientZM() || client!=zm_client) return;
@@ -5904,12 +5929,9 @@ void ZM_Horde(int client, int count=10, char type[64]="", bool angry = false, bo
           		DispatchSpawn(zombie);
               	ActivateEntity(zombie);
               	TeleportEntity(zombie, randomPos, NULL_VECTOR, NULL_VECTOR);
-              	if (glow)
-              	{
-                  	int eFlags = GetEdictFlags(zombie);
-                      if ((eFlags & FL_EDICT_ALWAYS)<=0) SetEdictFlags(zombie, eFlags | FL_EDICT_ALWAYS);
-                  	L4D2_SetEntityGlow(zombie,L4D2Glow_Constant,3000,0,{160,40,40},false);
-              	}
+              	if (glow && !ZM_finale_announced && !L4D_IsSurvivalMode())
+                  	CreateTimer(g_fUpdateRate,clown_check_rush,EntIndexToEntRef(zombie),TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+              	
           	
           	}
 		}

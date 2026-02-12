@@ -3,7 +3,7 @@
 	
 	"Zombie Master"
 	{
-		"fr"			"Maître des zombies"
+		"fr"			"Maître des Zombies"
 	}
 	
 	"Bank"
