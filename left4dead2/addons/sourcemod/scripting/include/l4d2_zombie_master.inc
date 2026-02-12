@@ -98,11 +98,13 @@
 #define SOUND_PANIC_ON "npc/mega_mob/mega_mob_incoming.wav"
 #define SOUND_PANIC_OFF "ui/pickup_secret01.wav"
 
+#define SOUND_ELLIS_ZM_FAKE "player/survivor/voice/mechanic/dlc1_communitye20.wav"
 #define SOUND_ELLIS_ZM "zm/ellis_zm.wav"
 #define SOUND_ELLIS_ZM_MP3 "zm/ellis_zm.mp3"
 #define VCD_ELLIS_ZM   "scenes/custom/ellis_zm.vcd"
 #define SS_ELLIS_ZM    "CustomVoice_Ellis_ZM"
 
+#define SOUND_LOUIS_ZM_FAKE "player/survivor/voice/Manager/TakeSubMachineGun03.wav"
 #define SOUND_LOUIS_ZM "zm/louis_zm.wav"
 #define SOUND_LOUIS_ZM_MP3 "zm/louis_zm.mp3"
 #define VCD_LOUIS_ZM   "scenes/custom/louis_zm.vcd"
@@ -291,18 +293,6 @@ stock void infected_panic(Handle hInfectedAttackSurvivorTeam)
     }
 }
 
-// Delay Elapsed Time only. Onslaught events regularly reset Elapsed time but not remaining time.
-stock void invalidate_natural_mob(float duration = 3600.0)
-{
-    CountdownTimer MobSpawnTimer = L4D2Direct_GetMobSpawnTimer();
-    if (MobSpawnTimer)
-    {
-        //CTimer_Invalidate(MobSpawnTimer);
-        //CTimer_Start(MobSpawnTimer,duration); 
-        CTimer_SetDuration(MobSpawnTimer,3700.0);
-    }
-}
-
 stock Action infinite_delay_natural_mob(Handle timer = null)
 {
     CountdownTimer MobSpawnTimer = L4D2Direct_GetMobSpawnTimer();
@@ -310,10 +300,7 @@ stock Action infinite_delay_natural_mob(Handle timer = null)
     {
         CTimer_Invalidate(MobSpawnTimer);
         CTimer_Start(MobSpawnTimer,3600.0); 
-        //CTimer_SetDuration(MobSpawnTimer,3600.0);
-        //CTimer_SetTimestamp(MobSpawnTimer,GetGameTime()+3600.0);
-        //CTimer_SetDuration(MobSpawnTimer,3600.0);
-        RequestFrame(invalidate_natural_mob);
+        CTimer_SetDuration(MobSpawnTimer,3600.0+100.0);
     }
     return Plugin_Stop;
 }
