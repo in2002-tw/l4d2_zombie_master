@@ -167,12 +167,14 @@
 		
 		"Offsets"
         {
+            
             // CBaseServer::GetClient(int) - returns IClient*
             "CBaseServer::GetClient"
             {
                 "linux"        "7"
                 "windows"    "6"
             }
+            
             // CBaseClient::UpdateAcknowledgedFramecount(int)
             // Called with -1 to force full update (like cl_fullupdate)
             "CBaseClient::UpdateAcknowledgedFramecount"
@@ -183,12 +185,20 @@
             
             // https://github.com/Ilusion9/entityIO-sm
             "CBaseEntity::AcceptInput"
-		  {
+		    {
 				"windows"		"44"
 				"linux"			"45"
 				"mac"			"45"
-		  }
-            
+		    }
+		    
+		    // https://asherkin.github.io/vtable/
+		    // Same offsets as Witch::TryToCull()!
+		    "Infected::TryToCull()"
+		    {
+    		    "windows"		"366"
+    		    "linux"			"348"
+		    }
+             
         }
 		
 		
@@ -197,6 +207,22 @@
 			"l4d2_zombie_master::CTerrorPlayer::StartRangeCull"
 			{
 				"signature"		"CTerrorPlayer::StartRangeCull"
+				"callconv"		"thiscall"
+				"return"		"void"
+				"this"			"entity"
+			}
+			
+			"l4d2_zombie_master::SurvivorBot::EnforceProximityToHumans"
+			{
+				"signature"		"SurvivorBot::EnforceProximityToHumans"
+				"callconv"		"thiscall"
+				"return"		"void"
+				"this"			"entity"
+			}
+			
+			"l4d2_zombie_master::CTerrorPlayer::CullZombie"
+			{
+				"signature"		"CTerrorPlayer::CullZombie"
 				"callconv"		"thiscall"
 				"return"		"void"
 				"this"			"entity"
@@ -344,11 +370,29 @@
 				"mac"		"@_ZN8Infected18AttackSurvivorTeamEv"
 			}
 			
+			"CTerrorPlayer::CullZombie"
+			{
+				"library"	"server"
+				"linux"		"@_ZN13CTerrorPlayer10CullZombieEv"
+				"mac"		"@_ZN13CTerrorPlayer10CullZombieEv"
+				"windows"	"\x2A\x2A\x2A\x2A\x2A\x2A\x56\x8B\x2A\x8B\x0D\x2A\x2A\x2A\x2A\x57\x56"
+						/* ? ? ? ? ? ? 56 8B ? 8B 0D ? ? ? ? 57 56 */
+			}
+			
+			
 			// CBaseServer global instance
             "sv"
             {
                 "library"    "engine"
                 "linux"        "@sv"
+            }
+            
+            "SurvivorBot::EnforceProximityToHumans"
+            {
+                "library"        "server"
+                "linux"          "@_ZN11SurvivorBot24EnforceProximityToHumansEv"
+                "windows"        "\x55\x8B\xEC\x83\xEC\x30\x57\x8B\xF9\xE8\x2A\x2A\x2A\x2A\x83\xF8\x04\x0F\x84\x2A\x2A\x2A\x2A\x8B\xCF\xE8\x2A\x2A\x2A\x2A\x84\xC0\x75\x19\x8B\x87\x40\x40\x00\x00\x8B\x90\x08\x01\x00\x00\x8D\x8F"
+                // 55 8B EC 83 EC 30 57 8B F9 E8 ? ? ? ? 83 F8 04 0F 84 ? ? ? ? 8B CF E8 ? ? ? ? 84 C0 75 19 8B 87 40 40 00 00 8B 90 08 01 00 00 8D 8F
             }
             
 			

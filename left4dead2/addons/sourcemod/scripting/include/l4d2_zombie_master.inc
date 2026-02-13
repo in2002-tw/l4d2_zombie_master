@@ -282,13 +282,13 @@ stock bool navArea_validStart(Address navArea)
 
 stock void infected_panic(Handle hInfectedAttackSurvivorTeam)
 {
-    if (!hInfectedAttackSurvivorTeam) return;
     int zombie = INVALID_ENT_REFERENCE;
     while( INVALID_ENT_REFERENCE != (zombie = FindEntityByClassname(zombie, "infected")) )
     {
    	    if( IsValidEntity(zombie) && GetEntProp(zombie,Prop_Data,"m_iHealth")>0 ) 
    	    {
-       	     SDKCall(hInfectedAttackSurvivorTeam,zombie);
+	        if (hInfectedAttackSurvivorTeam) SDKCall(hInfectedAttackSurvivorTeam,zombie);
+            else SetEntProp(zombie, Prop_Send, "m_mobRush", 1);
         }
     }
 }

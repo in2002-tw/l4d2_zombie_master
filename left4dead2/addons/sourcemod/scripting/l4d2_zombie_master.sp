@@ -20,7 +20,7 @@
 #include <adt_trie>
 #include <l4d2_zombie_master>
 
-// Changelog for 0.7.8
+// Changelog for 0.7.9
 // 1. ZM flashlight improvements
 // 2. "Incoming attack" jingle playing when it shouldn't fixed.
 // 3. SI control crouch bug fixed.
@@ -41,10 +41,11 @@
 // Hopefully somebody in the future will find a better plug-and-play solution for playing custom lipsynced audio.
 // 13. Flow spawns by looking at survivor should be easier to trigger now even when a survivor is standing on an invalid navmesh.
 // 14. Fixed exception: Game event "finale_vehicle_incoming" does not exist
-// 15. Clowns spawned by ZM that are chasing survivors will glow a soft red color. To turn this off set the cvar zm_clown_glow 0.
-// We added this because clowns can be abused to make panic useless. This makes clowns easy targets for the survivors, after they die the horde becomes calm.
+// 15. Clowns spawned by ZM that aggro on survivors will glow a soft red color visible to everyone on the server. To turn this off set the cvar zm_clown_glow 0.
+// We added this because clowns can be abused to make panic useless. This makes clowns easy targets for the survivors so the horde can calm down.
 // 16. French translation added. Thank you Raykeno
 // 17. A few bugs with survivor glows were fixed.
+// 18. Rare bug where survivor bots teleport to ZM, which can cause them to fall to their death, hopefully fixed.
 
 bool DEBUG = false;
 
@@ -56,14 +57,13 @@ bool DEBUG = false;
 // 12. Better navmesh integration
 // 15. Performance bottlenecks.
 // 16. Is there a way to prevent observers from being able to see the ZM info?
-// 21. Survivor bots teleport to ZM and fall to their death
 // 26. No fog for ZM
 // 30. Bring back inputkill prevention. Might not need it though.
 // 38. Check why witches and uncommons can't spawn, sometimes get auto killed
 // 42. QuitZM should first check if ZM is alive and undo control
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.7.8 2026-02-11"
+#define PLUGIN_VERSION 			"0.7.9 2026-02-12"
 #define GAMEDATA_FILE           PLUGIN_NAME
 
 public Plugin myinfo =
@@ -137,6 +137,14 @@ static Handle hInfectedAttackSurvivorTeam = null;
 
 // https://github.com/Ilusion9/entityIO-sm
 static Handle g_DHook_AcceptInput = null;
+
+//static Handle g_DHook_TryToCull = null;
+
+// ty zyiks
+DynamicDetour g_dd_EnforceProximity;
+
+// https://github.com/Psykotikism/L4D1-2_Signatures/blob/main/l4d2/gamedata/l4d2_signatures.txt
+//DynamicDetour g_dd_CullZombie;
 
 int AllPlayerCount;
 ConVar g_hCvarDebug, g_hCvarAllow, z_max_player_zombies, infectedbots_enable;
@@ -5057,16 +5065,6 @@ Action JoinZM(int client, int args)
         L4D_TakeOverBot(client);
     }
     
-    // Trying to fix survivor teleport and die bug
-    for (int i = 1; i <= MaxClients; i++)
-   	{
-   		if (!IsClientInGame(i)) continue;
-   		if (GetClientTeam(i)!=TEAM_SURVIVOR) continue;
-   		if (!IsPlayerAlive(i)) continue;
-   		if (!IsFakeClient(i)) continue;
-   		SetEntPropEnt(i, Prop_Send, "m_lookatPlayer",-1);
-    }
-    
     remove_all_ZM_glows();
     
     zm_just_died = true;
@@ -5383,7 +5381,8 @@ bool can_discount_tank()
     if (!g_bDiscountTank) return false;
     if (zm_stage!=ZM_STARTED) return false;
     if (first_tank_stage>0) return false;
-    if (ZM_finale_announced || L4D_IsSurvivalMode()) return false;
+    if ( ZM_finale_announced || L4D_IsSurvivalMode() ) return false;
+    if (L4D_IsMissionFinalMap() && !IsValidEntity(lastdoor)) return false;
     int ProhibitBosses = L4D2_GetScriptValueInt("ProhibitBosses", 0);
     if (ProhibitBosses>0) return false;
     int DisallowThreatType = L4D2_GetScriptValueInt("DisallowThreatType", 0);
@@ -5459,9 +5458,15 @@ Action zm_debug_tank_discount(int client, int args)
         return Plugin_Continue;
     }
     
-    if (L4D_IsSurvivalMode() || ZM_finale_announced)
+    if (L4D_IsSurvivalMode())
     {
-        ReplyToCommand(client, "First tank discount not applicable.");
+        ReplyToCommand(client, "First tank discount disabled in Survival.");
+        return Plugin_Continue;
+    }
+    
+    if ( ZM_finale_announced || (L4D_IsMissionFinalMap() && !IsValidEntity(lastdoor)) )
+    {
+        ReplyToCommand(client, "First tank discount disabled in Finales.");
         return Plugin_Continue;
     }
     
@@ -5942,12 +5947,16 @@ void ZM_Horde(int client, int count=10, char type[64]="", bool angry = false, bo
 		
         if (zombie>0)
         {
+           //if (g_DHook_TryToCull) DHookEntity(g_DHook_TryToCull,false,zombie,INVALID_FUNCTION,TryToCull_Pre);
            spawned += 1;
            bank -= temp_cost;
            live_zombie_arr[ZOMBIECLASS_COMMON] += 1;
            g_iEntities += 1;
-           if (angry && hInfectedAttackSurvivorTeam) SDKCall(hInfectedAttackSurvivorTeam,zombie);
-           // if this doesn't work', try setting the entprop m_mobRush 
+           if (angry)
+           {
+               if (hInfectedAttackSurvivorTeam) SDKCall(hInfectedAttackSurvivorTeam,zombie);
+               else SetEntProp(zombie, Prop_Send, "m_mobRush", 1);
+           }
            if (set_model[0]!=0 || price_angry) DispatchKeyValue(zombie, "targetname", "zm_unit_uncommon");
            else DispatchKeyValue(zombie, "targetname", "zm_unit_common");
            if (use_randompz) mark_flow_survivor_and_zombie(-1,zombie);
@@ -6065,6 +6074,7 @@ void ZM_Witch(int client,int witch_type, bool free = false, bool flow = false)
 	
 	if (witch>0)
 	{
+    	//if (g_DHook_TryToCull) DHookEntity(g_DHook_TryToCull,false,witch,INVALID_FUNCTION,TryToCull_Pre);
     	if (!free) bank -= temp_cost;
     	live_zombie_arr[ZOMBIECLASS_WITCH] += 1;
     	if (DEBUG) LogMessage("[zm] Created witch %d", witch);
@@ -6348,6 +6358,7 @@ void spawn_free_angry_zombies(int victim, int count)
                 //SetEntProp(zombie,Prop_Data,"m_iHealth", GetEntProp(zombie,Prop_Data,"m_iMaxHealth")-1 ); // no refunds
                 live_zombie_arr[ZOMBIECLASS_COMMON] += 1;
                 if (hInfectedAttackSurvivorTeam) SDKCall(hInfectedAttackSurvivorTeam,zombie);
+                else SetEntProp(zombie, Prop_Send, "m_mobRush", 1);
             }
             
         }
@@ -6720,7 +6731,7 @@ void ResetCvars()
     ResetConVar(FindConVar("z_frustration"), true, true);
     ResetConVar(FindConVar("tank_stuck_failsafe"), true, true);
     
-    //ResetConVar(FindConVar("sb_enforce_proximity_range"), true, true);
+    ResetConVar(FindConVar("sb_enforce_proximity_range"), true, true);
     //ResetConVar(FindConVar("sb_unstick"), true, true);
     
     //ResetConVar(FindConVar("z_common_limit"), true, true);
@@ -6777,7 +6788,7 @@ void SetCvarsZM()
    
    // Prevent survivor bot teleport to ZM bug
    // If that doesn't work try detouring SurvivorBot::EnforceProximityToHumans
-   //SetConVarInt(FindConVar("sb_enforce_proximity_range"), 99999);
+   SetConVarInt(FindConVar("sb_enforce_proximity_range"), 999999);
    //SetConVarInt(FindConVar("sb_unstick"), 0);
    
    //SetConVarInt(FindConVar("z_common_limit"), 1);
@@ -7379,7 +7390,10 @@ void IsAllowed()
 		//if (g_dd_StartRangeCull) g_dd_StartRangeCull.Enable(Hook_Pre, StartRangeCull_Pre);
 		//if (g_hDTR_InputKill && !bypass_windows) g_hDTR_InputKill.Enable(Hook_Pre, DTR_CBaseEntity_InputKill);
 		//if (g_hDTR_InputKillHierarchy && !bypass_windows) g_hDTR_InputKillHierarchy.Enable(Hook_Pre, DTR_CBaseEntity_InputKillHierarchy);
-	
+	    
+	    if (g_dd_EnforceProximity) g_dd_EnforceProximity.Enable(Hook_Pre, EnforceProximity_Pre);
+	    //if (g_dd_CullZombie) g_dd_CullZombie.Enable(Hook_Pre, CullZombie_Pre);
+	    
 		EMS_hud_ready = true;
 		if (AllPlayerCount<=0) CountClients();
 		if (AllPlayerCount>0) clients_in_server = true;
@@ -7454,11 +7468,14 @@ void IsAllowed()
 		//UnhookEvent("survivor_rescue_abandoned", EvtRescueAbandoned, EventHookMode_PostNoCopy);
 		UnhookEvent("survivor_call_for_help", EvtPlayerCallHelp, EventHookMode_Post); // userid -> actual player entity
 		UnhookEvent("player_bot_replace", EvtBotReplacePlayer, EventHookMode_Post);
-          UnhookEvent("bot_player_replace", EvtPlayerReplaceBot, EventHookMode_Post);
+        UnhookEvent("bot_player_replace", EvtPlayerReplaceBot, EventHookMode_Post);
 		
 		//if (g_dd_StartRangeCull) g_dd_StartRangeCull.Disable(Hook_Pre, StartRangeCull_Pre);
 		//if (g_hDTR_InputKill && !bypass_windows) g_hDTR_InputKill.Disable(Hook_Pre, DTR_CBaseEntity_InputKill);
 		//if (g_hDTR_InputKillHierarchy && !bypass_windows) g_hDTR_InputKillHierarchy.Disable(Hook_Pre, DTR_CBaseEntity_InputKillHierarchy);
+		
+		if (g_dd_EnforceProximity) g_dd_EnforceProximity.Disable(Hook_Pre, EnforceProximity_Pre);
+		//if (g_dd_CullZombie) g_dd_CullZombie.Disable(Hook_Pre, CullZombie_Pre);
 		
 		for( int i = 1; i <= MaxClients; i++ )
     	{
@@ -7653,6 +7670,36 @@ public MRESReturn DHook_Director_AcceptInput(int pThis, DHookReturn hReturn, DHo
 //	if (DEBUG) LogMessage("[zm] StartRangeCull_Pre");
 //	if (g_bCvarAllow && zm_stage<ZM_STARTED) return MRES_Supercede;
 //	return MRES_Ignored;
+//}
+
+MRESReturn EnforceProximity_Pre(int entity)
+{
+	if (zm_client==-1) return MRES_Ignored;
+	if (GetEntPropEnt(entity,Prop_Send,"m_lookatPlayer")==zm_client && IsValidClientZM() && !IsPlayerAlive(zm_client))
+	{
+    	SetEntPropEnt(entity, Prop_Send, "m_lookatPlayer",-1);
+    	if (DEBUG) LogMessage("[zm] EnforceProximity_Pre %d", entity);
+    	return MRES_Supercede;
+	}
+	return MRES_Ignored;
+}
+
+//MRESReturn CullZombie_Pre(int entity)
+//{
+//    LogMessage("[zm] CullZombie_Pre %d", entity);
+//    if (g_bCvarAllow) return MRES_Supercede;
+//	return MRES_Ignored;
+//}
+
+//public MRESReturn TryToCull_Pre(int pThis, DHookReturn hReturn, DHookParam hParams)
+//{
+//    LogMessage("[zm] TryToCull %d %d", pThis, hReturn.Value);
+//    if (g_bCvarAllow)
+//    {
+//        hReturn.Value = false;
+//        return MRES_Supercede;
+//    }
+//    return MRES_Ignored;
 //}
 
 //MRESReturn DTR_CBaseEntity_InputKill(int pThis)
@@ -8030,6 +8077,14 @@ void PrepSDKCall()
 	//if (!g_dd_StartRangeCull) LogMessage("[zm] Failed to create DynamicDetour StartRangeCull");
 	//else LogMessage("[zm] Created DynamicDetour l4d2_zombie_master::CTerrorPlayer::StartRangeCull");
     
+    g_dd_EnforceProximity = DynamicDetour.FromConf(hGameData, "l4d2_zombie_master::SurvivorBot::EnforceProximityToHumans");
+    if (!g_dd_EnforceProximity) LogMessage("[zm] Failed to create DynamicDetour EnforceProximityToHumans");
+    else LogMessage("[zm] Created DynamicDetour SurvivorBot::EnforceProximityToHumans");
+    
+    //g_dd_CullZombie = DynamicDetour.FromConf(hGameData, "l4d2_zombie_master::CTerrorPlayer::CullZombie");
+    //if (!g_dd_CullZombie) LogMessage("[zm] Failed to create DynamicDetour CTerrorPlayer::CullZombie");
+    //else LogMessage("[zm] Created DynamicDetour CTerrorPlayer::CullZombie");
+    
     //g_hDTR_InputKill = DynamicDetour.FromConf(hGameData, "l4d2_zombie_master::CBaseEntity::InputKill");
     //if (!g_hDTR_InputKill) LogMessage("[zm] Failed to create DynamicDetour InputKill");
     
@@ -8054,6 +8109,11 @@ void PrepSDKCall()
         DHookAddParam(g_DHook_AcceptInput, HookParamType_Object, 20);
 	    DHookAddParam(g_DHook_AcceptInput, HookParamType_Int);
 	}
+	
+	//int TryToCullOffset = GameConfGetOffset(hGameData, "Infected::TryToCull()");
+	//if (TryToCullOffset == -1) LogMessage("[zm] Failed to load Infected::TryToCull() offset.");
+	//else g_DHook_TryToCull = DHookCreate(TryToCullOffset, HookType_Entity, ReturnType_Bool, ThisPointer_CBaseEntity);
+	
 	
 	//if (hGameData_l4dhooks != null)
 	//{
