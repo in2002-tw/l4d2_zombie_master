@@ -3499,6 +3499,7 @@ public void L4D2_OnDominatedBySpecialInfected(int victim, int dominator)
 {
     if (!g_bCvarAllow) return;
     update_glow(victim,false);
+    CreateTimer(0.15,Timer_update_glow,EntIndexToEntRef(victim),TIMER_FLAG_NO_MAPCHANGE);
 }
 
 // There is a deeper layer of glows that the game is managing I can't seem to access with l4dhooks.
@@ -3712,6 +3713,13 @@ void CreateZMGlow(int target, bool red = false)
     	update_glow(target,false);
 	}
 	if (DEBUG) LogMessage("[zm] CreateZMGlow %d %d %d", target, glow, g_iGlowList[target]);
+}
+
+Action Timer_update_glow(Handle timer, int entref)
+{
+    if (!IsValidEntRef(entref)) return Plugin_Stop;
+    update_glow(EntRefToEntIndex(entref),false);
+    return Plugin_Stop;
 }
 
 void update_glow(int i, bool force = false)
@@ -6377,6 +6385,7 @@ public Action Event_PlayerBoomed(Event event, const char[] name, bool dontBroadc
     {
         spawn_free_angry_zombies(victim,vomit_numzombies);
         update_glow(victim,false);
+        CreateTimer(0.15,Timer_update_glow,EntIndexToEntRef(victim),TIMER_FLAG_NO_MAPCHANGE);
     }
     return Plugin_Continue;
 }
@@ -6386,6 +6395,7 @@ public Action Event_PlayerUnBoomed(Event event, const char[] name, bool dontBroa
     if (!g_bCvarAllow) return Plugin_Continue;
     int victim = GetClientOfUserId(event.GetInt("userid"));
     update_glow(victim,false);
+    CreateTimer(0.15,Timer_update_glow,EntIndexToEntRef(victim),TIMER_FLAG_NO_MAPCHANGE);
     return Plugin_Continue;
 }
 
@@ -7825,8 +7835,10 @@ void evtPlayerTeam(Event event, const char[] name, bool dontBroadcast)
 {
 	if (!g_bCvarAllow) return;
     int client = GetClientOfUserId(event.GetInt("userid"));
+    if (!IsValidClient(client)) return;
     if (DEBUG) LogMessage("[zm] evtPlayerTeam %d", client);
     update_glow(client,false);
+    CreateTimer(0.15,Timer_update_glow,EntIndexToEntRef(client),TIMER_FLAG_NO_MAPCHANGE);
     if (!IsValidClient(client)) return;
     if (zm_timer == INVALID_HANDLE) zm_update(zm_timer);
     if (zm_client==client) RequestFrame(check_zm_team);
