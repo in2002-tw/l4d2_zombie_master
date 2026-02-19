@@ -26,6 +26,9 @@
 #include <left4dhooks>
 #include <adt_trie>
 
+#define FIRST_TANK_SPAWNED 1
+#define FIRST_TANK_DEAD 2
+
 #define ZM_MENU_CLOSED 0
 #define ZM_MENU_MAIN 1
 #define ZM_MENU_COMMON 2
@@ -43,6 +46,10 @@
 #define SPAWNER_OTHER 5
 
 #define FOG_DISTANCE 5000.0
+
+#define HULL_DX_STRICT 15.0
+#define HULL_DZ_MIN_STRICT 26.0
+#define HULL_DZ_MAX_STRICT 46.0
 
 #define HULL_DX 20.0
 #define HULL_DZ 36.0
@@ -64,6 +71,10 @@
 #define SOUND_CONDITIONAL "ui/menu_invalid.wav"
 //#define SOUND_ALLOWED "ui/menu_focus.wav"
 #define SOUND_ALLOWED "ui/littlereward.wav" // try beepclear.wav
+
+#define EXPLOSION1 "ambient/explosions/explode_1.wav"
+#define EXPLOSION2 "ambient/explosions/explode_2.wav"
+#define EXPLOSION3 "ambient/explosions/explode_3.wav"
 
 #define MODEL_SMOKER "models/infected/smoker.mdl"
 #define MODEL_BOOMER "models/infected/boomer.mdl"
@@ -209,12 +220,18 @@ stock void get_zombieclass_name(int ZOMBIECLASS, char name[32])
 // Allow witches to be spawned in weird places
 stock bool nav_can_spawn_zombies(int navAttributeFlags, int navSpawnAttributes, bool witch = false)
 {
+    if (!witch)
+    {
+        if (navAttributeFlags & NAV_BASE_OUTSIDE_WORLD) return false;
+        if (navSpawnAttributes & NAV_SPAWN_BATTLESTATION) return false;
+    }
+    // some Valve maps have messed up navmeshes where rescue closet is bleeding out
     if (navSpawnAttributes & NAV_SPAWN_PLAYER_START) return false;
     if (navSpawnAttributes & NAV_SPAWN_CHECKPOINT) return false;
+    if (navSpawnAttributes & NAV_SPAWN_BATTLEFIELD) return true;
+    if (navSpawnAttributes & NAV_SPAWN_ESCAPE_ROUTE) return true;
+    if (navSpawnAttributes & NAV_SPAWN_OBSCURED || navSpawnAttributes & NAV_SPAWN_IGNORE_VISIBILITY) return true;
     if (navSpawnAttributes & NAV_SPAWN_RESCUE_CLOSET) return false;
-    if (!witch && (navAttributeFlags & NAV_BASE_OUTSIDE_WORLD)) return false;
-    if (!witch && (navSpawnAttributes & NAV_SPAWN_BATTLESTATION)) return false;
-    if ( (navSpawnAttributes & NAV_SPAWN_OBSCURED) || (navSpawnAttributes & NAV_SPAWN_IGNORE_VISIBILITY)) return true; // always spawn
     return true;
 }
 
@@ -517,6 +534,52 @@ stock void process_horde_arg(int &count, char type[32], bool &angry, bool &flow,
         count = arg_int;
         if (count<=0) count = 10;
     }
+}
+
+static float HULL_MINS[3] = {-HULL_DX_STRICT,-HULL_DX_STRICT,HULL_DZ_MIN_STRICT};
+static float HULL_MAXS[3] = {HULL_DX_STRICT,HULL_DX_STRICT,HULL_DZ_MAX_STRICT};
+public bool TraceFilter_Spawner(int entity, int contentsMask)
+{
+	if (entity==0) return true;
+	if (IsValidClient(entity) && IsPlayerAlive(entity)) return true;
+	if (entity>MaxClients)
+	{
+    	   static char class[32];
+        GetEntityClassname(entity, class, sizeof(class));
+        if (strcmp(class,"infected")==0) return false;
+        if (strcmp(class,"env_player_blocker")==0) return false;
+        //if (strcmp(class,"witch")==0) return false; // restrict dirty witch placement
+        if (strcmp(class,"env_physics_blocker")==0) return false;
+    	   return true;
+	}
+	return true;
+}
+stock bool IsObstructed(float vecpos[3], bool DEBUG=false)
+{
+    bool isObstructed = false;
+	Handle hullTrace = TR_TraceHullFilterEx(vecpos, vecpos, HULL_MINS, HULL_MAXS,
+								        MASK_NPCSOLID,
+								        TraceFilter_Spawner);
+	if (TR_DidHit(hullTrace))
+	{
+		int hitEntity = TR_GetEntityIndex(hullTrace);
+		if (DEBUG && IsValidEntity(hitEntity))
+		{
+		     char classname[64];
+             GetEntityClassname(hitEntity, classname, sizeof(classname));
+             LogMessage("[zm] IsObstructed hit %d %s", hitEntity, classname);
+		}
+		int hullSurfaceFlags = TR_GetSurfaceFlags(hullTrace);
+		if (hitEntity == 0)
+		{
+			// Hit world
+			if (!(hullSurfaceFlags & 0x0080) && !(hullSurfaceFlags & 0x0100) && !(hullSurfaceFlags & 0x0200))
+        			isObstructed = true;
+		}
+		else isObstructed = true;
+	}
+	delete hullTrace;
+	return isObstructed;
 }
 
 //// ty zyiks

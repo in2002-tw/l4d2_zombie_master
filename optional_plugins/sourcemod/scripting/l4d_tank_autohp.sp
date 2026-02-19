@@ -6,15 +6,22 @@
 //#undef REQUIRE_PLUGIN
 
 #define PLUGIN_NAME			    "l4d_tank_autohp"
-#define PLUGIN_VERSION 			"1.0 2026-01-25"
+#define PLUGIN_VERSION 			"1.01 2026-02-16"
 
 #define TEAM_SPECTATOR		1
 #define TEAM_SURVIVOR		2
 #define TEAM_INFECTED		3
 
+// These are EXPECTED VANILLA GAME VALUES. DO NOT MODIFY THIS.
+#define HP_EASY 3000
+#define HP_NORMAL 4000
+#define HP_VERSUS 6000
+#define HP_ADVANCED 8000
+
 bool DEBUG = false;
 float g_fCvarTankAutoHPScale, g_fCvarTankAutoHPCutoff;
-ConVar g_hCvarTankAutoHPScale, g_hCvarTankAutoHPCutoff;
+ConVar g_hCvarTankAutoHPScale, g_hCvarTankAutoHPCutoff, g_hCvarVerifyVanillaValues, g_hCvarAlways;
+bool g_bCvarVerifyVanillaValues, g_bCvarAlways = false;
 int ZOMBIECLASS_TANK;
 
 bool adjusted[MAXPLAYERS+1] = {false,...}; // true if tank health was already adjusted
@@ -60,6 +67,12 @@ public void OnPluginStart()
     g_hCvarTankAutoHPCutoff = CreateConVar("l4d_tank_autohp_cutoff", "0.75", "In percent, how much the per-player bonus gets reduced by the time we get to the max player count. Larger number makes the per-player bonus shrink faster. 0 to stop shrinking.", FCVAR_NOTIFY, true, 0.0, true, 1000.0);
     g_hCvarTankAutoHPCutoff.AddChangeHook(ConVarChanged_Cvars);
     
+    g_hCvarVerifyVanillaValues = CreateConVar("l4d_tank_autohp_vanilla_verify", "0.0", "If 1, will modify tank HP only if tank has vanilla hp.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hCvarVerifyVanillaValues.AddChangeHook(ConVarChanged_Cvars);
+    
+    g_hCvarAlways = CreateConVar("l4d_tank_autohp_always", "0.0", "If 1, will always scale tank hp even if health or maxhealth was modified by something else.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hCvarAlways.AddChangeHook(ConVarChanged_Cvars);
+    
     HookEvent("player_spawn", evtPlayerSpawn, EventHookMode_Post);
     HookEvent("player_team", evtPlayerTeam, EventHookMode_Post);
     HookEvent("round_start", evtRoundStart, EventHookMode_PostNoCopy);
@@ -70,6 +83,17 @@ public void OnPluginStart()
     RegConsoleCmd("l4d_tank_autohp_table", PrintTable, "Print tank health table for current parameters.");
     
     UpdateCvars();
+}
+
+
+public void OnPluginEnd()
+{
+    UnhookEvent("player_spawn", evtPlayerSpawn, EventHookMode_Post);
+    UnhookEvent("player_team", evtPlayerTeam, EventHookMode_Post);
+    UnhookEvent("round_start", evtRoundStart, EventHookMode_PostNoCopy);
+    UnhookEvent("player_bot_replace", EvtBotReplacePlayer, EventHookMode_Pre);
+    UnhookEvent("bot_player_replace", EvtPlayerReplaceBot, EventHookMode_Pre);
+    UnhookEvent("player_death", evtPlayerDeath, EventHookMode_Post);
 }
 
 public Action PrintTable(int client, int args)
@@ -88,16 +112,6 @@ public Action PrintTable(int client, int args)
     }
     
     return Plugin_Continue;
-}
-
-public void OnPluginEnd()
-{
-    UnhookEvent("player_spawn", evtPlayerSpawn, EventHookMode_Post);
-    UnhookEvent("player_team", evtPlayerTeam, EventHookMode_Post);
-    UnhookEvent("round_start", evtRoundStart, EventHookMode_PostNoCopy);
-    UnhookEvent("player_bot_replace", EvtBotReplacePlayer, EventHookMode_Pre);
-    UnhookEvent("bot_player_replace", EvtPlayerReplaceBot, EventHookMode_Pre);
-    UnhookEvent("player_death", evtPlayerDeath, EventHookMode_Post);
 }
 
 public void OnClientPutInServer(int client)
@@ -157,6 +171,8 @@ void UpdateCvars()
 {
     g_fCvarTankAutoHPScale = g_hCvarTankAutoHPScale.FloatValue;
     g_fCvarTankAutoHPCutoff = g_hCvarTankAutoHPCutoff.FloatValue;
+    g_bCvarVerifyVanillaValues = g_hCvarVerifyVanillaValues.BoolValue;
+    g_bCvarAlways = g_hCvarAlways.BoolValue;
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
@@ -188,6 +204,17 @@ Action scale_tank_hp(Handle timer, DataPack pack)
     if (GetEntProp(client,Prop_Send,"m_isIncapacitated")>0) return Plugin_Stop;
     if (GetEntProp(client,Prop_Send,"m_zombieClass")!=ZOMBIECLASS_TANK) return Plugin_Stop;
     
+    int expected_maxhealth = pack.ReadCell();
+    int expected_health = pack.ReadCell();
+    int curr_maxhealth = GetEntProp(client,Prop_Data,"m_iMaxHealth");
+    if (!g_bCvarAlways && curr_maxhealth!=expected_maxhealth) return Plugin_Stop;
+    expected_maxhealth = curr_maxhealth;
+    
+    int curr_health = GetEntProp(client,Prop_Data,"m_iHealth");
+    if (!g_bCvarAlways && curr_health>expected_health) return Plugin_Stop;
+    expected_health = curr_health;
+    int diff = curr_maxhealth - curr_health;
+    
     int allplayers = GetClientCount(false);
     int g_iPlayersInSurvivorTeam, counted_players = 0;
     for (int i=1;i<=MaxClients;i++)
@@ -207,15 +234,6 @@ Action scale_tank_hp(Handle timer, DataPack pack)
     
     if (g_iPlayersInSurvivorTeam<=4) return Plugin_Stop;
     
-    int expected_maxhealth = pack.ReadCell();
-    int expected_health = pack.ReadCell();
-    int curr_maxhealth = GetEntProp(client,Prop_Data,"m_iMaxHealth");
-    if (curr_maxhealth!=expected_maxhealth) return Plugin_Stop;
-    
-    int curr_health = GetEntProp(client,Prop_Data,"m_iHealth");
-    if (curr_health>expected_health) return Plugin_Stop;
-    int diff = curr_maxhealth - curr_health;
-    
     int set_maxhealth = get_adjusted_hp(curr_maxhealth,g_iPlayersInSurvivorTeam);
     int set_health = set_maxhealth - diff;
     
@@ -230,11 +248,6 @@ Action scale_tank_hp(Handle timer, DataPack pack)
     
     return Plugin_Stop;
 }
-
-#define HP_EASY 3000
-#define HP_NORMAL 4000
-#define HP_VERSUS 6000
-#define HP_ADVANCED 8000
 
 void swap(int client, int newclient, bool swap_hp = false)
 {
@@ -274,6 +287,7 @@ Action EvtPlayerReplaceBot(Event event, const char[] name, bool dontBroadcast)
 
 void evtPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 {
+	if (g_fCvarTankAutoHPScale<=0.0) return;
 	int client = GetClientOfUserId(event.GetInt("userid"));
 	if (!IsValidClient(client)) return;
 	char targetName[64];
@@ -299,7 +313,7 @@ void evtPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 	int health = GetEntProp(client,Prop_Data,"m_iHealth");
 	int max_health = GetEntProp(client,Prop_Data,"m_iMaxHealth");
     if (health>max_health) return;
-    //if ( max_health!=HP_EASY && max_health!=HP_NORMAL && max_health!=HP_VERSUS && max_health!=HP_ADVANCED ) return;
+    if (g_bCvarVerifyVanillaValues && max_health!=HP_EASY && max_health!=HP_NORMAL && max_health!=HP_VERSUS && max_health!=HP_ADVANCED) return;
     if (DEBUG) PrintToServer("[l4d_tank_autohp] player_spawn %d %s %d %d %d %d/%d", client, targetName, team, incap, zClass, health, max_health);
 	DataPack pack;
     CreateDataTimer(0.15,scale_tank_hp,pack,TIMER_FLAG_NO_MAPCHANGE|TIMER_DATA_HNDL_CLOSE);
