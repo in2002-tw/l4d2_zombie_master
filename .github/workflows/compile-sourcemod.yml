@@ -1,0 +1,94 @@
+name: Compile SourceMod Script
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up SourcePawn compiler (SourceMod latest stable 1.12)
+        uses: rumblefrog/setup-sp@v1.2.4
+        with:
+          version: 1.12.x
+
+      - name: Download required third-party includes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          include_dir="$GITHUB_WORKSPACE/.ci/includes"
+          mkdir -p "$include_dir"
+
+          download_with_fallback() {
+            local output_file="$1"
+            shift
+
+            local url
+            for url in "$@"; do
+              if curl --fail --silent --show-error --location \
+                --retry 6 --retry-delay 2 --retry-all-errors \
+                "$url" -o "$output_file"; then
+                return 0
+              fi
+
+              echo "Download failed from: $url" >&2
+            done
+
+            echo "Unable to download required file: $output_file" >&2
+            return 1
+          }
+
+          for include_file in \
+            left4dhooks.inc \
+            left4dhooks_anim.inc \
+            left4dhooks_silver.inc \
+            left4dhooks_lux_library.inc \
+            left4dhooks_stocks.inc
+          do
+            download_with_fallback \
+              "$include_dir/$include_file" \
+              "https://raw.githubusercontent.com/SilvDev/Left4DHooks/main/sourcemod/scripting/include/$include_file" \
+              "https://cdn.jsdelivr.net/gh/SilvDev/Left4DHooks@main/sourcemod/scripting/include/$include_file"
+          done
+
+          if [ -z "${includePath:-}" ] || [ ! -f "${includePath}/dhooks.inc" ]; then
+            download_with_fallback \
+              "$include_dir/dhooks.inc" \
+              "https://raw.githubusercontent.com/alliedmodders/sourcemod/master/plugins/include/dhooks.inc" \
+              "https://cdn.jsdelivr.net/gh/alliedmodders/sourcemod@master/plugins/include/dhooks.inc"
+          fi
+
+      - name: Compile l4d2_zombie_master.sp
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$GITHUB_WORKSPACE/build"
+
+          spcomp \
+            -v2 \
+            -E \
+            -i"$GITHUB_WORKSPACE/left4dead2/addons/sourcemod/scripting/include" \
+            -i"$GITHUB_WORKSPACE/.ci/includes" \
+            "$GITHUB_WORKSPACE/left4dead2/addons/sourcemod/scripting/l4d2_zombie_master.sp" \
+            -o"$GITHUB_WORKSPACE/build/l4d2_zombie_master.smx"
+
+      - name: Upload compiled plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: l4d2_zombie_master-sourcemod-1.12
+          path: build/l4d2_zombie_master.smx
+          if-no-files-found: error
