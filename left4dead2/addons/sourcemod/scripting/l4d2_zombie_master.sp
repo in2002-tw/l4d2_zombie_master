@@ -40,7 +40,7 @@
 // 14. Minor bug fixes.
 // 15. AutoCommon system. New client commands: zm_autocommon_mode, zm_autocommon_max
 // 16. Random SI Model plugin works.
-// 17. New cvar zm_gamemode
+// 17. New cvar zm_gamemode. Custom gamemode .cfgs now supported.
 
 bool DEBUG = false;
 
@@ -604,10 +604,19 @@ void update_t_zm_activity(float new_t = -1.0)
     else t_zm_activity = new_t;
 }
 
+Action Timer_exec_settings(Handle timer)
+{
+    char command[PLATFORM_MAX_PATH];
+    Format(command, sizeof(command), "exec sourcemod/%s", CONFIG_FILENAME);
+    ServerCommand(command);
+    return Plugin_Stop;
+}
+
 public void OnPluginStart()
 {
 	if (DEBUG) LogMessage("[zm] OnPluginStart");
-	AutoExecConfig(true, CONFIG_FILENAME);
+	CreateTimer(1.0,Timer_exec_settings);
+	//AutoExecConfig(true, CONFIG_FILENAME);
 	g_Steam = new StringMap();
 	precache_survivor_hp();
 	LoadTranslations("l4d2_zombie_master.phrases");
