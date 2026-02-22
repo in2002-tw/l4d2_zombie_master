@@ -428,7 +428,10 @@ stock void transfer_SI_properties(int entity_new, char[] modelname, float vOrigi
    L4D2_SetCustomAbilityCooldown(entity_new,cooldown_remaining);
    //SetEntProp(entity_new, Prop_Data, "m_fFlags", fFlags); // causes charger to be stuck forever
    if (fFlags & FL_ONFIRE) IgniteEntity(entity_new, IGNITE_TIME);
-   if (fFlags & FL_DUCKING) SetEntityFlags(entity_new, GetEntityFlags(entity_new) | FL_DUCKING);
+   if (fFlags & FL_DUCKING)
+   {
+       SetEntityFlags(entity_new, GetEntityFlags(entity_new) | FL_DUCKING);
+   }
    
    TrimString(targetname);
    if (targetname[0]!=0)
