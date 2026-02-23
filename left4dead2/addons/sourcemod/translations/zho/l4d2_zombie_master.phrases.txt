@@ -512,4 +512,42 @@
 		"zho"			"Tank discount has been maximized!"
 	}
 
+	"AutoCommon"
+	{
+		"zho"			"AutoCommon"
+	}
+	
+	"AutoCommon ALWAYS"
+	{
+		"zho"			"Mode: ALWAYS"
+	}
+	
+	"AutoCommon PANIC"
+	{
+		"zho"			"Mode: PANIC"
+	}
+	
+	"AutoCommon OFF"
+	{
+		"zho"			"Mode: OFF"
+	}
+	
+	"AutoCommon Max"
+	{
+		"#format"		"{1:d}"
+		"zho"			"Max: {1}"
+	}
+	
+	
+	"Freeze Specials"
+	{
+		"zho"			"Freeze SI"
+	}
+	
+	"Unfreeze Specials"
+	{
+		"zho"			"Unfreeze SI"
+	}
+	
+
 }

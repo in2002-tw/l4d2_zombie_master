@@ -513,5 +513,42 @@
 		"fr"			"Remise du Tank maximisé!"
 	}
 	
+	"AutoCommon"
+	{
+		"fr"			"AutoCommon"
+	}
+	
+	"AutoCommon ALWAYS"
+	{
+		"fr"			"Mode: ALWAYS"
+	}
+	
+	"AutoCommon PANIC"
+	{
+		"fr"			"Mode: PANIC"
+	}
+	
+	"AutoCommon OFF"
+	{
+		"fr"			"Mode: OFF"
+	}
+	
+	"AutoCommon Max"
+	{
+		"#format"		"{1:d}"
+		"fr"			"Max: {1}"
+	}
+	
+	
+	"Freeze Specials"
+	{
+		"fr"			"Freeze SI"
+	}
+	
+	"Unfreeze Specials"
+	{
+		"fr"			"Unfreeze SI"
+	}
+	
 	
 }

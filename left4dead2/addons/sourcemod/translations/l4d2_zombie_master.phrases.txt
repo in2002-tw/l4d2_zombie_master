@@ -513,5 +513,42 @@
 		"en"			"Tank discount maximized!"
 	}
 	
+	"AutoCommon"
+	{
+		"en"			"AutoCommon"
+	}
+	
+	"AutoCommon ALWAYS"
+	{
+		"en"			"Mode: ALWAYS"
+	}
+	
+	"AutoCommon PANIC"
+	{
+		"en"			"Mode: PANIC"
+	}
+	
+	"AutoCommon OFF"
+	{
+		"en"			"Mode: OFF"
+	}
+	
+	"AutoCommon Max"
+	{
+		"#format"		"{1:d}"
+		"en"			"Max: {1}"
+	}
+	
+	
+	"Freeze Specials"
+	{
+		"en"			"Freeze SI"
+	}
+	
+	"Unfreeze Specials"
+	{
+		"en"			"Unfreeze SI"
+	}
+	
 	
 }

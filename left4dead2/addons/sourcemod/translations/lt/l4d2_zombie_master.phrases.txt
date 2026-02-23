@@ -513,6 +513,43 @@
 	{
 		"lt"			"Maksimali Tanko nuolaida!"
 	}
+	
+	"AutoCommon"
+	{
+		"lt"			"AutoZombiai"
+	}
+	
+	"AutoCommon ALWAYS"
+	{
+		"lt"			"Režimas: VISADA"
+	}
+	
+	"AutoCommon PANIC"
+	{
+		"lt"			"Režimas: PANIKA"
+	}
+	
+	"AutoCommon OFF"
+	{
+		"lt"			"Režimas: IŠJUNGTA"
+	}
+	
+	"AutoCommon Max"
+	{
+		"#format"		"{1:d}"
+		"lt"			"Max: {1}"
+	}
+	
+	
+	"Freeze Specials"
+	{
+		"lt"			"Užšaldyti Specialiuosius"
+	}
+	
+	"Unfreeze Specials"
+	{
+		"lt"			"Atšaldyti Specialiuosius"
+	}
 
 	
 }
