@@ -76,7 +76,7 @@
 #define SOUND_BLOCKED "ui/beep_error01.wav"
 #define SOUND_CONDITIONAL "ui/menu_invalid.wav"
 //#define SOUND_ALLOWED "ui/menu_focus.wav"
-#define SOUND_ALLOWED "ui/littlereward.wav" // try beepclear.wav
+#define SOUND_HITMARKER "ui/littlereward.wav" // try beepclear.wav
 
 #define EXPLOSION1 "ambient/explosions/explode_1.wav"
 #define EXPLOSION2 "ambient/explosions/explode_2.wav"
@@ -97,9 +97,6 @@
 #define MODEL_ROAD "models/infected/common_male_roadcrew.mdl"
 #define MODEL_JIMMY "models/infected/common_male_jimmy.mdl"
 #define MODEL_FALLEN "models/infected/common_male_fallen_survivor.mdl"
-
-//#define MODEL_LADDER "models/props_c17/metalladder001.mdl"
-//#define MODEL_LADDER "*1"
 
 #define SOUND_READY "ui/critical_event_1.wav"
 #define SOUND_OFFER "ui/pickup_misc42.wav"
@@ -328,17 +325,19 @@ stock Action infinite_delay_natural_mob(Handle timer = null)
     return Plugin_Stop;
 }
 
-stock bool is_survivor_vomited(int client)
+// Check if Survivor or Special Infected is vomited -- attracting commons, for survivors vomit overlay ON.
+stock bool is_player_vomited(int client)
 {
-    float t_start = GetEntPropFloat(client, Prop_Send, "m_vomitStart");
-    if (t_start<=0.0) return false;
+    //float t_start = GetEntPropFloat(client, Prop_Send, "m_vomitStart");
+    //if (t_start<=0.0) return false;
     //float t_end = GetEntPropFloat(client, Prop_Send, "m_vomitFadeStart");
-    float t_end = GetEntPropFloat(client, Prop_Send, "m_itTimer", 1); 
-    if (t_end<=0.0) return false;
-    t_end -= 1.0;
-    float t_now = GetGameTime();
-    if (t_now<t_end && t_now>=t_start) return true;
-    return false;
+    //float t_end = GetEntPropFloat(client, Prop_Send, "m_itTimer", 1); 
+    //if (t_end<=0.0) return false;
+    //t_end -= 1.0;
+    //float t_now = GetGameTime();
+    //if (t_now<t_end && t_now>=t_start) return true;
+    //return false;
+    return GetEntPropFloat(client, Prop_Send, "m_itTimer", 1)!=-1.0;
 }
 
 stock bool get_client_auth(int client, char auth[65])
