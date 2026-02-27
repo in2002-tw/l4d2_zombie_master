@@ -61,6 +61,7 @@
 // To enable this, set AutoCommon mode to ALWAYS and Quit ZM.
 // 34. Freeze/Unfreeze moved to Teleport's place in the main menu because it is a more important tool.
 // 35. Random yaw angles for all spawned units.
+// 36. new cvar: zm_allow_freeze to enable/disable ambush style gameplay mechanics.
 
 bool DEBUG = false;
 
@@ -84,9 +85,6 @@ bool DEBUG = false;
 // 52. Smoker, Charger stupid behavior after ability fail.
 // 57. Frozen tanks should be in stasis to prevent music
 // 58. Autokill obstructed stuck units
-// On spawn, run Stage 1 after 1.0 sec. Get origin of entity
-// 5.0 sec after Stage 1, run Stage 2 where we check if origin changed. If it is exactly the same, kill entity if obstructed.
-// 59. Boomer Master: store free uncommons after max cap is hit and continously swarm survivors with them.
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
 #define PLUGIN_VERSION 			"0.8.7 2026-02-26"
@@ -258,11 +256,12 @@ ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer,
        g_hCostBoomer, g_hCostSpitter, g_hCostHunter, g_hCostSmoker, g_hCostJockey, g_hMaxWitches, g_hMaxSI, g_hSpecialCooldown,
        g_hCostCharger, g_hCostTank, g_hCostWitchStatic, g_hCostWitchMoving, g_hCostCommon, g_hCostUncommon, g_hLockSaferoom,
        g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait,
-       g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons;
+       g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons, g_hAllowFreeze;
+
 float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fStopInactivity,g_fSpecialCooldown,
 g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout;
 
-bool g_bFairQueue, g_bDiscountTank, g_bMemes, g_bClownGlow;
+bool g_bFairQueue, g_bDiscountTank, g_bMemes, g_bClownGlow, g_bAllowFreeze;
 char g_sForceCommon[32];
 
 char g_sZMGamemode[PLATFORM_MAX_PATH]; 
@@ -896,11 +895,14 @@ public void OnPluginStart()
 	g_hHoldFinale = CreateConVar("zm_hold_finale", "1", "Hold Finale stages until ZM runs out of resources. Otherise the Finale will be very short.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 	g_hHoldFinale.AddChangeHook(ConVarChanged_Cvars);
 	
-	g_hZMGamemode = CreateConVar("zm_gamemode", "zm_default", "Specify gamemode cfg inside left4dead2/cfg/sourcemod/l4d2_zombie_master/");
+	g_hZMGamemode = CreateConVar("zm_gamemode", "zm_default", "Specify gamemode cfg inside left4dead2/cfg/sourcemod/l4d2_zombie_master/",FCVAR_PROTECTED);
 	g_hZMGamemode.AddChangeHook(ConVarChanged_Cvars_Gamemode);
 	
-	g_hVomitCommons = CreateConVar("zm_vomit_commons", "10", "Number of angry commons spawned near survivor when vomited upon.");
+	g_hVomitCommons = CreateConVar("zm_vomit_commons", "10", "Number of angry commons spawned near survivor when vomited upon.",FCVAR_PROTECTED);
 	g_hVomitCommons.AddChangeHook(ConVarChanged_Cvars);
+	
+	g_hAllowFreeze = CreateConVar("zm_allow_freeze", "1", "Allow ZM to freeze Special Infected.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
+	g_hAllowFreeze.AddChangeHook(ConVarChanged_Cvars_ZMenu);
 	
 	GetCvars();
 
@@ -1008,8 +1010,12 @@ void create_main_menu()
     Format(buffer, sizeof(buffer), "%T", "Other", zm_language);
     AddMenuItem(menu_main, "4", buffer);
     
-    if (ZM_specials_frozen) Format(buffer, sizeof(buffer), "%T", "Unfreeze Specials", zm_language);
-    else Format(buffer, sizeof(buffer), "%T", "Freeze Specials", zm_language);
+    if (g_bAllowFreeze)
+    {
+        if (ZM_specials_frozen) Format(buffer, sizeof(buffer), "%T", "Unfreeze Specials", zm_language);
+        else Format(buffer, sizeof(buffer), "%T", "Freeze Specials", zm_language);
+    }
+    else buffer = "-";
     AddMenuItem(menu_main, "5", buffer);
     
     //AddMenuItem(menu_main, "6", "<-- (R)");
@@ -1038,7 +1044,10 @@ int main_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
             	case 2: zm_menu_state=ZM_MENU_BOSS;
             	case 3: zm_menu_state=ZM_MENU_CLEANUP;
             	case 4: zm_menu_state=ZM_MENU_OTHER;
-            	case 5: set_specials_frozen(~ZM_specials_frozen);
+            	case 5:
+            	{
+                	if (g_bAllowFreeze) set_specials_frozen(~ZM_specials_frozen);
+            	}
             	//case 6: {close_menus(zm_client); return 0;}
         	}
         	RequestFrame(reopen_zm_menu,true);
@@ -2514,7 +2523,7 @@ void freeze_team(bool state = true, int team = TEAM_SURVIVOR)
     if (team==TEAM_INFECTED)
     {
         if (zm_stage<ZM_STARTED && !state) return;
-        if (zm_stage==ZM_STARTED && state!=ZM_specials_frozen) return;
+        if (g_bAllowFreeze && zm_stage==ZM_STARTED && state!=ZM_specials_frozen) return;
     }
     //check_saferoom();
     for (int i=1;i<=MaxClients;i++)
@@ -4932,6 +4941,7 @@ bool client_in_start_area(int client)
 Action zm_freeze(int client, int args)
 {
     if (!g_bCvarAllow || !IsValidClientZM() || zm_client!=client || zm_stage<ZM_STARTED) return Plugin_Continue;
+    if (!g_bAllowFreeze) return Plugin_Continue;
     //ZM_specials_frozen = ~ZM_specials_frozen;
     set_specials_frozen(~ZM_specials_frozen);
     return Plugin_Continue;
@@ -5673,6 +5683,9 @@ void GetCvars()
     
     g_iVomitCommons = g_hVomitCommons.IntValue;
     
+    g_bAllowFreeze = g_hAllowFreeze.BoolValue;
+    if (!g_bAllowFreeze) ZM_specials_frozen = false;
+    
     //zm_update();
     
 }
@@ -5756,7 +5769,7 @@ Action JoinZM(int client, int args)
     L4D_State_Transition(client, STATE_OBSERVER_MODE);
     //autocommon_setting = AUTOCOMMON_OFF;
     //autocommon_uncommons = false;
-    //ZM_specials_frozen = false;
+    if (!g_bAllowFreeze) ZM_specials_frozen = false;
     zm_client = client;
     zm_client_userid = GetClientUserId(zm_client);
     
@@ -8814,6 +8827,7 @@ void evtPlayerSpawned(Event event, const char[] name, bool dontBroadcast)
 
 public void Event_PlayerShoved(Event event, const char[] name, bool dontBroadcast)
 {
+    if (!g_bCvarAllow) return;
     if (!specials_frozen || zm_stage!=ZM_STARTED) return;
     int victim = GetClientOfUserId(event.GetInt("userid"));
     if (IsValidClient(victim) && IsFakeClient(victim) && GetClientTeam(victim)==TEAM_INFECTED)
