@@ -4,7 +4,7 @@
 #include <left4dhooks>
 
 #define PLUGIN_NAME			    "l4d2_shoot_alert_common"
-#define PLUGIN_VERSION 			"1.0 2026-03-09"
+#define PLUGIN_VERSION 			"1.1 2026-03-09"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -14,20 +14,26 @@
 
 #define MODEL_ROAD "models/infected/common_male_roadcrew.mdl"
 
+// 1.1 Changes:
+// 1. Added more places to reset timers
+// 2. Removed SetEntProp(entity, Prop_Send, "m_nSequence", 37), a better solution is needed.
+// 3. Replaced PARTITION_SOLID_EDICTS with PARTITION_NON_STATIC_EDICTS for optimization.
+// 4. Small optimizations.
+
 public Plugin myinfo =
 {
 	name = "[L4D2] Weapon Fire Alert Common",
 	author = "gvazdas",
 	description = "Weapon fire alerts Common Infected.",
 	version = PLUGIN_VERSION,
-	url = "https://github.com/gvazdas/l4d2_zombie_master"
+	url = "https://forums.alliedmods.net/showthread.php?t=352360,https://github.com/gvazdas/l4d2_zombie_master"
 }
 
 Handle timers[MAXPLAYERS+1] = {INVALID_HANDLE, ...}; // optimization
 
 ConVar g_hCvarEnable, g_hCvarAlertRange, g_hCvarAlertProbability, g_hCvarRushRange;
 bool enabled = false;
-float alert_range = 2000.0;
+float alert_range = 3000.0;
 float rush_range = 500.0;
 float alert_probability = 0.5;
 
@@ -38,7 +44,7 @@ public void OnPluginStart()
     g_hCvarEnable = CreateConVar("l4d2_shoot_alert_common_enable", "1", "0=Plugin off, 1=Plugin on.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_hCvarEnable.AddChangeHook(ConVarChanged_Cvars);   
     
-    g_hCvarAlertRange = CreateConVar("l4d2_shoot_alert_common_range", "2000.0", "Range to make commons look at shooter.",FCVAR_NOTIFY, true, 0.0, true, 100000.0);
+    g_hCvarAlertRange = CreateConVar("l4d2_shoot_alert_common_range", "3000.0", "Range to make commons look at shooter.",FCVAR_NOTIFY, true, 0.0, true, 100000.0);
     g_hCvarAlertRange.AddChangeHook(ConVarChanged_Cvars);
     
     g_hCvarAlertProbability = CreateConVar("l4d2_shoot_alert_common_probability", "0.5", "Probability for gun fire to alert a particular common zombie.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
@@ -70,6 +76,7 @@ void IsAllowed()
     {
         HookEvent("weapon_fire", evtPlayerFired, EventHookMode_Post);
         HookEvent("round_start",   evtRoundStart,  EventHookMode_PostNoCopy);
+        reset_timers();
     }
     else
     {
@@ -81,7 +88,7 @@ void IsAllowed()
 
 public void OnMapStart()
 {
-    reset_timers();
+    if (enabled) reset_timers();
 }
 
 void evtRoundStart(Event event, const char[] name, bool dontBroadcast)
@@ -99,7 +106,7 @@ void evtPlayerFired(Event event, const char[] name, bool dontBroadcast)
     int client = GetClientOfUserId(event.GetInt("userid"));
     if (!IsPlayerAlive(client) || GetClientTeam(client)!=TEAM_SURVIVOR) return;
     if (timers[client]==INVALID_HANDLE)
-        timers[client] = CreateTimer(GetRandomFloat(0.5-0.2,0.5+0.2),alert_update,EntIndexToEntRef(client),TIMER_FLAG_NO_MAPCHANGE);
+        timers[client] = CreateTimer(GetRandomFloat(0.75-0.25,0.75+0.25),alert_update,EntIndexToEntRef(client),TIMER_FLAG_NO_MAPCHANGE);
 }
 
 // GUNFIRE!
@@ -123,13 +130,15 @@ Action alert_update(Handle timer, int entref)
     }
     float pos[3];
     L4D_GetEntityWorldSpaceCenter(client,pos);
-    TR_EnumerateEntitiesSphere(pos,alert_range,PARTITION_SOLID_EDICTS,AlertCallback,client);
+    // PARTITION_NON_STATIC_EDICTS or PARTITION_SOLID_EDICTS?
+    TR_EnumerateEntitiesSphere(pos,alert_range,PARTITION_NON_STATIC_EDICTS,AlertCallback,client);
     return Plugin_Stop;
 }
 
 public bool AlertCallback(int entity, int client)
 {
-    if (!IsValidEntity(entity)) return true;
+    // Return true to continue enumerating, false to stop
+    if (entity<=MaxClients || !IsValidEntity(entity)) return true;
     static char class[16];
     GetEntityClassname(entity, class, sizeof(class));
     switch (class[0])
@@ -139,13 +148,15 @@ public bool AlertCallback(int entity, int client)
             if (strcmp(class,"infected")==0)
             {
                 // If already rushing, do nothing.
-                if (GetEntProp(entity, Prop_Send, "m_mobRush")>0) return true;
+                if (GetEntProp(entity,Prop_Send,"m_mobRush")>0) return true;
                 
                 // Road crew have headphones, ignore gunfire.
                 char sModelName[64];
                 GetEntPropString(entity, Prop_Data, "m_ModelName", sModelName, sizeof(sModelName));
                 if (strcmp(sModelName,MODEL_ROAD)==0) return true;
-              
+                
+                if (!IsValidClient(client) || !IsPlayerAlive(client)) return false;
+                
                 float pos[3], pos2[3];
                 L4D_GetEntityWorldSpaceCenter(client,pos);
                 L4D_GetEntityWorldSpaceCenter(entity,pos2);
@@ -171,8 +182,8 @@ public bool AlertCallback(int entity, int client)
                     else if (lookat<=0)
                     {
                         // This part needs work, setting sequence like this gives jank results.
-                        // Maybe Actions is the way to go.1
-                        SetEntProp(entity, Prop_Send, "m_nSequence", 37);
+                        // Maybe Actions is the way to go.
+                        //SetEntProp(entity, Prop_Send, "m_nSequence", 37);
                         SetEntPropEnt(entity, Prop_Send, "m_clientLookatTarget",client);
                         DataPack pack;
                         CreateDataTimer(GetRandomFloat(2.0-0.5,2.0+0.5),undo_lookat,pack,TIMER_FLAG_NO_MAPCHANGE|TIMER_DATA_HNDL_CLOSE);
@@ -183,7 +194,6 @@ public bool AlertCallback(int entity, int client)
             }
         }
     }
-    // Return true to continue enumerating, false to stop
     return true;
 }
 
