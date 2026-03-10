@@ -11,20 +11,6 @@
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
-#define TEAM_SPECTATOR		1
-#define TEAM_SURVIVOR		2
-#define TEAM_INFECTED		3
-
-#define MAXENTITIES         2048
-#define MODEL_ROAD          "models/infected/common_male_roadcrew.mdl"
-
-// 1.2 Changes:
-// 1. New cvar l4d2_shoot_alert_common_los to dynamically adjust range when there is no line of sight.
-// 2. Bug fixed where commons wouldn't aggro after player team change.
-// 3. Optimization: keeping in memory entities that should be ignored for callback.
-// 4. Various fixes suggested by Silvers: weapon_fire hook is now dynamically hooked/unhooked to reduce overhead.
-// 5. Silenced submachine gun has an additional 2x reduced range.
-
 public Plugin myinfo =
 {
 	name = "[L4D2] Weapon Fire Alert Common",
@@ -34,21 +20,28 @@ public Plugin myinfo =
 	url = "https://forums.alliedmods.net/showthread.php?t=352360,https://github.com/gvazdas/l4d2_zombie_master"
 }
 
-Handle timer_check; // avoid infected death spam
-Handle timers[MAXPLAYERS+1]; // optimization - prevent frequent updates
-bool ignore[MAXENTITIES]; // optimization - ignore non-infected entities and zombies that are already aggro.
-bool silent[MAXPLAYERS+1]; // 2x range reduction for silenced smg
-bool weapon_fire_hooked = false; // optimization
-int commons = 0; // optimization
+#define TEAM_SPECTATOR		1
+#define TEAM_SURVIVOR		2
+#define TEAM_INFECTED		3
+#define MAXENTITIES         2048
+#define MODEL_ROAD          "models/infected/common_male_roadcrew.mdl"
 
-ConVar g_hCvarEnable, g_hCvarAlertRange, g_hCvarAlertProbability, g_hCvarRushRange, g_hCvarLOS;
+// Optimizations
+Handle timer_death; // avoid infected death spam
+Handle timers[MAXPLAYERS+1]; // prevent frequent sphere calculations
+bool ignore[MAXENTITIES] = {true,...}; // ignore non-infected entities and already aggro infected
+bool silent[MAXPLAYERS+1]; // 2x range reduction for silenced smg
+bool weapon_fire_hooked = false; // dynamically unhook weapon_fire if there are no commons.
+int commons = 0; // track commons to predict when unhook might need to be done
+float pos_arr[MAXPLAYERS+1][3]; // calculate position of survivor once
+
+// Inputs
+ConVar g_hCvarEnable, g_hCvarAlertRange, g_hCvarAlertProbability, g_hCvarRushRange, g_hCvarLOS, g_hCvarMPGameMode;
 bool enabled = false;
 float alert_range = 3000.0;
 float rush_range = 800.0;
 float alert_probability = 0.5;
 float LOS_multiplier = 2.0;
-
-ConVar g_hCvarMPGameMode;
 
 public void OnPluginStart()
 {
@@ -66,7 +59,7 @@ public void OnPluginStart()
     g_hCvarRushRange = CreateConVar("l4d2_shoot_alert_common_range_rush", "800.0", "Range to make commons rush shooter immediately.",FCVAR_NOTIFY, true, 0.0, true, 100000.0);
     g_hCvarRushRange.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hCvarLOS = CreateConVar("l4d2_shoot_alert_common_los", "2.0", "Line-of-sight range multiplier.",FCVAR_NOTIFY, true, 1.0, true, 10000.0);
+    g_hCvarLOS = CreateConVar("l4d2_shoot_alert_common_los", "2.0", "Range multiplier when there is no line-of-sight to survivor.",FCVAR_NOTIFY, true, 1.0, true, 10000.0);
     g_hCvarLOS.AddChangeHook(ConVarChanged_Cvars);
     
     g_hCvarMPGameMode = FindConVar("mp_gamemode");
@@ -128,60 +121,16 @@ void IsAllowed()
 		UnhookEvent("gauntlet_finale_start",evtFinaleStart, EventHookMode_PostNoCopy); //final starts, only rushing maps trigger (C5M5, C13M4)
 		UnhookEvent("survival_round_start", Event_SurvivalRoundStart,EventHookMode_PostNoCopy);
     }
-} 
-
-void Event_SurvivalRoundStart(Event event, const char[] name, bool dontBroadcast)
-{
-    if (weapon_fire_hooked) RequestFrame(check_hook_weapon_fire);
-}
-
-void evtFinaleStart(Event event, const char[] name, bool dontBroadcast)
-{
-    if (weapon_fire_hooked) RequestFrame(check_hook_weapon_fire);
-}
-
-int get_commons()
-{
-    commons = L4D_GetCommonsCount();
-    return commons;
 }
 
 void check_hook_weapon_fire()
 {
-    timer_check = null;
+    timer_death = null;
     bool should_hook = enabled && !L4D_IsSurvivalMode() && !L4D_IsFinaleActive() && get_commons()>0;
     if (should_hook==weapon_fire_hooked) return;
     if (should_hook) HookEvent("weapon_fire", evtPlayerFired, EventHookMode_Post);
     else UnhookEvent("weapon_fire", evtPlayerFired, EventHookMode_Post);
     weapon_fire_hooked = should_hook;
-}
-
-public void OnMapStart()
-{
-    if (!enabled) return;
-    reset_timers();
-    RequestFrame(check_hook_weapon_fire);
-}
-
-void EvtBotReplace(Event event, const char[] name, bool dontBroadcast) 
-{
-    int bot = GetClientOfUserId(event.GetInt("bot"));
-    int client = GetClientOfUserId(event.GetInt("player"));
-    if (IsValidClient(client)) timers[client] = null;
-    if (IsValidClient(bot)) timers[bot] = null;
-}
-
-void evtPlayerTeam(Event event, const char[] name, bool dontBroadcast)
-{
-    int client = GetClientOfUserId(event.GetInt("userid"));
-    if (IsValidClient(client)) timers[client] = null;
-}
-
-void evtRound(Event event, const char[] name, bool dontBroadcast)
-{
-    if (!enabled) return;
-    reset_timers();
-    RequestFrame(check_hook_weapon_fire);
 }
 
 public void OnEntityCreated(int entity, const char[] classname)
@@ -190,18 +139,21 @@ public void OnEntityCreated(int entity, const char[] classname)
 	{
     	ignore[entity] = false;
     	commons += 1;
-    	if (enabled && !weapon_fire_hooked && timer_check==null)
-        	timer_check = CreateTimer(0.1,timer_check_hook_weapon_fire);
+    	if (enabled && !weapon_fire_hooked && timer_death==null)
+        	timer_death = CreateTimer(0.1,timer_check_hook_weapon_fire);
 	}
 }
 
 public void OnEntityDestroyed(int entity)
 {
 	if (!weapon_fire_hooked) return;
-	static char class[16];
-    GetEntityClassname(entity, class, sizeof(class));
-	if (strcmp(class,"infected")==0 && commons<=1 && timer_check==null)
-    	timer_check = CreateTimer(1.0,timer_check_hook_weapon_fire);
+	if (commons<=1 && timer_death==null)
+	{
+        static char class[16];
+        GetEntityClassname(entity, class, sizeof(class));
+        if (strcmp(class,"infected")==0)
+            timer_death = CreateTimer(1.0,timer_check_hook_weapon_fire);
+    }
 }
 
 Action timer_check_hook_weapon_fire(Handle timer)
@@ -237,6 +189,7 @@ Action alert_update(Handle timer, int entref)
     if (FindEntityByClassname(-1, "pipe_bomb_projectile")!=INVALID_ENT_REFERENCE) return Plugin_Stop;
     static float pos[3];
     L4D_GetEntityWorldSpaceCenter(client,pos);
+    pos_arr[client][0] = pos[0]; pos_arr[client][1] = pos[1]; pos_arr[client][2] = pos[2];
     TR_EnumerateEntitiesSphere(pos,alert_range,PARTITION_NON_STATIC_EDICTS,AlertCallback,client);
     return Plugin_Stop;
 }
@@ -268,11 +221,10 @@ bool AlertCallback(int entity, int client)
         
         if (!IsValidClient(client)) return false; // just in case.
         
-        float pos[3], pos2[3];
-        L4D_GetEntityWorldSpaceCenter(client,pos);
+        static float pos[3], pos2[3];
+        pos[0] = pos_arr[client][0]; pos[1] = pos_arr[client][1]; pos[2] = pos_arr[client][2];
         L4D_GetEntityWorldSpaceCenter(entity,pos2);
         float range = GetVectorDistance(pos,pos2);
-        
         pos2[2] += 36.0;
         bool LOS = L4D2_IsVisibleToPlayer(client,TEAM_SURVIVOR,3,0,pos2);
         if (!LOS) range *= LOS_multiplier;
@@ -284,7 +236,6 @@ bool AlertCallback(int entity, int client)
             return true;
         }
         if (range>alert_range) return true;
-        
         if (alert_probability>=1.0 || GetRandomFloat(0.0,1.0)<alert_probability)
         {
             int lookat = GetEntPropEnt(entity, Prop_Send, "m_clientLookatTarget");
@@ -305,8 +256,8 @@ bool AlertCallback(int entity, int client)
 
 void zombie_rush_client(int zombie, int client)
 {
+    SetEntPropEnt(zombie, Prop_Send, "m_clientLookatTarget",client); // this might do absolutely nothing.
     SetEntProp(zombie, Prop_Send, "m_mobRush", 1);
-    SetEntPropEnt(zombie, Prop_Send, "m_clientLookatTarget",client);
     ignore[zombie] = true;
 }
 
@@ -329,13 +280,56 @@ Action undo_lookat(Handle timer, DataPack pack)
     return Plugin_Stop;
 }
 
+public void OnMapStart()
+{
+    if (!enabled) return;
+    reset_timers();
+    RequestFrame(check_hook_weapon_fire);
+}
+
+void Event_SurvivalRoundStart(Event event, const char[] name, bool dontBroadcast)
+{
+    if (weapon_fire_hooked) RequestFrame(check_hook_weapon_fire);
+}
+
+void evtFinaleStart(Event event, const char[] name, bool dontBroadcast)
+{
+    if (weapon_fire_hooked) RequestFrame(check_hook_weapon_fire);
+}
+
+void EvtBotReplace(Event event, const char[] name, bool dontBroadcast) 
+{
+    int bot = GetClientOfUserId(event.GetInt("bot"));
+    int client = GetClientOfUserId(event.GetInt("player"));
+    if (IsValidClient(client)) timers[client] = null;
+    if (IsValidClient(bot)) timers[bot] = null;
+}
+
+void evtPlayerTeam(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (IsValidClient(client)) timers[client] = null;
+}
+
+void evtRound(Event event, const char[] name, bool dontBroadcast)
+{
+    reset_timers();
+    RequestFrame(check_hook_weapon_fire);
+}
+
+int get_commons()
+{
+    commons = L4D_GetCommonsCount();
+    return commons;
+}
+
 void reset_timers()
 {
     for( int i = 1; i <= MAXPLAYERS; i++ )
     {
         timers[i] = null;
     }
-    timer_check = null;
+    timer_death = null;
 }  
 
 stock bool IsValidClient(int client, bool replaycheck = true)
