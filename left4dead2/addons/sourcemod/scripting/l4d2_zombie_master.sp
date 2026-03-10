@@ -21,7 +21,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.8.9 2026-03-08"
+#define PLUGIN_VERSION 			"0.9.0 2026-03-09"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -45,6 +45,8 @@ public Plugin myinfo =
 // 8. Custom maps tested: Daybreak, I Hate Mountains 2, Urban Flight
 // 9. Improved distance to survivors calculations. Should give less false positives.
 // 10. Make vomit target that specific survivor rather than whole team.
+// 11. Compatibility with l4d2_shoot_alert_common.
+// 12. Optimizations thanks to Silvers.
 
 // TO DO LIST:
 // 4. Better easier to read zombie spawner visuals (done by zyiks, not implemented)
@@ -127,7 +129,7 @@ int g_iEntities; // track number of edicts and entities
 bool zm_allow_spawns = true; // in survival, prevent spawns until survivors have started timer
 Handle zm_timer = INVALID_HANDLE; // zm_update timer, repeats periodically
 Handle clients_timer = INVALID_HANDLE; // CountClients() timer which does not run twice if there's already a timer set to run it
-char ZM_hint[128]; 
+static char ZM_hint[128]; 
 bool EMS_hud_ready = false; // track whether HUD was initialized
 int roundcount = 0;
 bool ZM_finale_announced = false;
@@ -142,8 +144,8 @@ int script_CommonLimit = -1;
 //float t_scope_change = 0.0;
 bool survival_activated = false; // track if survival panic button was activated but ZM isn't present
 bool pending_tank = false;
-char targetName_pending[64]; // pending targetname for takeover tank
-char model_pending[64]; // pending model for takeover tank
+static char targetName_pending[64]; // pending targetname for takeover tank
+static char model_pending[64]; // pending model for takeover tank
 int maxhp_pending = 0; // pending max hp for takeover tank
 bool active_looktarget = false; // live update HP for special infected ZM is looking at
 Handle hp_timers[MAXENTITIES] = {INVALID_HANDLE, ...}; // prevent extremely frequent glow updates
@@ -199,7 +201,7 @@ int g_iLaser = 0;
 int g_iHalo = 0;
 
 ConVar g_hCvarMPGameMode;
-char g_sCvarMPGameMode[32];
+static char g_sCvarMPGameMode[32];
 
 // Notify ZM about being able to control units with USE
 bool zm_use_notify = false;
@@ -219,9 +221,9 @@ float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fSto
 g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout;
 
 bool g_bFairQueue, g_bDiscountTank, g_bMemes, g_bClownGlow, g_bAllowFreeze;
-char g_sForceCommon[32];
+static char g_sForceCommon[32];
 
-char g_sZMGamemode[PLATFORM_MAX_PATH]; 
+static char g_sZMGamemode[PLATFORM_MAX_PATH]; 
 
 int g_iBankInitial,g_iBankInitialPlayer, g_iPanicCost, g_iVomitCommons;
 
@@ -388,7 +390,7 @@ void reset_fair_queue()
     client_offer = -1;
     roundcount_offer = -1;
     StringMapSnapshot snapshot = g_Steam.Snapshot();
-    char auth[128];
+    static char auth[128];
     int maxKeys = snapshot.Length;
     zm_data cell;
     for (int i = 0; i < maxKeys; i++)
@@ -553,7 +555,7 @@ void create_offer_menu(int client)
 	if (DEBUG) LogMessage("[zm] create_offer_menu");
 	if (menu_offer!=INVALID_HANDLE) CloseHandle(menu_offer);
 	menu_offer = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),offer_menu_Handler);
-	char buffer[64]; 
+	static char buffer[64]; 
     Format(buffer, sizeof(buffer), "%T", "Offer ZM", client);
 	menu_offer.SetTitle(buffer); 
     
@@ -616,7 +618,7 @@ bool is_zm_spamming()
     return false;
 }
 
-public void OnDirectorOutputFired(const char[] output, int activator, int caller, float delay)
+void OnDirectorOutputFired(const char[] output, int activator, int caller, float delay)
 {
     if (!g_bCvarAllow || zm_stage!=ZM_STARTED) return;
     if (DEBUG) LogMessage("[zm] info_director output %s fired! %d %d %f", output, activator, caller, delay);
@@ -935,7 +937,7 @@ void create_main_menu()
 	
 	int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
-	char buffer[64]; 
+	static char buffer[64]; 
 	
 	Format(buffer, sizeof(buffer), "%T", "Zombie Master", zm_language);
 	menu_main.SetTitle(buffer);
@@ -1017,7 +1019,7 @@ void create_common_menu()
 	
 	int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
-	char buffer[64]; 
+	static char buffer[64]; 
     	
     Format(buffer, sizeof(buffer), "%T", "Common", zm_language);
 	menu_common.SetTitle(buffer);
@@ -1097,7 +1099,7 @@ void create_uncommon_menu()
 	
 	int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
-	char buffer[64]; 
+	static char buffer[64]; 
 	
 	Format(buffer, sizeof(buffer), "%T", "Uncommon", zm_language);
 	menu_uncommon.SetTitle(buffer);
@@ -1173,7 +1175,7 @@ void create_special_menu()
     
     int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
-	char buffer[64]; 
+	static char buffer[64]; 
     int occupied, max;
     
     Format(buffer, sizeof(buffer), "%T", "Special", zm_language);
@@ -1282,7 +1284,7 @@ void create_boss_menu()
 	
 	int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
-	char buffer[64]; 
+	static char buffer[64]; 
 	
 	Format(buffer, sizeof(buffer), "%T", "Boss", zm_language);
 	menu_boss.SetTitle(buffer);
@@ -1365,7 +1367,7 @@ void create_cleanup_menu()
 	
 	int zm_language = LANG_SERVER;
     if (IsValidClientZM()) zm_language = zm_client;
-    char buffer[64]; 
+    static char buffer[64]; 
 	
 	Format(buffer, sizeof(buffer), "%T", "Cleanup", zm_language);
 	menu_cleanup.SetTitle(buffer);
@@ -1432,7 +1434,7 @@ void create_other_menu()
 	
 	int zm_language = LANG_SERVER;
     if (IsValidClientZM()) zm_language = zm_client;
-    char buffer[64]; 
+    static char buffer[64]; 
 	
 	Format(buffer, sizeof(buffer), "%T", "Other", zm_language);
 	menu_other.SetTitle(buffer);
@@ -1528,7 +1530,7 @@ void create_autocommon_menu()
 	if (menu_autocommon!=INVALID_HANDLE) CloseHandle(menu_autocommon);
 	menu_autocommon = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),autocommon_menu_Handler);
 	
-	char buffer[64]; 
+	static char buffer[64]; 
     int zm_language = LANG_SERVER;
     if (IsValidClientZM()) zm_language = zm_client;
     	
@@ -1624,10 +1626,10 @@ void set_bank_begin()
     commons_add = 0.0;
 }
 
+static char myFormattedString[128];
 void update_hint(const char[] myString, any ...)
 {
 	if (!IsValidClientZM()) return;
-	char[] myFormattedString = new char[128];
 	VFormat(myFormattedString,128,myString,2);
     FormatEx(ZM_hint,sizeof(ZM_hint),"%s",myFormattedString);
     update_EMS_HUD();
@@ -1659,7 +1661,7 @@ void update_ZM_spawner(float target_pos[3], float spawner_pos[3], int state, boo
         
         if ( (zm_spawner_state!=state || zm_target_pos[0]!=target_pos[0] || zm_target_pos[1]!=target_pos[1] || zm_target_pos[2]!=target_pos[2]) && (t_now-t_last_spawner_sound)>=2.0)
         {
-            char sound_name[64];
+            static char sound_name[64];
             if (state==SPAWNER_BLOCKED) sound_name = SOUND_BLOCKED;
             else if (state==SPAWNER_CONDITIONAL) sound_name = SOUND_CONDITIONAL;
             else sound_name = "";
@@ -2006,11 +2008,11 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
 
 bool saferoom_interacted = false;
 int hits = 0;
-public MRESReturn DHook_Saferoom_AcceptInput(int pThis, DHookReturn hReturn, DHookParam hParams)
+MRESReturn DHook_Saferoom_AcceptInput(int pThis, DHookReturn hReturn, DHookParam hParams)
 {
 	if (!g_bCvarAllow || zm_stage>=ZM_STARTED) return MRES_Ignored;
 	
-	char inputName[256];
+	static char inputName[256];
 	hParams.GetString(1, inputName, sizeof(inputName));
 	int activator = hParams.IsNull(2) ? -1 : hParams.Get(2);
 	int caller = hParams.IsNull(3) ? -1 : hParams.Get(3);	
@@ -2411,7 +2413,7 @@ public Action L4D2_OnChangeFinaleStage(int &finaleType, const char[] arg)
 {	
 	if (!g_bCvarAllow || zm_stage!=ZM_STARTED || finaleType==FINALE_NONE) return Plugin_Continue;
 	int current = L4D2_GetCurrentFinaleStage();
-	char current_label[32], label[32]; //
+	static char current_label[32], label[32]; //
 	get_finale_label(current,current_label);
 	get_finale_label(finaleType,label);
 	int pending_mob = L4D2Direct_GetPendingMobCount();
@@ -2555,7 +2557,7 @@ void Chase(int target)
 		AcceptEntityInput(entity, "Enable");
 		if (DEBUG) LogMessage("[zm] Chase enabled");
 		panic_target = target;
-		char name[MAX_NAME_LENGTH];
+		static char name[MAX_NAME_LENGTH];
         GetClientName(target,name,sizeof(name));
         update_hint("%T", "Chasing x", zm_client, name);
 	}
@@ -2677,11 +2679,11 @@ void toggle_panic(bool state = true, bool overwrite = false, bool free = false)
 }
 
 static char g_sHUD_Text[512];
-char g_sHUD_TextArray[4][128];
-char g_sBuffer[128];
-char g_sSpaces[128] = "                                                                                                                               ";
-char g_sData_HUD_ZM_Text[128];
-char g_sData_HUD_TIMER_Text[128];
+static char g_sHUD_TextArray[4][128];
+static char g_sBuffer[128];
+static char g_sSpaces[128] = "                                                                                                                               ";
+static char g_sData_HUD_ZM_Text[128];
+static char g_sData_HUD_TIMER_Text[128];
 
 void update_EMS_HUD(bool force = false, float delay = 0.1)
 {
@@ -2717,7 +2719,7 @@ Action perform_HUD_update(Handle timer = null)
     if (IsValidClientZM() && zm_stage<ZM_END)
     {
         
-        char panic_str[32];
+        static char panic_str[32];
         if (panic || ZM_finale_announced || (L4D_IsSurvivalMode() && zm_stage==ZM_STARTED) )
         {
             float panic_left;
@@ -2736,10 +2738,10 @@ Action perform_HUD_update(Handle timer = null)
         }
         else Format(panic_str, sizeof(panic_str), "");
         
-        char bank_str[32];
-        char common_str[32];
-        char special_str[32];
-        char witch_str[32];
+        static char bank_str[32];
+        static char common_str[32];
+        static char special_str[32];
+        static char witch_str[32];
         
         if (bank_rate>0.0) Format(bank_str, sizeof(bank_str), "%T %d (%.1f)", "Bank", zm_client, bank, bank_rate);
         else Format(bank_str, sizeof(bank_str), "%T %d", "Bank", zm_client, bank);
@@ -2795,7 +2797,7 @@ Action perform_HUD_update(Handle timer = null)
        
        if (IsValidClient(client_offer))
        {
-           char name[MAX_NAME_LENGTH]; 
+           static char name[MAX_NAME_LENGTH]; 
            GetClientName(client_offer,name,sizeof(name));
            int timeleft = RoundFloat(g_fFairQueueWait - (t_now - t_offer));
            if (timeleft<0) timeleft = 0;
@@ -3173,7 +3175,7 @@ void sanity_check_available(int zClass, float t_now = -1.0)
     else if ( available_zombie_arr[zClass]<max_zombie_arr[zClass] &&
               t_now>(timestamp_available_arr[zClass]+0.15) ) //timers can jitter
     {
-        char zClassName[32]; 
+        static char zClassName[32]; 
         get_zombieclass_name(zClass,zClassName);
         LogMessage("[zm] unexpected sanity_check %s fallthrough, report to mod authors", zClassName);
         add_available_zombie(zClass);
@@ -3190,12 +3192,12 @@ void create_timer_add_available_zombie(float delay,int zClass, int round, int co
         add_available_zombie(zClass);
         return;
     }
-    char zClassName[32]; 
+    static char zClassName[32]; 
     get_zombieclass_name(zClass,zClassName);
     if (DEBUG) LogMessage("[zm] create_timer_add_available_zombie %d %s, delay: %f", count, zClassName, delay);
     timestamp_available_arr[zClass] = GetEngineTime() + delay;
     DataPack pack;
-    CreateDataTimer(delay, timer_add_available_zombie, pack, TIMER_FLAG_NO_MAPCHANGE|TIMER_DATA_HNDL_CLOSE);
+    CreateDataTimer(delay, timer_add_available_zombie, pack, TIMER_FLAG_NO_MAPCHANGE);
     pack.WriteCell(zClass);
     pack.WriteCell(round);
     pack.WriteCell(count);
@@ -3219,7 +3221,7 @@ void add_available_zombie(int zClass, int add=1, bool draw = true)
     
     if (zm_stage>=ZM_PREP)
     {
-        char zClassName[32]; 
+        static char zClassName[32]; 
         get_zombieclass_name(zClass,zClassName);
         if (DEBUG) LogMessage("[zm] add_available_zombie %d %s", add, zClassName);
     }
@@ -3589,7 +3591,7 @@ void CreateZMGlow(int target, bool red = false)
 	int eFlags = GetEdictFlags(target);
 	if ((eFlags & FL_EDICT_ALWAYS)<=0) SetEdictFlags(target, eFlags | FL_EDICT_ALWAYS);
 	
-	char sModelName[64];
+	static char sModelName[64];
 	GetEntPropString(target, Prop_Data, "m_ModelName", sModelName, sizeof(sModelName));
 	
 	SetEntityModel(glow, sModelName);
@@ -3671,7 +3673,7 @@ void update_glow(int i, bool bile_override = false)
     }
     else
     {
-        char class[16];
+        static char class[16];
         GetEntityClassname(i,class,sizeof(class));
         if (strcmp(class,"witch")==0) update_zm_glow(i);
     }
@@ -3738,7 +3740,7 @@ void update_zm_glow(int parent)
         	}
     	}
 	    
-       	char targetName[64];
+       	static char targetName[64];
         GetEntPropString(parent, Prop_Data, "m_iName", targetName, sizeof(targetName));
        	bool flashing = false;
        	if (EntIndexToEntRef(parent)==entref_control || strcmp(targetName,"zm_unit_spotted")==0 ) flashing = true;
@@ -3757,7 +3759,7 @@ void UpdateSurvivorGlow(int client)
     
     if (DEBUG)
     {
-        char name[MAX_NAME_LENGTH]; 
+        static char name[MAX_NAME_LENGTH]; 
         GetClientName(client,name,sizeof(name));
         LogMessage("[zm] UpdateSurvivorGlow %s", name);
     }
@@ -3791,7 +3793,7 @@ void UpdateSurvivorGlow(int client)
 	}
 }
 
-public Action OnTakeDamageWitch(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3])
+Action OnTakeDamageWitch(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3])
 {
     if (damage>32.0)
     {
@@ -3866,10 +3868,10 @@ Action ZMControlSI(int client, int args)
             zm_deathPos = vEye;
             zm_deathAngles = vAngles;
             
-            char sModelName[64];
+            static char sModelName[64];
             GetEntPropString(zm_client, Prop_Data, "m_ModelName", sModelName, sizeof(sModelName));
             
-            char targetName[64];
+            static char targetName[64];
             GetEntPropString(zm_client, Prop_Data, "m_iName", targetName, sizeof(targetName));
             if (strcmp(targetName,"zm_control")==0) targetName = "";
             else if (strcmp(targetName,"zm_unit_control")==0) targetName = "zm_unit";
@@ -3953,7 +3955,7 @@ Action ZMControlSI(int client, int args)
          int fFlags = GetEntProp(entity, Prop_Data, "m_fFlags");
          zClass = GetEntProp(entity, Prop_Send, "m_zombieClass");
          
-         char targetName[64];
+         static char targetName[64];
          GetEntPropString(entity, Prop_Data, "m_iName", targetName, sizeof(targetName));
          if (strcmp(targetName,"zm_unit")==0) DispatchKeyValue(entity, "targetname", "zm_unit_dead");
          else
@@ -3962,7 +3964,7 @@ Action ZMControlSI(int client, int args)
              if (targetName[0]==0) DispatchKeyValue(zm_client, "targetname", "zm_control");
          }
          
-         char sModelName[64];
+         static char sModelName[64];
          GetEntPropString(entity, Prop_Data, "m_ModelName", sModelName, sizeof(sModelName));
          
          remove_ZM_glow(entity);
@@ -4209,11 +4211,11 @@ Action random_meme(Handle timer = null)
     }
 	
 	listplayers.Sort(Sort_Random, Sort_Integer);
-	char model[PLATFORM_MAX_PATH];
-    char sound[PLATFORM_MAX_PATH];
-    char soundFake[PLATFORM_MAX_PATH];
+	static char model[PLATFORM_MAX_PATH];
+    static char sound[PLATFORM_MAX_PATH];
+    static char soundFake[PLATFORM_MAX_PATH];
     //char vcdPath[PLATFORM_MAX_PATH];
-    char PathFake[PLATFORM_MAX_PATH];
+    static char PathFake[PLATFORM_MAX_PATH];
 	for(int x = 0; x < listplayers.Length; x++)
     {
         i = listplayers.Get(x);
@@ -4315,7 +4317,7 @@ void update_ZM_looktarget_HP(int health_manual = -1)
      if (health>0)
      {
         int zClass = GetEntProp(entref_control, Prop_Send, "m_zombieClass");
-        char zClassName[32]; 
+        static char zClassName[32]; 
         get_zombieclass_name(zClass,zClassName);
         int max_health = GetEntProp(entref_control,Prop_Data,"m_iMaxHealth");
   	    update_hint("%T", "Selected Special", zm_client, zClassName, health, max_health);
@@ -4350,7 +4352,7 @@ void update_entref_control(int new_entref, bool draw = false)
     
 }
 
-public bool TraceFilter_Looktarget(int entity, int contentsMask)
+bool TraceFilter_Looktarget(int entity, int contentsMask)
 {
 	if (entity==zm_client || entity<=0) return false;
 	if (IsValidClient(entity) && IsPlayerAlive(entity)) return true;
@@ -4562,7 +4564,7 @@ Action zm_autocommon_mode(int client, int args)
     if (!g_bCvarAllow || !IsValidClientZM() || zm_client!=client) return Plugin_Continue;
     if (args>0)
     {
-        char type[32];
+        static char type[32];
         GetCmdArg(1, type, sizeof(type));
         TrimString(type);
         if (strcmp(type,"always",false)==0) autocommon_setting = AUTOCOMMON_ALWAYS;
@@ -4760,7 +4762,7 @@ Action zm_update(Handle timer = null)
     float witch_pos[3];
     int entity = -1;
     int counted_witches = 0;
-    char targetName[20];
+    static char targetName[20];
     while ( ((entity = FindEntityByClassname(entity, "witch")) != -1) )
     {
     	 if (!IsValidEntity(entity)) continue;
@@ -4986,7 +4988,7 @@ Action zm_debug_mob(int client, int args)
     return Plugin_Continue;
 }
 
-public int Handle_VoteMenu(Menu menu, MenuAction action, int param1, int param2)
+int Handle_VoteMenu(Menu menu, MenuAction action, int param1, int param2)
 {
     if (action == MenuAction_End) delete menu;
     else if (action == MenuAction_VoteEnd)
@@ -5013,7 +5015,7 @@ void DoVoteMenu()
     menu.DisplayVoteToAll(20);
 }
  
-public Action VoteZM(int client, int args)
+Action VoteZM(int client, int args)
 {
         
     if (L4D_HasPlayerControlledZombies())
@@ -5030,7 +5032,7 @@ public Action VoteZM(int client, int args)
 }
 
 
-public Action ZM_MOTD(int client, int args)
+Action ZM_MOTD(int client, int args)
 { 
     if (!IsValidClient(client) || IsFakeClient(client)) return Plugin_Continue;
 
@@ -5117,8 +5119,8 @@ public Action ZM_MOTD(int client, int args)
         PrintToConsole(client, "Compatible mp_gamemode: coop l4d1coop survival l4d1survival.");
         PrintToConsole(client, "sm_cvar zm_gamemode sets the .cfg file that is read in cfg/sourcemod/l4d2_zombie_master/.");
         
-        char name[64];
-        char value[64];
+        static char name[64];
+        static char value[64];
         bool isCommand;
         int flags;
         ConVar cvar;
@@ -5151,7 +5153,7 @@ public Action ZM_MOTD(int client, int args)
 
 void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-	char sGameMode[32];
+	static char sGameMode[32];
 	g_hCvarMPGameMode.GetString(sGameMode, sizeof(sGameMode));
 	if(strcmp(g_sCvarMPGameMode, sGameMode, false) == 0) return;
 	g_sCvarMPGameMode = sGameMode;
@@ -5170,7 +5172,7 @@ void load_zm_gamemode()
     g_hZMGamemode.GetString(g_sZMGamemode, sizeof(g_sZMGamemode));
     TrimString(g_sZMGamemode);
     if (g_sZMGamemode[0]==0) g_sZMGamemode = "zm_default";
-    char command[PLATFORM_MAX_PATH];
+    static char command[PLATFORM_MAX_PATH];
     Format(command, sizeof(command), "exec sourcemod/l4d2_zombie_master/%s", g_sZMGamemode);
     ServerCommand(command);  
 }
@@ -5337,7 +5339,7 @@ Action JoinZM(int client, int args)
   		{
       		if (IsValidClient(client_offer))
       		{
-          		char name[MAX_NAME_LENGTH]; 
+          		static char name[MAX_NAME_LENGTH]; 
                 GetClientName(client_offer,name,sizeof(name));
                 int timeleft = RoundFloat(g_fFairQueueWait - (GetEngineTime() - t_offer));
                 if (timeleft<0) timeleft = 0;
@@ -5372,7 +5374,7 @@ Action JoinZM(int client, int args)
   	//SetVariantString("function InputKill() {return plugin_shouldKill}");
    	//AcceptEntityInput(client, "RunScriptCode");
     
-    char name[MAX_NAME_LENGTH]; 
+    static char name[MAX_NAME_LENGTH]; 
     GetClientName(client,name,sizeof(name));
     int playcount = get_rounds(client);
     PrintToChatAll("[zm] %t (%d)", "ZM joined", name, playcount);
@@ -5445,7 +5447,7 @@ void QuitZM(int client, bool print = true)
 	       FindConVar("mp_gamemode").ReplicateToClient(zm_client,g_sCvarMPGameMode);
            if (print)
            {
-               char name[MAX_NAME_LENGTH]; 
+               static char name[MAX_NAME_LENGTH]; 
                GetClientName(client,name,sizeof(name));
                PrintToChatAll("[zm] %t", "ZM quit", name);
                update_t_zm_activity();
@@ -5723,7 +5725,7 @@ Action saferoom_disturb(Handle timer, float vPos[3])
 {
     if (!IsValidEntRef(g_iLockedDoor) || zm_stage>=ZM_STARTED) return Plugin_Stop;
     int random = GetRandomInt(1,3);
-    char sound[64];
+    static char sound[64];
     switch (random)
     {
         case 1: {sound=SOUND_DOORSLAM;}
@@ -5792,7 +5794,7 @@ Action Open_Saferoom(Handle timer, bool scary = false)
 			CreateShake(50.0,5000.0,vPos);
 			CreateShake(50.0,5000.0,vPos);
 			
-			char sound_explosion[64];
+			static char sound_explosion[64];
 			switch (GetRandomInt(1,3))
 			{
     			case 1: sound_explosion = EXPLOSION1;
@@ -5801,7 +5803,7 @@ Action Open_Saferoom(Handle timer, bool scary = false)
 			}
 			EmitSoundToAll(sound_explosion,g_iLockedDoor,_,SNDLEVEL_GUNFIRE,_,SNDVOL_NORMAL);
 			
-			char sModel[64];
+			static char sModel[64];
         	GetEntPropString(g_iLockedDoor, Prop_Data, "m_ModelName", sModel, sizeof(sModel));
 			GetEntPropVector(g_iLockedDoor, Prop_Data, "m_vecAbsOrigin", vPos);
             GetEntPropVector(g_iLockedDoor, Prop_Send, "m_angRotation", vAng);
@@ -5917,7 +5919,7 @@ Action zm_start(int client, int args)
             if (zm_stage<ZM_STARTED && IsValidEntRef(g_iLockedDoor) && !force_started)
             {
                 int random = GetRandomInt(1,5);
-                char sound[64];
+                static char sound[64];
                 switch (random)
                 {
                     case 1: {sound=SOUND_SCARY1;}
@@ -5982,7 +5984,7 @@ Action ZM_Spawn_Horde(int client, int args)
     char type[32] = "";
     if (args>0)
     {
-        char arg[32] = "";
+        static char arg[32] = "";
         GetCmdArg(1,arg,sizeof(arg));
         process_horde_arg(count,type,angry,flow,arg);
     	if (args>1) {GetCmdArg(2,arg,sizeof(arg)); process_horde_arg(count,type,angry,flow,arg);}
@@ -6058,7 +6060,12 @@ Action clown_check_rush(Handle timer, int entref)
     {
        	int looktarget = GetEntPropEnt(entref, Prop_Send, "m_clientLookatTarget");
        	if (IsValidClient(looktarget) && IsPlayerAlive(looktarget) && GetClientTeam(looktarget)==TEAM_SURVIVOR)
-           	glow = true;
+       	{
+           	float pos[3];
+           	L4D_GetEntityWorldSpaceCenter(entref,pos);
+           	pos[2] += 36.0;
+           	glow = L4D2_IsVisibleToPlayer(looktarget,TEAM_SURVIVOR,3,0,pos);
+       	}
     }
     if (glow)
     {
@@ -6212,7 +6219,7 @@ void ZM_Horde(int client, int count=10, char type[64]="", bool angry = false, bo
 	int spawned = 0;
 	float randomPos[3];
     //int ticktime = RoundToNearest(GetGameTime()/GetTickInterval()) + 5000;
-	char current_model[64];
+	static char current_model[64];
 	current_model = set_model;
 	bool glow = false;
 	bool random = false;
@@ -6294,7 +6301,6 @@ void ZM_Horde(int client, int count=10, char type[64]="", bool angry = false, bo
 		
         if (zombie>0)
         {
-           DHookEntity(g_DHook_AcceptInput, true, zombie, INVALID_FUNCTION, DHook_infected_AcceptInput);
            if (!playcount_increased && zm_stage>=ZM_STARTED && IsValidClientZM()) increase_playcount(zm_client);
            spawned += 1;
            bank -= temp_cost;
@@ -6327,7 +6333,7 @@ void ZM_Horde(int client, int count=10, char type[64]="", bool angry = false, bo
         
 	    if (hint)
 	    {
-    	    char label[32];
+    	    static char label[32];
     	    Format(label, sizeof(label), "%T", "Common", zm_client);
     	    update_hint("%T", "Spawned X Y", zm_client, spawned, label);
 	    }
@@ -6459,7 +6465,7 @@ void ZM_Witch(int client,int witch_type, bool free = false, bool flow = false)
        	CreateTimer(g_fUpdateRate, CreateZMGlow_white, EntIndexToEntRef(witch), TIMER_FLAG_NO_MAPCHANGE);
        	entref_delete = EntIndexToEntRef(witch);
        	add_available_zombie(ZOMBIECLASS_WITCH,-1);
-       	char label[32];
+       	static char label[32];
    	    Format(label, sizeof(label), "%T", "Witch", zm_client);
    	    update_hint("%T", "Spawned X Y", zm_client, 1, label);
        	DispatchKeyValue(witch, "targetname", "zm_unit");
@@ -6513,7 +6519,7 @@ void delete_all_infected(bool common=true, bool witch=true, bool special=true)
       	     GetEntityClassname(entity, class, sizeof(class));
       	     if ( (ZM_finale_announced || L4D_IsSurvivalMode()) && strcmp(class,"player")==0 && GetEntProp(entity, Prop_Send, "m_zombieClass")==ZOMBIECLASS_TANK )
              {
-                 char targetName[20];
+                 static char targetName[20];
                  GetEntPropString(entity, Prop_Data, "m_iName", targetName, sizeof(targetName));
                  if (strcmp(targetName,"zm_unit")!=0)
                  {
@@ -6544,7 +6550,7 @@ Action ZM_Spawn_Witch(int client, int args)
 	if (args>0)
 	{
 	    int arg_int;
-        char arg[32];
+        static char arg[32];
         bool hit = false;
     	// Check Argument 1
     	GetCmdArg(1,arg,sizeof(arg));
@@ -6608,7 +6614,7 @@ void zm_del_pointing(int client)
    if ( (ZM_finale_announced || L4D_IsSurvivalMode()) && strcmp(class,"player")==0 &&
        GetEntProp(target, Prop_Send, "m_zombieClass")==ZOMBIECLASS_TANK )
    {
-       char targetName[20];
+       static char targetName[20];
        GetEntPropString(target, Prop_Data, "m_iName", targetName, sizeof(targetName));
        if (strcmp(targetName,"zm_unit")!=0)
        {
@@ -6656,7 +6662,7 @@ public Action evtPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     
     if(GetClientTeam(victim)!=TEAM_INFECTED) return Plugin_Continue;
     
-    char targetName[20];
+    static char targetName[20];
     GetEntPropString(victim, Prop_Data, "m_iName", targetName, sizeof(targetName));
     
     if (active_looktarget && entref_control==EntIndexToEntRef(victim))
@@ -6980,7 +6986,7 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
                 }
                 else
                 {
-                    char name[32];
+                    static char name[32];
                     get_zombieclass_name(ZOMBIECLASS,name);
                     Format(name, sizeof(name), "%T", name, zm_client);
                     update_hint("%T", "Spawned X Y", zm_client, 1, name);
@@ -7002,7 +7008,7 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
 
 Action ZM_Smoker(int client, int args)
 {
-   char extra[32];
+   static char extra[32];
    if (args>0) GetCmdArg(1, extra, sizeof(extra));
    ZM_Unit_Special(client,ZOMBIECLASS_SMOKER,extra);
    return Plugin_Continue;
@@ -7010,7 +7016,7 @@ Action ZM_Smoker(int client, int args)
 
 Action ZM_Boomer(int client, int args)
 {
-   char extra[32] = "";
+   static char extra[32] = "";
    if (args>0) GetCmdArg(1, extra, sizeof(extra));
    ZM_Unit_Special(client,ZOMBIECLASS_BOOMER,extra);
    return Plugin_Continue;
@@ -7018,7 +7024,7 @@ Action ZM_Boomer(int client, int args)
 
 Action ZM_Hunter(int client, int args)
 {
-   char extra[32] = "";
+   static char extra[32] = "";
    if (args>0) GetCmdArg(1, extra, sizeof(extra));
    ZM_Unit_Special(client,ZOMBIECLASS_HUNTER,extra);
    return Plugin_Continue;
@@ -7026,7 +7032,7 @@ Action ZM_Hunter(int client, int args)
 
 Action ZM_Spitter(int client, int args)
 {
-   char extra[32] = "";
+   static char extra[32] = "";
    if (args>0) GetCmdArg(1, extra, sizeof(extra));
    ZM_Unit_Special(client,ZOMBIECLASS_SPITTER,extra);
    return Plugin_Continue;
@@ -7034,7 +7040,7 @@ Action ZM_Spitter(int client, int args)
 
 Action ZM_Jockey(int client, int args)
 {
-   char extra[32] = "";
+   static char extra[32] = "";
    if (args>0) GetCmdArg(1, extra, sizeof(extra));
    ZM_Unit_Special(client,ZOMBIECLASS_JOCKEY,extra);
    return Plugin_Continue;
@@ -7042,7 +7048,7 @@ Action ZM_Jockey(int client, int args)
 
 Action ZM_Charger(int client, int args)
 {
-   char extra[32] = "";
+   static char extra[32] = "";
    if (args>0) GetCmdArg(1, extra, sizeof(extra));
    ZM_Unit_Special(client,ZOMBIECLASS_CHARGER,extra);
    return Plugin_Continue;
@@ -7050,7 +7056,7 @@ Action ZM_Charger(int client, int args)
 
 Action ZM_Tank(int client, int args)
 {
-   char extra[32] = "";
+   static char extra[32] = "";
    if (args>0) GetCmdArg(1, extra, sizeof(extra));
    ZM_Unit_Special(client,ZOMBIECLASS_TANK,extra);
    return Plugin_Continue;
@@ -7363,13 +7369,13 @@ public void OnMapStart()
             ConVar g_hDownloadUrl = FindConVar("sv_downloadurl");
             if (g_hDownloadUrl!=null)
             {
-                char currentUrl[256];
+                static char currentUrl[256];
                 g_hDownloadUrl.GetString(currentUrl,sizeof(currentUrl));
                 TrimString(currentUrl);
                 if (currentUrl[0]=='\0') g_hDownloadUrl.SetString("https://gvazdas.github.io/l4d2_zombie_master/left4dead2", false, false);
             }
             
-            char buffer[128];
+            static char buffer[128];
             //if (lipsync_available) Format(buffer, sizeof(buffer), "sound/%s", SOUND_ELLIS_ZM);
             Format(buffer, sizeof(buffer), "sound/%s", SOUND_ELLIS_ZM_MP3);
             AddFileToDownloadsTable(buffer);
@@ -7403,7 +7409,7 @@ public void OnMapStart()
     PrecacheSound(SOUND_HITMARKER);
 
 	g_bSpawnWitchBride = false;
-	char sMap[64];
+	static char sMap[64];
 	GetCurrentMap(sMap, sizeof(sMap));
 	if(StrEqual("c6m1_riverbank", sMap, false)) g_bSpawnWitchBride = true;
 	else g_bSpawnWitchBride = false;
@@ -7714,7 +7720,7 @@ void evtRoundEnd(Event event, const char[] name, bool dontBroadcast)
         	zm_win_announced = true;
         	EmitSoundToClient(zm_client,SOUND_ZM_WIN);
         	PrintHintText(zm_client, "%t", "ZM win text");
-        	char zm_name[MAX_NAME_LENGTH]; 
+        	static char zm_name[MAX_NAME_LENGTH]; 
             GetClientName(zm_client,zm_name,sizeof(zm_name));
             PrintToChatAll("[zm] %t", "ZM won", zm_name);
     	}
@@ -7964,10 +7970,10 @@ void IsAllowed()
 	
 }
 
-public Action Event_ServerCvar(Handle event, char[] name, bool dontBroadcast)
+Action Event_ServerCvar(Handle event, char[] name, bool dontBroadcast)
 {
 	if (!g_bCvarAllow) return Plugin_Continue;
-	char sConVarName[64];
+	static char sConVarName[64];
 	GetEventString(event, "cvarname", sConVarName, sizeof(sConVarName));
 	if (StrContains(sConVarName,"zm_",false)==0) return Plugin_Handled;
 	return Plugin_Continue;
@@ -8017,7 +8023,7 @@ void EvtPlayerCallHelp(Event event, const char[] name, bool dontBroadcast)
     if (IsValidClient(client)) UpdateSurvivorGlow(client);
 }
 
-public Action SwapSound(int clients[MAXPLAYERS], int &numClients, char sample[PLATFORM_MAX_PATH],
+Action SwapSound(int clients[MAXPLAYERS], int &numClients, char sample[PLATFORM_MAX_PATH],
                     	  int &entity, int &channel, float &volume, int &level, int &pitch, int &flags,
                     	  char soundEntry[PLATFORM_MAX_PATH], int &seed)
 {
@@ -8043,7 +8049,7 @@ Action OnPZDmgMsg(UserMsg msg_id, BfRead msg, const int[] players, int playersNu
     return Plugin_Continue;
 } 
 
-public MRESReturn DHook_Fog_AcceptInput(int pThis, DHookReturn hReturn, DHookParam hParams)
+MRESReturn DHook_Fog_AcceptInput(int pThis, DHookReturn hReturn, DHookParam hParams)
 {
 	if (DEBUG) LogMessage("[zm] DHook_Fog_AcceptInput");
 	if (!g_bCvarAllow) return MRES_Ignored;
@@ -8052,27 +8058,12 @@ public MRESReturn DHook_Fog_AcceptInput(int pThis, DHookReturn hReturn, DHookPar
 	return MRES_Ignored;
 }
 
-public MRESReturn DHook_infected_AcceptInput(int pThis, DHookReturn hReturn, DHookParam hParams)
-{
-   	if (DEBUG)
-   	{
-       	char inputName[256];
-       	hParams.GetString(1, inputName, sizeof(inputName));
-       	int activator = hParams.IsNull(2) ? -1 : hParams.Get(2);
-       	int caller = hParams.IsNull(3) ? -1 : hParams.Get(3);	
-       	int actionId = hParams.Get(5);	
-       	LogMessage("[zm] infected %d accepted input %s %d %d %d", pThis, inputName, activator, caller, actionId);
-   	}
-   	return MRES_Ignored;
-}
-
-
-public MRESReturn DHook_Director_AcceptInput(int pThis, DHookReturn hReturn, DHookParam hParams)
+MRESReturn DHook_Director_AcceptInput(int pThis, DHookReturn hReturn, DHookParam hParams)
 {
 	if (DEBUG) LogMessage("[zm] DHook_Director_AcceptInput");
 	if (!g_bCvarAllow) return MRES_Ignored;
 	
-	char inputName[256];
+	static char inputName[256];
 	hParams.GetString(1, inputName, sizeof(inputName));
 	int activator = hParams.IsNull(2) ? -1 : hParams.Get(2);
 	int caller = hParams.IsNull(3) ? -1 : hParams.Get(3);	
@@ -8233,7 +8224,7 @@ void evtPlayerSpawned(Event event, const char[] name, bool dontBroadcast)
    	   
 }
 
-public void Event_PlayerShoved(Event event, const char[] name, bool dontBroadcast)
+void Event_PlayerShoved(Event event, const char[] name, bool dontBroadcast)
 {
     if (!g_bCvarAllow) return;
     if (!specials_frozen || zm_stage!=ZM_STARTED) return;
