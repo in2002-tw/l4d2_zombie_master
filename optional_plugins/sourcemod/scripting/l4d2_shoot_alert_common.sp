@@ -7,7 +7,7 @@
 #include <left4dhooks>
 
 #define PLUGIN_NAME			    "l4d2_shoot_alert_common"
-#define PLUGIN_VERSION 			"1.2 2026-03-09"
+#define PLUGIN_VERSION 			"1.21* 2026-03-09"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -29,11 +29,11 @@ public Plugin myinfo =
 // Optimizations
 Handle timer_death; // avoid infected death spam
 Handle timers[MAXPLAYERS+1]; // prevent frequent sphere calculations
-bool ignore[MAXENTITIES] = {true,...}; // ignore non-infected entities and already aggro infected
+bool ignore[MAXENTITIES] = {true,...}; // ignore non-infected entities and already rushing infected
 bool silent[MAXPLAYERS+1]; // 2x range reduction for silenced smg
 bool weapon_fire_hooked = false; // dynamically unhook weapon_fire if there are no commons.
 int commons = 0; // track commons to predict when unhook might need to be done
-float pos_arr[MAXPLAYERS+1][3]; // calculate position of survivor once
+float pos_arr[MAXPLAYERS+1][3]; // calculate position of survivor once -- idk why sphere can't give us this info :/
 
 // Inputs
 ConVar g_hCvarEnable, g_hCvarAlertRange, g_hCvarAlertProbability, g_hCvarRushRange, g_hCvarLOS, g_hCvarMPGameMode;
@@ -147,12 +147,13 @@ public void OnEntityCreated(int entity, const char[] classname)
 public void OnEntityDestroyed(int entity)
 {
 	if (!weapon_fire_hooked) return;
-	if (commons<=1 && timer_death==null)
-	{
-        static char class[16];
-        GetEntityClassname(entity, class, sizeof(class));
-        if (strcmp(class,"infected")==0)
-            timer_death = CreateTimer(1.0,timer_check_hook_weapon_fire);
+	static char class[16];
+    GetEntityClassname(entity, class, sizeof(class));
+    if (strcmp(class,"infected")==0)
+    {
+    	commons -= 1;
+    	if (commons<=1 && timer_death==null)
+        	timer_death = CreateTimer(0.1,timer_check_hook_weapon_fire);
     }
 }
 
