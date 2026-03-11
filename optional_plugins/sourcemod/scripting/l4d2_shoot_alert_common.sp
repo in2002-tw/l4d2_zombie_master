@@ -7,7 +7,7 @@
 #include <left4dhooks>
 
 #define PLUGIN_NAME			    "l4d2_shoot_alert_common"
-#define PLUGIN_VERSION 			"1.4 2026-03-10"
+#define PLUGIN_VERSION 			"1.41 2026-03-11"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -53,25 +53,25 @@ public void OnPluginStart()
     g_hCvarEnable = CreateConVar("l4d2_shoot_alert_common_enable", "1", "0=Plugin off, 1=Plugin on.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_hCvarEnable.AddChangeHook(ConVarChanged_Cvars);   
     
-    g_hCvarAlertRange = CreateConVar("l4d2_shoot_alert_common_range", "2500.0", "Alert range in line of sight.",FCVAR_NOTIFY, true, 0.0, true, 100000.0);
+    g_hCvarAlertRange = CreateConVar("l4d2_shoot_alert_common_range", "2000.0", "Alert range in line of sight.",FCVAR_NOTIFY, true, 0.0, true, 100000.0);
     g_hCvarAlertRange.AddChangeHook(ConVarChanged_Cvars);
     
     g_hCvarAlertProbability = CreateConVar("l4d2_shoot_alert_common_probability", "0.5", "Alert probability.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_hCvarAlertProbability.AddChangeHook(ConVarChanged_Cvars);  
     
-    g_hCvarRushRange = CreateConVar("l4d2_shoot_alert_common_range_rush", "700.0", "Rush range in line of sight.",FCVAR_NOTIFY, true, 0.0, true, 100000.0);
+    g_hCvarRushRange = CreateConVar("l4d2_shoot_alert_common_range_rush", "600.0", "Rush range in line of sight. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 100000.0);
     g_hCvarRushRange.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hCvarLOS = CreateConVar("l4d2_shoot_alert_common_los", "2.0", "No line-of-sight range multiplier.",FCVAR_NOTIFY, true, 1.0, true, 10000.0);
+    g_hCvarLOS = CreateConVar("l4d2_shoot_alert_common_los", "2.0", "No-line-of-sight range multiplier.",FCVAR_NOTIFY, true, 1.0, true, 10000.0);
     g_hCvarLOS.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hCvarAlertMax = CreateConVar("l4d2_shoot_alert_common_max", "10", "Number of alerts to rush. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 10000.0);
+    g_hCvarAlertMax = CreateConVar("l4d2_shoot_alert_common_max", "12", "Number of alerts to rush. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 10000.0);
     g_hCvarAlertMax.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hCvarAlertMemory = CreateConVar("l4d2_shoot_alert_common_memory", "5.0", "How many seconds to forget 1 alert. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 10000.0);
+    g_hCvarAlertMemory = CreateConVar("l4d2_shoot_alert_common_memory", "4.0", "How many seconds to forget 1 alert. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 10000.0);
     g_hCvarAlertMemory.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hCvarSpeech = CreateConVar("l4d2_shoot_alert_common_vocalize", "0.0", "Treat survivor voice same as silenced mp5 (also scales with volume).",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hCvarSpeech = CreateConVar("l4d2_shoot_alert_common_vocalize", "0.0", "Make survivor voices alert zombies like a silenced mp5 (also scales with volume).",FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_hCvarSpeech.AddChangeHook(ConVarChanged_Cvars);
     
     g_hCvarMPGameMode = FindConVar("mp_gamemode");
@@ -182,7 +182,7 @@ void late_enable() // If plugin just enabled, check if there are any infected en
 public void OnEntityCreated(int entity, const char[] classname) // When a zombie is created, check if hooks should activate.
 {
 	if (!enabled || finale_active || L4D_IsSurvivalMode()) return;
-	if (strcmp(classname,"infected")==0 && GetEntProp(entity,Prop_Send,"m_mobRush")<=0)
+	if (strcmp(classname,"infected")==0 && GetEntProp(entity,Prop_Send,"m_mobRush")<=0) // always spawns with 0 HP
 	{
     	ignore[entity] = false; commons += 1; alerts[entity]=0;
     	CreateTimer(1.0,check_aggro,EntIndexToEntRef(entity));
@@ -192,7 +192,7 @@ public void OnEntityCreated(int entity, const char[] classname) // When a zombie
 Action check_aggro(Handle timer, int entref) // Check again.
 {
     if (!IsValidEntRef(entref)) return Plugin_Stop;
-    if (GetEntProp(entref,Prop_Send,"m_mobRush")>0)
+    if (is_bad_infected(entref))
     {
         ignore_infected(EntRefToEntIndex(entref));
         return Plugin_Stop;
@@ -218,8 +218,7 @@ void evtPlayerFired(Event event, const char[] name, bool dontBroadcast) // Survi
 {
     if (event.GetInt("count")<=0) return; // melee weapons give 0 count
     int client = GetClientOfUserId(event.GetInt("userid"));
-    if (timers[client]!=null) return;
-    if (GetClientTeam(client)!=TEAM_SURVIVOR) return;
+    if (timers[client]!=null || GetClientTeam(client)!=TEAM_SURVIVOR) return;
     static char weapon[128];
     event.GetString("weapon",weapon,sizeof(weapon),""); // 2.0 multiplier for silenced smg
     multipliers[client] = (StrContains(weapon,"silen",false)>=0) ? 2.0 : 1.0;
@@ -230,14 +229,10 @@ Action SurvivorSpeak(int clients[MAXPLAYERS], int &numClients, char sample[PLATF
                    int &entity, int &channel, float &volume, int &level, int &pitch, int &flags,
                    char soundEntry[PLATFORM_MAX_PATH], int &seed) // Survivor said something.
 {
-    if (channel!=SNDCHAN_VOICE) return Plugin_Continue;
-    if (volume<=0.1) return Plugin_Continue;
-    if (sample[0]!='p') return Plugin_Continue;
-    if (!IsValidClient(entity)) return Plugin_Continue;
-    if (timers[entity]!=null) return Plugin_Continue;
+    if (channel!=SNDCHAN_VOICE || volume<=0.1 || sample[0]!='p' || !IsValidClient(entity) || timers[entity]!=null) return Plugin_Continue;
     if (!IsPlayerAlive(entity) || GetClientTeam(entity)!=TEAM_SURVIVOR) return Plugin_Continue;
     if (StrContains(sample,"survivor")<0 || StrContains(sample,"voice")<0) return Plugin_Continue;
-    multipliers[entity] = 2.0/volume; // at full volume, treat speech similar to silenced mp5
+    multipliers[entity] = 2.0/volume; // at full volume, treat speech same as silenced mp5
     #if DEBUG 
         LogMessage("%s %f -> %f", sample, volume, multipliers[entity]);
     #endif
@@ -272,7 +267,7 @@ bool AlertCallback(int entity, int client) // Return true to continue enumeratin
     GetEntityClassname(entity, class, sizeof(class));
     if (strcmp(class,"infected")==0)
     {
-        if (GetEntProp(entity,Prop_Send,"m_mobRush")>0) // If already rushing, do nothing.
+        if (is_bad_infected(entity)) // Ignore rushing and dead infected
         {
             ignore_infected(entity);
             return true;
@@ -296,13 +291,12 @@ bool AlertCallback(int entity, int client) // Return true to continue enumeratin
         bool LOS = L4D2_IsVisibleToPlayer(client,TEAM_SURVIVOR,3,0,pos2);
         if (!LOS) range *= LOS_multiplier;
         range *= multipliers[client];
-        
-        if (range<=rush_range)
+        if (range>alert_range) return true;
+        if (rush_range>0.0 && range<=rush_range)
         {
             infected_rush_client(entity,client);
             return true;
         }
-        if (range>alert_range) return true;
         if (alert_probability>=1.0 || GetRandomFloat(0.0,1.0)<alert_probability)
         {
             if (alert_max>0) // Aggro if disturbed too many times.
@@ -331,7 +325,7 @@ bool AlertCallback(int entity, int client) // Return true to continue enumeratin
     return true;
 }
 
-void infected_rush_client(int infected, int client)
+void infected_rush_client(const int infected, const int client)
 {
     #if DEBUG
         LogMessage("infected %d rush %d", infected, client);
@@ -341,7 +335,7 @@ void infected_rush_client(int infected, int client)
     ignore_infected(infected);
 }
 
-void ignore_infected(int infected)
+void ignore_infected(const int infected)
 {
     ignore[infected] = true;
     alerts[infected] = 0;
@@ -354,7 +348,7 @@ Action undo_lookat(Handle timer, DataPack pack) // Must have been the wind...
     pack.Reset();
     int entref_zombie = pack.ReadCell();
     if (!IsValidEntRef(entref_zombie)) return Plugin_Stop;
-    if (GetEntProp(entref_zombie, Prop_Send, "m_mobRush")>0)
+    if (is_bad_infected(entref_zombie))
     {
         ignore_infected(EntRefToEntIndex(entref_zombie));
         return Plugin_Stop;
@@ -408,7 +402,7 @@ int get_commons(bool calm=false, bool late=false) // Counting ONLY non-aggro inf
     int count = 0;
    	while( (entity = FindEntityByClassname(entity, "infected")) != INVALID_ENT_REFERENCE )
    	{
-   		if (GetEntProp(entity,Prop_Send,"m_mobRush")>0) ignore[entity] = true;
+   		if (is_bad_infected(entity)) ignore[entity] = true;
    		else
    		{
        		if (late) ignore[entity] = false;
@@ -452,6 +446,11 @@ void reset_timers()
     timer_hook = null;
     timer_calm = null;
 }  
+
+stock bool is_bad_infected(int infected) // works for entity or entref
+{
+    return GetEntProp(infected,Prop_Send,"m_mobRush")>0 || GetEntProp(infected,Prop_Data,"m_iHealth")<=0;
+}
 
 stock bool IsValidClient(int client, bool replaycheck = true)
 {
