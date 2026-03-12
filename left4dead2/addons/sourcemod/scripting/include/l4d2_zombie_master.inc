@@ -300,13 +300,14 @@ stock bool navArea_validStart(Address navArea)
     return true;
 }
 
-stock void infected_panic(Handle hInfectedAttackSurvivorTeam)
+stock void infected_panic(Handle hInfectedAttackSurvivorTeam,bool update_look = false)
 {
     int zombie = INVALID_ENT_REFERENCE;
     while( INVALID_ENT_REFERENCE != (zombie = FindEntityByClassname(zombie, "infected")) )
     {
    	    if( IsValidEntity(zombie) && GetEntProp(zombie,Prop_Data,"m_iHealth")>0 ) 
    	    {
+	        if (update_look) SetEntPropEnt(zombie, Prop_Send, "m_clientLookatTarget",GetRandomSurvivor(1,1));
 	        if (hInfectedAttackSurvivorTeam) SDKCall(hInfectedAttackSurvivorTeam,zombie);
             else SetEntProp(zombie, Prop_Send, "m_mobRush", 1);
         }
@@ -496,6 +497,7 @@ stock void GetSurvivorHealthColor(int hp,int color[3],bool rescue=false,bool cri
 
 stock bool valid_uncommon(char arg[32])
 {
+    if (arg[0]==0) return false;
     if (strcmp(arg,"random")==0) return true;
     else if (strcmp(arg,"riot")==0) return true;
 	else if (strcmp(arg,"ceda")==0) return true;
@@ -546,13 +548,14 @@ stock void process_horde_arg(int &count, char type[32], bool &angry, bool &flow,
 
 static float HULL_MINS[3] = {-HULL_DX_STRICT,-HULL_DX_STRICT,HULL_DZ_MIN_STRICT};
 static float HULL_MAXS[3] = {HULL_DX_STRICT,HULL_DX_STRICT,HULL_DZ_MAX_STRICT};
-public bool TraceFilter_Spawner(int entity, int contentsMask)
+bool TraceFilter_Spawner(int entity, int contentsMask, int ignore_entity)
 {
+	if (entity==ignore_entity) return false;
 	if (entity==0) return true;
 	if (IsValidClient(entity) && IsPlayerAlive(entity)) return true;
 	if (entity>MaxClients)
 	{
-    	   static char class[32];
+    	static char class[32];
         GetEntityClassname(entity, class, sizeof(class));
         if (strcmp(class,"infected")==0) return false;
         if (strcmp(class,"env_player_blocker")==0) return false;
@@ -562,12 +565,12 @@ public bool TraceFilter_Spawner(int entity, int contentsMask)
 	}
 	return true;
 }
-stock bool IsObstructed(float vecpos[3], bool DEBUG=false)
+stock bool IsObstructed(float vecpos[3], int entity = -1, bool DEBUG=false)
 {
     bool isObstructed = false;
 	Handle hullTrace = TR_TraceHullFilterEx(vecpos, vecpos, HULL_MINS, HULL_MAXS,
 								        MASK_NPCSOLID,
-								        TraceFilter_Spawner);
+								        TraceFilter_Spawner, entity);
 	if (TR_DidHit(hullTrace))
 	{
 		int hitEntity = TR_GetEntityIndex(hullTrace);
