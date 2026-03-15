@@ -329,16 +329,11 @@ stock Action infinite_delay_natural_mob(Handle timer = null)
 // Check if Survivor or Special Infected is vomited -- attracting commons, for survivors vomit overlay ON.
 stock bool is_player_vomited(int client)
 {
-    //float t_start = GetEntPropFloat(client, Prop_Send, "m_vomitStart");
-    //if (t_start<=0.0) return false;
-    //float t_end = GetEntPropFloat(client, Prop_Send, "m_vomitFadeStart");
-    //float t_end = GetEntPropFloat(client, Prop_Send, "m_itTimer", 1); 
-    //if (t_end<=0.0) return false;
-    //t_end -= 1.0;
-    //float t_now = GetGameTime();
-    //if (t_now<t_end && t_now>=t_start) return true;
-    //return false;
-    return GetEntPropFloat(client, Prop_Send, "m_itTimer", 1)!=-1.0;
+    float t_end = GetEntPropFloat(client, Prop_Send, "m_itTimer", 1);
+    if (t_end<0.0) return false;
+    t_end -= 0.1; // smooth transition between custom glow and survivor glow
+    if (GetGameTime()>=t_end) return false;
+    return true;
 }
 
 stock bool get_client_auth(int client, char auth[65])

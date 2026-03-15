@@ -1,0 +1,23 @@
+// See left4dhooks_stocks.inc for full list of weaponids
+// -1.0 -> use Default value | 0.0 -> disable (fully silent)
+// WeaponID Multiplier
+0   +1.00    // Default // ~35 dmg
+2   +1.35    // L4D2WeaponId_Smg // 20 dmg
+7   +2.00    // L4D2WeaponId_SmgSilenced // 25 dmg
+33  +1.25    // L4D2WeaponId_SmgMP5 // 26 dmg
+5   -1.00    // L4D2WeaponId_Rifle // 33 dmg
+34  -1.00    // L4D2WeaponId_RifleSG552 // 33 dmg
+1   +1.15    // L4D2WeaponId_Pistol // 36 dmg
+9   +0.95    // L4D2WeaponId_RifleDesert // 44 dmg
+26  +0.90    // L4D2WeaponId_RifleAK47 // 58 dmg
+37  +0.90    // L4D2WeaponId_RifleM60 // 60 dmg instantly kills commons
+32  +0.85    // L4D2WeaponId_PistolMagnum // 80 dmg
+6   +0.80    // L4D2WeaponId_HuntingRifle // 90 dmg
+10  +0.80    // L4D2WeaponId_SniperMilitary // 90 dmg
+36  -1.00    // L4D2WeaponId_SniperScout // 105 dmg
+35  +0.75    // L4D2WeaponId_SniperAWP // 115 dmg
+3   -1.00    // L4D2WeaponId_Pumpshotgun // 250 dmg
+4   -1.00    // L4D2WeaponId_Autoshotgun // 253 dmg
+8   -1.00    // L4D2WeaponId_ShotgunChrome // 248 dmg
+11  -1.00    // L4D2WeaponId_ShotgunSpas // 252 dmg
+21  +0.50    // L4D2WeaponId_GrenadeLauncher // 1000 dmg

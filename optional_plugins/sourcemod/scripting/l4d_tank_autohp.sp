@@ -1,12 +1,10 @@
 #pragma semicolon 1
 #pragma newdecls required
 #include <sourcemod>
-//#include <sdktools>
-//#include <sdkhooks>
-//#undef REQUIRE_PLUGIN
 
 #define PLUGIN_NAME			    "l4d_tank_autohp"
-#define PLUGIN_VERSION 			"1.01 2026-02-16"
+#define PLUGIN_VERSION 			"1.02 2026-03-12"
+#define CONFIG_FILENAME         PLUGIN_NAME
 
 #define TEAM_SPECTATOR		1
 #define TEAM_SURVIVOR		2
@@ -32,7 +30,7 @@ public Plugin myinfo =
 	author = "gvazdas",
 	description = "Automatic tank HP scaling for 4+ survivors.",
 	version = PLUGIN_VERSION,
-	url = ""
+	url = "https://forums.alliedmods.net/showthread.php?p=2842585,https://github.com/gvazdas/l4d2_zombie_master"
 }
 
 int get_adjusted_hp(int max_hp, int num_survivors)
@@ -61,16 +59,18 @@ int get_adjusted_hp(int max_hp, int num_survivors)
 
 public void OnPluginStart()
 {
-    g_hCvarTankAutoHPScale = CreateConVar("l4d_tank_autohp_scale", "0.2", "Tank HP scaling. This is the extra hp given to the tank per player normalized to the initial tank hp. Larger number gives more HP. 0 to disable plugin.", FCVAR_NOTIFY, true, 0.0, true, 1000.0);
+    AutoExecConfig(true, CONFIG_FILENAME);
+    
+    g_hCvarTankAutoHPScale = CreateConVar("l4d_tank_autohp_scale", "0.2", "Tank HP scaling. This is the extra hp given to the tank per player normalized to the initial tank hp. Larger number gives more HP. 0 to disable plugin.", FCVAR_NOTIFY, true, 0.0, true, 10000.0);
     g_hCvarTankAutoHPScale.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hCvarTankAutoHPCutoff = CreateConVar("l4d_tank_autohp_cutoff", "0.75", "In percent, how much the per-player bonus gets reduced by the time we get to the max player count. Larger number makes the per-player bonus shrink faster. 0 to stop shrinking.", FCVAR_NOTIFY, true, 0.0, true, 1000.0);
+    g_hCvarTankAutoHPCutoff = CreateConVar("l4d_tank_autohp_cutoff", "0.75", "In percent, how much the per-player bonus gets reduced by the time we get to the max player count. Larger number makes the per-player bonus shrink faster. 0 to stop shrinking.", FCVAR_NOTIFY, true, 0.0, true, 10000.0);
     g_hCvarTankAutoHPCutoff.AddChangeHook(ConVarChanged_Cvars);
     
     g_hCvarVerifyVanillaValues = CreateConVar("l4d_tank_autohp_vanilla_verify", "0.0", "If 1, will modify tank HP only if tank has vanilla hp.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_hCvarVerifyVanillaValues.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hCvarAlways = CreateConVar("l4d_tank_autohp_always", "0.0", "If 1, will always scale tank hp even if health or maxhealth was modified by something else.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hCvarAlways = CreateConVar("l4d_tank_autohp_always", "0.0", "If 1, will always scale tank hp even if health or maxhealth was modified by something else. Bad idea.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_hCvarAlways.AddChangeHook(ConVarChanged_Cvars);
     
     HookEvent("player_spawn", evtPlayerSpawn, EventHookMode_Post);
