@@ -7,15 +7,15 @@
 #include <files>
 #include <left4dhooks>
 
-#define PLUGIN_NAME			    "l4d2_shoot_alert_common"
-#define PLUGIN_VERSION 			"1.7 2026-03-12"
-#define CONFIG_FILENAME         PLUGIN_NAME
+#define PLUGIN_NAME			"l4d2_shoot_alert_common"
+#define PLUGIN_VERSION 		"1.85 2026-03-15"
+#define CONFIG_FILENAME     PLUGIN_NAME
 
 public Plugin myinfo =
 {
 	name = "[L4D2] Weapon Fire Alert Common",
 	author = "gvazdas,Silvers",
-	description = "Survivor weapon fire and speech alerts Common Infected (except road workers).",
+	description = "Survivor gunfire and speech alerts Common Infected (except road workers).",
 	version = PLUGIN_VERSION,
 	url = "https://forums.alliedmods.net/showthread.php?t=352360,https://github.com/gvazdas/l4d2_zombie_master"
 }
@@ -23,9 +23,9 @@ public Plugin myinfo =
 #define TEAM_SPECTATOR		1
 #define TEAM_SURVIVOR		2
 #define TEAM_INFECTED		3
-#define MAXENTITIES         2048
-#define MODEL_ROAD          "models/infected/common_male_roadcrew.mdl"
-#define DEBUG               0
+#define MAXENTITIES        2048
+#define MODEL_ROAD         "models/infected/common_male_roadcrew.mdl"
+#define DEBUG              0
 
 #if DEBUG
 int g_iLaser;
@@ -46,10 +46,13 @@ Handle timer_calm; // periodically calm down non-rushing infected
 int shots[MAXPLAYERS+1]; // accumulate gunfire before callback
 float weaponid_multipliers[L4D2WeaponId_MAX] = {-1.0,...}; // multipliers for each weaponID; -1.0 to use default value.
 
+bool l4dhooks_updated = false; // check if l4dhooks is new enough
+bool enumerate_new = false; // 2026-03-15 new enumeration method using L4D_FindEntityByClassnameWithin 
+
 // Inputs
 ConVar g_hCvarEnable, g_hCvarAlertRange, g_hCvarAlertProbability, g_hCvarRushRange, g_hCvarLOS, g_hCvarAlertMax,
-g_hCvarAlertMemory, g_hCvarVoice, g_hCvarAccumulate, g_hCvarMPGameMode;
-bool enabled, speech, accumulate = false;
+g_hCvarAlertMemory, g_hCvarVoice, g_hCvarAccumulate, g_hCvarSaferoom, g_hCvarMPGameMode;
+bool enabled, speech, accumulate, saferoom = false;
 float alert_range, rush_range, alert_probability, alert_memory, LOS_multiplier, voice_multiplier;
 int alert_max;
 
@@ -59,9 +62,21 @@ float get_weaponid_multiplier(int weaponid)
     return weaponid_multipliers[weaponid];
 }
 
-public void OnPluginStart()
+Action request_reset(int client, int args)
 {
+    static char command[PLATFORM_MAX_PATH];
+    Format(command, sizeof(command), "exec sourcemod/%s", CONFIG_FILENAME);
+    ServerCommand(command);
+    return Plugin_Stop;
+}
+
+public void OnPluginStart()
+{   
     AutoExecConfig(true, CONFIG_FILENAME);
+    RegAdminCmd("l4d2_shoot_alert_common_resetcvars", request_reset, ADMFLAG_ROOT, "Reload default cfg. Admins only.");
+    
+    l4dhooks_updated = GetFeatureStatus(FeatureType_Native,"L4D_FindEntityByClassnameNearest")==FeatureStatus_Available;
+    if (!l4dhooks_updated) LogMessage("Please update l4dhooks for performance.");
     
     // Populate table of weaponid range multipliers.
     weaponid_multipliers[0] = 1.0; // Default value
@@ -97,43 +112,46 @@ public void OnPluginStart()
         }
         CloseHandle(fileHandle);
     }
-    else LogMessage("Could not read data/l4d2_shoot_alert_common.txt. Using default values.");
+    else LogMessage("Could not read sourcemod/data/l4d2_shoot_alert_common.txt. Using default weapon ranges.");
     
-    g_hCvarEnable = CreateConVar("l4d2_shoot_alert_common_enable", "1", "0=Plugin off, 1=Plugin on.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hCvarEnable = CreateConVar("l4d2_shoot_alert_common_enable", "1", "0=OFF,1=ON.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_hCvarEnable.AddChangeHook(ConVarChanged_Cvars);   
     
-    g_hCvarAlertRange = CreateConVar("l4d2_shoot_alert_common_range", "2500.0", "Alert range in line of sight.",FCVAR_NOTIFY, true, 0.0, true, 100000.0);
+    g_hCvarAlertRange = CreateConVar("l4d2_shoot_alert_common_range", "2500.0", "Alert range in line of sight for multiplier=1.0.",FCVAR_NOTIFY, true, 0.0, true, 100000.0);
     g_hCvarAlertRange.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hCvarAlertProbability = CreateConVar("l4d2_shoot_alert_common_probability", "0.5", "Alert probability.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hCvarAlertProbability = CreateConVar("l4d2_shoot_alert_common_probability", "0.5", "Alert probability. (rush probability is always 1.0)",FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_hCvarAlertProbability.AddChangeHook(ConVarChanged_Cvars);  
     
-    g_hCvarRushRange = CreateConVar("l4d2_shoot_alert_common_range_rush", "800.0", "Rush range in line of sight. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 100000.0);
+    g_hCvarRushRange = CreateConVar("l4d2_shoot_alert_common_range_rush", "800.0", "Rush range in line of sight for multiplier=1.0. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 100000.0);
     g_hCvarRushRange.AddChangeHook(ConVarChanged_Cvars);
     
     g_hCvarLOS = CreateConVar("l4d2_shoot_alert_common_los", "2.5", "No-line-of-sight range multiplier.",FCVAR_NOTIFY, true, 1.0, true, 10000.0);
     g_hCvarLOS.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hCvarAlertMax = CreateConVar("l4d2_shoot_alert_common_max", "12", "Number of alerts to rush. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 10000.0);
+    g_hCvarAlertMax = CreateConVar("l4d2_shoot_alert_common_max", "12", "Number of alerts in zombie memory to rush. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 10000.0);
     g_hCvarAlertMax.AddChangeHook(ConVarChanged_Cvars);
     
     g_hCvarAlertMemory = CreateConVar("l4d2_shoot_alert_common_memory", "4.0", "How many seconds to forget 1 alert. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 10000.0);
     g_hCvarAlertMemory.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hCvarVoice = CreateConVar("l4d2_shoot_alert_common_voice", "0.0", "Survivor voice range multiplier (scales with volume), 0 to disable. 2 is a good value.",FCVAR_NOTIFY, true, 0.0, true, 1000.0);
+    g_hCvarVoice = CreateConVar("l4d2_shoot_alert_common_voice", "2.0", "Survivor voice range multiplier (scales with volume). 0 to disable. 2 is a good value. -1.0 to use default value.",FCVAR_NOTIFY, true, -1.0, true, 1000.0);
     g_hCvarVoice.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hCvarAccumulate = CreateConVar("l4d2_shoot_alert_common_accumulate", "0.0", "Accumulate gunfire between first shot and delayed response. More realistic but commons get aggro easily.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hCvarAccumulate = CreateConVar("l4d2_shoot_alert_common_accumulate", "0.0", "Set to 1 for hardcore realism. Any extra shots between shot and delayed response are accumulated.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_hCvarAccumulate.AddChangeHook(ConVarChanged_Cvars);
+    
+    g_hCvarSaferoom = CreateConVar("l4d2_shoot_alert_common_saferoom", "0.0", "Enable when survivors are in start area.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hCvarSaferoom.AddChangeHook(ConVarChanged_Cvars);
     
     g_hCvarMPGameMode = FindConVar("mp_gamemode");
     g_hCvarMPGameMode.AddChangeHook(ConVarChanged_Gamemode);
     
-  	HookEvent("finale_start", 			evtFinaleStart,    EventHookMode_PostNoCopy);
-  	HookEvent("finale_radio_start", 	evtFinaleStart,    EventHookMode_PostNoCopy);
-  	HookEvent("gauntlet_finale_start", 	evtFinaleStart,    EventHookMode_PostNoCopy);
-  	HookEvent("survival_round_start",   evtFinaleStart,    EventHookMode_PostNoCopy);
-  	HookEvent("round_start",            evtRound,          EventHookMode_PostNoCopy);
+    HookEvent("finale_start", 		    evtFinaleStart,    EventHookMode_PostNoCopy);
+    HookEvent("finale_radio_start", 	evtFinaleStart,    EventHookMode_PostNoCopy);
+    HookEvent("gauntlet_finale_start", 	evtFinaleStart,    EventHookMode_PostNoCopy);
+    HookEvent("survival_round_start",   evtFinaleStart,    EventHookMode_PostNoCopy);
+    HookEvent("round_start",            evtRound,          EventHookMode_PostNoCopy);
     HookEvent("round_end",              evtRound,          EventHookMode_PostNoCopy);
     GetCvars();
 }
@@ -143,6 +161,7 @@ void ConVarChanged_Gamemode(ConVar convar, const char[] oldValue, const char[] n
 
 void GetCvars()
 {
+    bool update = false;
     alert_range = g_hCvarAlertRange.FloatValue;
     rush_range = g_hCvarRushRange.FloatValue;
     alert_probability = g_hCvarAlertProbability.FloatValue;
@@ -151,8 +170,9 @@ void GetCvars()
     if (g_hCvarVoice.FloatValue != voice_multiplier)
     {
         voice_multiplier = g_hCvarVoice.FloatValue;
+        if (voice_multiplier<0.0) voice_multiplier = weaponid_multipliers[0]; // use default value for -1.0
         speech = voice_multiplier>0.0;
-        if (speech_hooked!=speech) RequestFrame(check_hooks);
+        if (speech_hooked!=speech) update = true;
     }
     if (alert_max!=g_hCvarAlertMax.IntValue || g_hCvarAlertMemory.FloatValue != alert_memory)
     {
@@ -160,7 +180,13 @@ void GetCvars()
         alert_memory = g_hCvarAlertMemory.FloatValue;
         if (weapon_fire_hooked && alert_memory>=0.1 && alert_max>0) perform_calm(null,true);
     }
+    if (saferoom!=g_hCvarSaferoom.BoolValue)
+    {
+        saferoom = g_hCvarSaferoom.BoolValue;
+        update = true;
+    }
     IsAllowed();
+    if (update) RequestFrame(check_hooks);
 }
 
 void IsAllowed()
@@ -190,7 +216,7 @@ void IsAllowed()
 void check_hooks() // Dynamically hook/unhook weapon_fire and NormalSoundHook for performance.
 {
     timer_hook = null;
-    bool should_hook = enabled && !finale_active && !L4D_IsSurvivalMode() && get_commons()>0;
+    bool should_hook = enabled && !finale_active && !L4D_IsSurvivalMode() && L4D_IsInIntro()<=0 && (saferoom || L4D_HasAnySurvivorLeftSafeArea()) && get_commons()>0;
     bool should_hook_speech = should_hook && speech;
     if (should_hook!=weapon_fire_hooked)
     {
@@ -219,6 +245,18 @@ Action timer_check_hooks(Handle timer)
     return Plugin_Stop;
 }
 
+public void L4D_OnFinishIntro()
+{
+    if (!enabled || weapon_fire_hooked || timer_hook!=null) return;
+    timer_hook = CreateTimer(0.1,timer_check_hooks,TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public void L4D_OnFirstSurvivorLeftSafeArea_Post()
+{
+    if (!enabled || weapon_fire_hooked || timer_hook!=null) return;
+    timer_hook = CreateTimer(0.1,timer_check_hooks,TIMER_FLAG_NO_MAPCHANGE);
+}
+
 void late_enable() // If plugin just enabled, check if there are any infected entities to alarm.
 {
     reset_timers();
@@ -232,13 +270,13 @@ public void OnEntityCreated(int entity, const char[] classname) // Check if this
 	if (!enabled || !IsValidEdict(entity)) return;
 	if (finale_active || L4D_IsSurvivalMode())
 	{
-    	ignore[entity] = true;
-    	return;
+       	ignore[entity] = true;
+       	return;
 	}
 	if (strcmp(classname,"infected")==0 && GetEntProp(entity,Prop_Send,"m_mobRush")<=0 && infected_can_hear(entity))
 	{
-    	ignore[entity] = false; alerts[entity] = 0; commons += 1;
-    	CreateTimer(1.0,check_aggro,EntIndexToEntRef(entity),TIMER_FLAG_NO_MAPCHANGE);
+       	ignore[entity] = false; alerts[entity] = 0; commons += 1;
+       	CreateTimer(1.0,check_aggro,EntIndexToEntRef(entity),TIMER_FLAG_NO_MAPCHANGE);
 	}
 	else ignore[entity] = true;
 }
@@ -251,7 +289,7 @@ Action check_aggro(Handle timer, int entref) // Check again.
         return Plugin_Stop;
     }
     int entity = EntRefToEntIndex(entref);
-    if (ignore[entity]) return Plugin_Stop; // commons was subtracted somewhere else (hopefully)
+    if (ignore[entity]) return Plugin_Stop; // commons was subtracted somewhere else
     if (is_bad_infected(entity) || !infected_can_hear(entity))
     {
         ignore_infected(entity);
@@ -262,7 +300,7 @@ Action check_aggro(Handle timer, int entref) // Check again.
     return Plugin_Stop;
 }
 
-public void OnEntityDestroyed(int entity) // When infected is destroyed, check if hooks needs to be deactivated.
+public void OnEntityDestroyed(int entity) // When infected is destroyed, check if hooks need to be deactivated.
 {
 	if (!weapon_fire_hooked || !IsValidEntity(entity)) return;
     if (is_infected(entity))
@@ -274,20 +312,26 @@ public void OnEntityDestroyed(int entity) // When infected is destroyed, check i
 
 void evtPlayerFired(Event event, const char[] name, bool dontBroadcast) // Survivor fired a gun.
 {
-    if (event.GetInt("count")<=0) return; // melee weapons give 0 count
+    //#if DEBUG 
+    //    LogMessage("%d fired %d, %d bullets", GetClientOfUserId(event.GetInt("userid")), event.GetInt("weaponid"), event.GetInt("count"));
+    //#endif
     int client = GetClientOfUserId(event.GetInt("userid"));
     if (GetClientTeam(client)!=TEAM_SURVIVOR) return;
-    float multiplier = get_weaponid_multiplier(event.GetInt("weaponid"));
+    int weaponid = event.GetInt("weaponid");
+    if (event.GetInt("count")<=0) // 0 count is returned by melee weapons and mounted weapons (minigun, 50 cal)
+    {
+        if (view_as<L4D2WeaponId>(weaponid)!=L4D2WeaponId_Ammo) return;
+    }
+    else if (view_as<L4D2WeaponId>(weaponid)==L4D2WeaponId_GrenadeLauncher) return; // grenade detonation event will alert instead.
+    float multiplier = get_weaponid_multiplier(weaponid);
+    if (multiplier<=0.0) return; // 0.0 multiplier weapons are silent
     if (timers[client]!=null)
     {
-        if (multiplier>0.0) // 0.0 multiplier weapons are silent
-        {
-            if (multipliers[client]>multiplier) multipliers[client] = multiplier; // prevent weapon swap range exploit
-            if (accumulate) shots[client] += 1;
-        }
+        if (multipliers[client]>multiplier) multipliers[client] = multiplier; // prevent weapon swap exploit
+        if (accumulate) shots[client] += 1;
         return;
     }
-    alert_constructor(client,multiplier);
+    alert_constructor(client,client,multiplier);
 }
 
 // This fires many times for the same file depending on number of clients!!!!!
@@ -301,51 +345,86 @@ Action SurvivorSpeak(int clients[MAXPLAYERS], int &numClients, char sample[PLATF
     #if DEBUG 
     LogMessage("%s %d %f -> %f", sample, level, volume, voice_multiplier/volume);
     #endif
-    alert_constructor(entity,voice_multiplier/volume);
+    alert_constructor(entity,entity,voice_multiplier/volume);
     return Plugin_Continue;
 }
 
-void alert_constructor(int client, float multiplier = 1.0)
+bool local[MAXPLAYERS+1] = {true,...}; // false for grenade detonation. for L4D2_RushVictim, if l4dhooks was updated.
+// entity where center should be, client is owner
+void alert_constructor(int entity, int client, float multiplier = 1.0, bool force = false)
 {
-    if (multiplier<=0.0) return;
+    if (multiplier<=0.0) return; // 0.0 multipliers mean silence.
+    if (!force && FindEntityByClassname(-1,"pipe_bomb_projectile")!=INVALID_ENT_REFERENCE) return; // pipe bombs are louder
     static float pos[3];
-    L4D_GetEntityWorldSpaceCenter(client,pos);
+    //L4D_GetEntityWorldSpaceCenter(entity,pos);
+    GetEntPropVector(entity,Prop_Send,"m_vecOrigin",pos); // for consistency with L4D_FindEntityByClassname
     pos_arr[client][0] = pos[0]; pos_arr[client][1] = pos[1]; pos_arr[client][2] = pos[2];
     shots[client] = 1;
     multipliers[client] = multiplier;
+    local[client] = client==entity;
     timers[client] = CreateTimer(GetRandomFloat(0.5,1.5),alert_update,EntIndexToEntRef(client),TIMER_FLAG_NO_MAPCHANGE);
 }
 
-Action alert_update(Handle timer, int entref) // Alert nearby infected.
+public void L4D2_GrenadeLauncher_Detonate_Post(int entity, int client)
 {
-    if (!IsValidEntRef(entref)) return Plugin_Stop; // prevent carry-over to new round
+    if (!weapon_fire_hooked) return;
+    if (!IsValidClient(client) || !IsPlayerAlive(client) || GetClientTeam(client)!=TEAM_SURVIVOR) return;
+    float multiplier = get_weaponid_multiplier(L4D2WeaponId_GrenadeLauncher);
+    timers[client] = null; // cancel any pending alerts
+    alert_constructor(entity,client,multiplier,true);
+}
+
+public void L4D_PipeBombProjectile_Post(int client, int projectile, const float vecPos[3], const float vecAng[3], const float vecVel[3], const float vecRot[3])
+{
+    if (!weapon_fire_hooked) return;
+    if (!IsValidClient(client) || !IsPlayerAlive(client) || GetClientTeam(client)!=TEAM_SURVIVOR) return;
+    reset_timers(false); // louder than guns and voices (except grenades)
+}
+
+public void L4D_PipeBomb_Detonate_Post(int entity, int client)
+{
+    if (!weapon_fire_hooked) return;
+    if (!IsValidClient(client) || !IsPlayerAlive(client) || GetClientTeam(client)!=TEAM_SURVIVOR) return;
+    static char class[32];
+    GetEntityClassname(entity,class,sizeof(class));
+    LogMessage("%d %s detonated, owner %d", entity, class, client);
+    reset_timers(false); // louder than guns and voices (except grenades)
+}
+
+Action alert_update(Handle timer, int entref) // Delayed alert nearby infected.
+{
+    if (!weapon_fire_hooked || !IsValidEntRef(entref)) return Plugin_Stop; // prevent carry-over to new round
     int client = EntRefToEntIndex(entref);
     if (!IsValidClient(client)) return Plugin_Stop;
-    if (timers[client]==null) return Plugin_Stop; // timer was cancelled
+    if (timer!=timers[client]) return Plugin_Stop; // timer was cancelled, might also be new round.
     timers[client] = null;
+    if (local[client] && FindEntityByClassname(-1,"pipe_bomb_projectile")!=INVALID_ENT_REFERENCE) return Plugin_Stop; // unless we are a grenade, pipe bombs are louder
     if (!IsPlayerAlive(client) || GetClientTeam(client)!=TEAM_SURVIVOR) return Plugin_Stop;
-    if (FindEntityByClassname(-1, "pipe_bomb_projectile")!=INVALID_ENT_REFERENCE) return Plugin_Stop;
+    float range_alert_effective = alert_range/multipliers[client];
+    if (range_alert_effective<=20.0) return Plugin_Stop; // range too small to catch anything.
     static float pos[3];
     pos[0] = pos_arr[client][0]; pos[1] = pos_arr[client][1]; pos[2] = pos_arr[client][2];
-    float sphere_range = (multipliers[client]<=1.0) ? alert_range : alert_range/multipliers[client];
-    TR_EnumerateEntitiesSphere(pos,sphere_range,PARTITION_NON_STATIC_EDICTS,AlertCallback,client);
+    if (l4dhooks_updated && L4D_FindEntityByClassnameNearest("infected",pos,range_alert_effective)<=0) return Plugin_Stop;
+    float range_rush_effective = rush_range/multipliers[client];
+    if (local[client] && l4dhooks_updated && rush_range>0.0) L4D2_RushVictim(client,range_rush_effective/LOS_multiplier);
+    
+    if (enumerate_new && l4dhooks_updated) EnumerateInfectedWithin(pos,range_alert_effective,client);
+    else TR_EnumerateEntitiesSphere(pos,range_alert_effective,PARTITION_NON_STATIC_EDICTS,AlertCallback_Sphere,client);
+    
     #if DEBUG
-    if (g_iLaser>0 && !IsFakeClient(client))
+    if (range_alert_effective>1.0 && g_iLaser>0 && !IsFakeClient(client))
     {
-       	// WHITE - SPHERE, SPHERE/LOS_multiplier | BLUE - ALERT, ALERT/LOS_multiplier | RED - RUSH, RUSH/LOS_multiplier
-       	TE_SetupBeamRingPoint(pos,sphere_range,sphere_range-1.0,g_iLaser,0,0,0,3.0,1.5,0.0,{255,255,255,255},0,0);
-        pos[2] += 2.0; TE_SendToClient(client); // draw enumerate sphere (LOS)
-        TE_SetupBeamRingPoint(pos,sphere_range/LOS_multiplier,sphere_range/LOS_multiplier-1.0,g_iLaser,0,0,0,3.0,1.5,0.0,{255,255,255,255},0,0);
-        pos[2] += 2.0; TE_SendToClient(client); // draw enumerate sphere (no LOS)
-        TE_SetupBeamRingPoint(pos,alert_range,alert_range-1.0,g_iLaser,0,0,0,3.0,1.5,0.0,{0,0,255,255},0,0);
-        pos[2] += 2.0; TE_SendToClient(client); // draw alert range (LOS)
-        TE_SetupBeamRingPoint(pos,alert_range/LOS_multiplier,alert_range/LOS_multiplier-1.0,g_iLaser,0,0,0,3.0,1.5,0.0,{0,0,255,255},0,0);
-        pos[2] += 2.0; TE_SendToClient(client); // draw alert range (no LOS)
-        if (rush_range>1.0)
+        // BLUE:ALERT,ALERT/LOS | RED:RUSH,RUSH/LOS
+        pos[2] += 36.0;
+        TE_SetupBeamRingPoint(pos,range_alert_effective,range_alert_effective-1.0,g_iLaser,0,0,0,3.0,1.5,0.0,{0,0,255,255},0,0);
+        pos[2] += 3.0; TE_SendToClient(client); // draw alert range (LOS)
+        TE_SetupBeamRingPoint(pos,range_alert_effective/LOS_multiplier,range_alert_effective/LOS_multiplier-1.0,g_iLaser,0,0,0,3.0,1.5,0.0,{0,0,255,255},0,0);
+        pos[2] += 3.0; TE_SendToClient(client); // draw alert range (no LOS)
+        if (range_rush_effective>1.0)
         {
-            TE_SetupBeamRingPoint(pos,rush_range,rush_range-1.0,g_iLaser,0,0,0,3.0,1.5,0.0,{255,0,0,255},0,0);
-            pos[2] += 2.0; TE_SendToClient(client); // draw rush range (LOS)
-            TE_SetupBeamRingPoint(pos,rush_range/LOS_multiplier,rush_range/LOS_multiplier-1.0,g_iLaser,0,0,0,3.0,1.5,0.0,{255,0,0,255},0,0);
+            TE_SetupBeamRingPoint(pos,range_rush_effective,range_rush_effective-1.0,g_iLaser,0,0,0,3.0,1.5,0.0,{255,0,0,255},0,0);
+            pos[2] += 3.0; TE_SendToClient(client); // draw rush range (LOS)
+            TE_SetupBeamRingPoint(pos,range_rush_effective/LOS_multiplier,range_rush_effective/LOS_multiplier-1.0,g_iLaser,0,0,0,3.0,1.5,0.0,{255,0,0,255},0,0);
             TE_SendToClient(client); // draw rush range (no LOS)
         }
     }
@@ -353,9 +432,24 @@ Action alert_update(Handle timer, int entref) // Alert nearby infected.
     return Plugin_Stop;
 }
 
-bool AlertCallback(int entity, int client) // Return true to continue enumerating, false to stop
+void EnumerateInfectedWithin(float pos[3], float range, int client)
+{
+    int entity = INVALID_ENT_REFERENCE;
+    while( (entity = L4D_FindEntityByClassnameWithin(entity,"infected",pos,range)) != INVALID_ENT_REFERENCE )
+    {
+        if (!AlertCallback(entity,client)) break;
+    }
+}
+
+bool AlertCallback_Sphere(int entity, int client) // For legacy function where we need to verify entity index.
 {
     if (entity<=MaxClients || !IsValidEdict(entity)) return true;
+    return AlertCallback(entity,client);
+}
+
+bool AlertCallback(int entity, int client) // Return true to continue enumerating, false to stop
+{
+    if (!weapon_fire_hooked) return false;
     if (ignore[entity]) return true;
     if (is_bad_infected(entity)) // Ignore rushing and dead infected
     {
@@ -364,19 +458,21 @@ bool AlertCallback(int entity, int client) // Return true to continue enumeratin
     }
     static float pos[3], pos2[3];
     pos[0] = pos_arr[client][0]; pos[1] = pos_arr[client][1]; pos[2] = pos_arr[client][2];
-    L4D_GetEntityWorldSpaceCenter(entity,pos2);
-    float range = GetVectorDistance(pos,pos2);
-    pos2[2] += 36.0; // for ray trace, check infected ear position
+    //L4D_GetEntityWorldSpaceCenter(entity,pos2);
+    GetEntPropVector(entity,Prop_Send,"m_vecOrigin",pos2);
+    float raw_range = GetVectorDistance(pos,pos2) * multipliers[client];
+    float range = raw_range;
+    pos2[2] += 68.0; // for ray trace, check infected ear position // 34.0 for WorldSpaceCenter
     bool LOS = L4D2_IsVisibleToPlayer(client,TEAM_SURVIVOR,3,0,pos2);
     if (!LOS) range *= LOS_multiplier;
-    range *= multipliers[client];
     if (range>alert_range) return true;
     #if DEBUG
-    LogMessage("cb %d shots %d zombie %d LOS %d x%.2f range %.1f",client,shots[client],entity,LOS,multipliers[client],range);
+    LogMessage("cb %d shots %d zombie %d LOS %d x%.2f range_eff %.1f",client,shots[client],entity,LOS,multipliers[client],range);
     #endif
     if (rush_range>0.0 && range<=rush_range)
     {
-        infected_rush_client(entity,client);
+        if (l4dhooks_updated && local[client] && (raw_range/LOS_multiplier)<rush_range) ignore_infected(entity); // L4D2_RushVictim did its job
+        else infected_rush_client(entity,client); // target may end up being another survivor ¯\_(ツ)_/¯
         return true;
     }
     if (alert_probability>=1.0 || GetRandomFloat(0.0,1.0)<alert_probability)
@@ -397,7 +493,7 @@ bool AlertCallback(int entity, int client) // Return true to continue enumeratin
         {
             SetEntPropEnt(entity, Prop_Send, "m_clientLookatTarget",client);
             DataPack pack;
-            CreateDataTimer(GetRandomFloat(1.5,2.5),undo_lookat,pack,TIMER_FLAG_NO_MAPCHANGE);
+            CreateDataTimer(GetRandomFloat(1.75,3.5),undo_lookat,pack,TIMER_FLAG_NO_MAPCHANGE);
             pack.WriteCell(EntIndexToEntRef(entity));
             pack.WriteCell(EntIndexToEntRef(client));
         }
@@ -410,14 +506,14 @@ void infected_rush_client(const int infected, const int client)
     #if DEBUG
     LogMessage("infected %d rush %d", infected, client);
     #endif
-    SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // this might do absolutely nothing.
+    SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // this probably does nothing useful
     SetEntProp(infected, Prop_Send, "m_mobRush", 1);
     ignore_infected(infected);
 }
 
 void ignore_infected(const int infected)
 {
-    ignore[infected] = true;
+    ignore[infected] = true; alerts[infected] = 0;
     commons -= 1;
     if (commons<=0 && timer_hook==null) check_hooks();
 }
@@ -483,7 +579,7 @@ int get_commons(bool calm=false, bool late=false) // Counting ONLY non-aggro inf
 {
     int entity = -1;
     int count = 0;
-   	while( (entity = FindEntityByClassname(entity, "infected")) != INVALID_ENT_REFERENCE )
+   	while( (entity = FindEntityByClassname(entity,"infected")) != INVALID_ENT_REFERENCE )
    	{
       	if (late)
       	{
@@ -525,15 +621,16 @@ Action perform_calm(Handle timer=null, bool reset = false)
     return Plugin_Continue;
 }
 
-void reset_timers()
+void reset_timers(bool force = true) // Cancel pending alerts
 {
     for( int i = 1; i <= MAXPLAYERS; i++ )
     {
+        if (!force && !local[i]) continue; // skip for grenades
         shots[i] = 0;
         timers[i] = null;
     }
     timer_hook = null;
-    timer_calm = null;
+    perform_calm(null,true);
 }  
 
 stock bool is_infected(int infected)

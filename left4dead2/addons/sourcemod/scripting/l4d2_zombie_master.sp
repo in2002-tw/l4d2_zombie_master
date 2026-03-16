@@ -2384,7 +2384,7 @@ public Action L4D_OnFatalFalling(int client, int camera)
     return Plugin_Continue;
 }
 
-void tp_survivor_start(int client)
+void tp_survivor_start(int client, bool notify = false)
 {
    
    if (!IsValidClient(client) || !L4D_HasMapStarted())
@@ -2503,10 +2503,18 @@ void tp_survivor_start(int client)
        if (safezone_navArea && navArea_validStart(safezone_navArea))
        {
            L4D_FindRandomSpot(safezone_navArea,randomPos);
-           randomPos[2] += 25.0;
+           if (IsObstructed(randomPos,client)) randomPos[2] += 50.0;
+           else randomPos[2] += 25.0;
            //TeleportEntity(client, randomPos, NULL_VECTOR, NULL_VECTOR);
            SetAbsOrigin(client,randomPos);
            if (DEBUG) LogMessage("[zm] Teleported %d to safezone", client);
+           
+            if (notify && !IsFakeClient(client))
+            {
+                if (!IsValidClientZM()) PrintHintText(client, "%t", "No ZM notify");
+                else PrintHintText(client, "%t", "Cannot start notify");
+            }
+           
        }
        else safezone_navAreaId = -1;
    }
@@ -4712,7 +4720,7 @@ bool client_in_start_area(int client)
     float pos[3];
     L4D_GetEntityWorldSpaceCenter(client,pos);
     // bools: anyz los checkground
-    Address temp_navArea = L4D_GetNearestNavArea(pos,500.0,true,false,true,TEAM_SURVIVOR);
+    Address temp_navArea = L4D_GetNearestNavArea(pos,500.0,true,true,true,TEAM_SURVIVOR);
     if (navArea_validStart(temp_navArea)) return true;
     if (IsValidEntRef(g_iLockedDoor))
     {
@@ -4920,7 +4928,7 @@ Action zm_update(Handle timer = null)
    if (zm_stage<ZM_STARTED && !zm_can_start) can_zm_start();
    
    // Double check that survivors havent left start area
-   if ( zm_stage<ZM_STARTED && zm_can_start && !L4D_IsSurvivalMode() && L4D_HasAnySurvivorLeftSafeArea() )
+   if ( zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && L4D_HasAnySurvivorLeftSafeArea() )
    {
        for (int i = 1; i <= MaxClients; i++)
    	   {
@@ -4928,12 +4936,12 @@ Action zm_update(Handle timer = null)
        		if (GetClientTeam(i)!=TEAM_SURVIVOR || i==zm_client) continue;
        		if (!client_in_start_area(i))
        		{
-           		if (IsValidClientZM() && !force_started)
+           		if (IsValidClientZM() && zm_can_start && !force_started)
            		{
                		start_zm_round();
                		break;
            		}
-           		else tp_survivor_start(i);
+           		else if (!L4D_IsPlayerHangingFromLedge(i)) tp_survivor_start(i,true);
        		}
        }
    }
@@ -5226,6 +5234,7 @@ Action ZM_MOTD(int client, int args)
     PrintToConsole(client, "");
     PrintToConsole(client, "=== 3. Chat/Console Commands ===");
     PrintToConsole(client, "/zm_vote -> Vote to enable/disable Zombie Master.");
+    PrintToConsole(client, "/zm_gamemode_menu -> Gamemode menu for clients and admins.");
     PrintToConsole(client, "/zm -> become ZM OR open menu and enter free look.");
     PrintToConsole(client, "");
     PrintToConsole(client, "/zm_horde n type angry flow");
@@ -7972,6 +7981,7 @@ void IsAllowed()
 		HookEvent("finale_radio_start", 	evtFinaleStart, EventHookMode_Pre); //final starts, all final maps trigger
 		HookEvent("gauntlet_finale_start", 	evtFinaleStart, EventHookMode_Pre); //final starts, only rushing maps trigger (C5M5, C13M4)
 		HookEvent("player_spawn", evtPlayerSpawned, EventHookMode_Post);
+		HookEvent("player_left_checkpoint", evt_ZM_start_imminent, EventHookMode_Post); // unhooking this can cause exceptions. dont ask me why. idk WHY. IDK 
 		HookEvent("player_left_start_area", evt_ZM_start_imminent, EventHookMode_Post);
 		HookEvent("witch_killed", EvtWitchKilled, EventHookMode_Post);
 		HookEvent("player_no_longer_it", Event_PlayerUnBoomed, EventHookMode_Pre);
@@ -8418,18 +8428,11 @@ void evt_ZM_start_imminent(Event event, const char[] name, bool dontBroadcast)
         if (!IsPlayerAlive(client)) return;
         if (GetClientTeam(client)!=TEAM_SURVIVOR) return;
         if (client==zm_client) return;
-        can_zm_start();
+        if (!zm_can_start) can_zm_start();
         if (zm_can_start && !client_in_start_area(client) && IsValidClientZM() && !force_started)
             start_zm_round();
         else if (g_bLockSaferoom && saferoom_locked && L4D_IsInIntro()<=0)
-        {
-            tp_survivor_start(client);
-            if (!IsFakeClient(client))
-            {
-                if (!IsValidClientZM()) PrintHintText(client, "%t", "No ZM notify");
-                else PrintHintText(client, "%t", "Cannot start notify");
-            }
-        }
+            tp_survivor_start(client,true);
     }
 }
 

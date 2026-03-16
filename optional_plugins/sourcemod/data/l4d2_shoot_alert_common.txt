@@ -20,4 +20,5 @@
 4   -1.00    // L4D2WeaponId_Autoshotgun // 253 dmg
 8   -1.00    // L4D2WeaponId_ShotgunChrome // 248 dmg
 11  -1.00    // L4D2WeaponId_ShotgunSpas // 252 dmg
+54  +0.80    // L4D2WeaponId_Ammo	 // Minigun and 50 cal
 21  +0.50    // L4D2WeaponId_GrenadeLauncher // 1000 dmg

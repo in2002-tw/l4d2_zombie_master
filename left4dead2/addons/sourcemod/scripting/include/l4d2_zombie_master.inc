@@ -288,15 +288,15 @@ stock void get_finale_label(int finaleType, char label[32])
 stock bool navArea_validStart(Address navArea)
 {
     if (!navArea) return false;
+    float pos[3];
+    L4D_FindRandomSpot(navArea,pos);
+    if (L4D_IsPositionInFirstCheckpoint(pos)) return true;
+    
     int navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
     if ( (navSpawnAttrs & NAV_SPAWN_OBSCURED) || (navSpawnAttrs & NAV_SPAWN_FINALE) ) return false;
     if (!((navSpawnAttrs & NAV_SPAWN_PLAYER_START) || (navSpawnAttrs & NAV_SPAWN_CHECKPOINT))) return false;
-    
-    float pos[3];
-    L4D_FindRandomSpot(navArea,pos);
     float flow = L4D_GetFlowFromPoint(pos);
     if (flow>0.0 || flow<(-9000.0)) return false;
-    if (!L4D_IsPositionInFirstCheckpoint(pos)) return false;
     return true;
 }
 
