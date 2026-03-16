@@ -47,7 +47,7 @@ int shots[MAXPLAYERS+1]; // accumulate gunfire before callback
 float weaponid_multipliers[L4D2WeaponId_MAX] = {-1.0,...}; // multipliers for each weaponID; -1.0 to use default value.
 
 bool l4dhooks_updated = false; // check if l4dhooks is new enough
-bool enumerate_new = false; // 2026-03-15 new enumeration method using L4D_FindEntityByClassnameWithin 
+bool enumerate_new = true; // 2026-03-15 new enumeration method using L4D_FindEntityByClassnameWithin 
 
 // Inputs
 ConVar g_hCvarEnable, g_hCvarAlertRange, g_hCvarAlertProbability, g_hCvarRushRange, g_hCvarLOS, g_hCvarAlertMax,
