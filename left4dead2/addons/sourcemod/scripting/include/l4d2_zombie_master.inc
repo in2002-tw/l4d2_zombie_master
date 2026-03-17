@@ -547,7 +547,12 @@ bool TraceFilter_Spawner(int entity, int contentsMask, int ignore_entity)
 {
 	if (entity==ignore_entity) return false;
 	if (entity==0) return true;
-	if (IsValidClient(entity) && IsPlayerAlive(entity)) return true;
+	if (IsValidClient(entity))
+	{
+	 if (IsValidClient(ignore_entity) && GetClientTeam(entity)==TEAM_SURVIVOR && GetClientTeam(ignore_entity)==TEAM_SURVIVOR)
+    	 return false; // survivors wont get stuck in other survivors.
+	 if (IsPlayerAlive(entity)) return true;
+	}
 	if (entity>MaxClients)
 	{
     	static char class[32];

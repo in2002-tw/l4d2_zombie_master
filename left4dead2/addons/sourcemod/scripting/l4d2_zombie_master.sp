@@ -22,7 +22,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.0 2026-03-14"
+#define PLUGIN_VERSION 			"0.9.01 2026-03-17"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -38,7 +38,6 @@ public Plugin myinfo =
 // Changelog for 0.9.0
 // 1. Bug fixed where uncommons can sometimes instantly die on spawn.
 // 2. Rare bug hopefully fixed where commons try to attack empty space in Finales and Survival.
-// 3. Finale auto common cull fix??? idk if this is possible
 // 4. Random SI model bug fixed for tanks.
 // 5. If you take over a tank that is climbing level geometry, you can get stuck. Fixed.
 // 6. Compatibility with jukebox by Silvers.
@@ -46,7 +45,7 @@ public Plugin myinfo =
 // 8. Custom maps tested: Daybreak, I Hate Mountains 2, Urban Flight, Warcelona
 // 9. Improved distance to survivors calculations. Should give less false positives.
 // 10. Make vomit target that specific survivor rather than whole team.
-// 11. Compatibility with l4d2_shoot_alert_common. Plugin gets disabled during prep stage and re-activated when saferoom door opens.
+// 11. Compatibility with l4d2_shoot_alert_common. Plugin gets disabled during prep stage and re-activated on round start.
 // 12. Optimizations thanks to Silvers.
 // 13. New cvar: zm_say_horde which makes survivors team chatting spawn horde.
 // 14. sm plugins reload called on plugins instead of resetting cvars which makes plugins reset to .cfg values.
@@ -54,9 +53,9 @@ public Plugin myinfo =
 // 16. zm_randomizer
 // 17. ZM menus updated to better represent game rules, like no specials, no witches, no commons, no uncommons, etc.
 // 18. New cvar: zm_panic_rate_multiplier
-// 19. New cvar: zm_ability_nocooldown (default 0)
-// 20. zm_max_si behavior update: add ..., -3, -2 support
-// 21. 
+// 19. New cvar: zm_ability_nocooldown (default 0) TBD
+// 20. zm_max_si behavior update: acceptable values -3, -2, -1, 0, etc.
+// 21. Random bug fixes.
 
 // TO DO LIST:
 // 4. Better easier to read zombie spawner visuals (done by zyiks, not implemented)
@@ -823,7 +822,6 @@ public void OnPluginStart()
 	RegConsoleCmd("zm_autocommon_mode", zm_autocommon_mode, "off panic always");
 	RegConsoleCmd("zm_autocommon_max", zm_autocommon_max, "n");
 	RegConsoleCmd("zm_freeze", zm_freeze, "Freeze/unfreeze all specials.");
-	RegConsoleCmd("say_team", ZM_SayHorde);
 	RegConsoleCmd("zm_gamemode_menu", ZM_Gamemode_Command, "Admins: select gamemode. Clients: vote for gamemode.");
 
 	// Commands -- admins only
@@ -980,7 +978,7 @@ public void OnPluginStart()
 	g_hRandomizer = CreateConVar("zm_randomizer", "0", "Randomize zm_gamemode on map change.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 	g_hRandomizer.AddChangeHook(ConVarChanged_Cvars);
 	
-	g_hSayHorde = CreateConVar("zm_say_horde", "0", "Survivors spawn free angry zombies when they type in team chat.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
+	g_hSayHorde = CreateConVar("zm_say_horde", "0", "Survivors spawn free angry zombies when they talk in team chat.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 	
 	GetCvars();
 
@@ -4283,17 +4281,14 @@ Action ZM_Chase_ZM(int client, int args)
     return Plugin_Continue;
 }
 
-Action ZM_SayHorde(int client, int args)
+public void OnClientSayCommand_Post(int client, const char[] command, const char[] sArgs)
 {
-    // ignore ! and // and \\ as first character.
-    if (args<=0) return Plugin_Continue;
-    if (!g_bCvarAllow || max_zombie_arr[ZOMBIECLASS_COMMON]<=0) return Plugin_Continue;
-    if (!g_hSayHorde.BoolValue || zm_stage!=ZM_STARTED) return Plugin_Continue;
-    if (!IsValidClient(client) || !IsPlayerAlive(client) || GetClientTeam(client)!=TEAM_SURVIVOR) return Plugin_Continue;
-    static char arg[256];
-    GetCmdArg(1,arg,sizeof(arg));
-    int num_args = RoundToCeil(1.0*strlen(arg)/2.5);
-    if (num_args<=0) return Plugin_Continue;
+    if (!g_hSayHorde.BoolValue || L4D_IsInIntro()>0) return;
+    if (max_zombie_arr[ZOMBIECLASS_COMMON]<=0 || (zm_stage!=ZM_STARTED && IsValidClientZM())) return;
+    if (!IsValidClient(client) || GetClientTeam(client)!=TEAM_SURVIVOR) return;
+    if (strcmp(command,"say_team")!=0) return;
+    int num_args = RoundToCeil(1.0*strlen(sArgs)/2.5);
+    if (num_args<=0) return;
     if (DEBUG) LogMessage("[zm] ZM_SayHorde %d %d", client, num_args);
    	if (live_zombie_arr[ZOMBIECLASS_COMMON]>=max_zombie_arr[ZOMBIECLASS_COMMON])
    	{
@@ -4304,7 +4299,7 @@ Action ZM_SayHorde(int client, int args)
     	   {
         	   SetEntProp(zombie, Prop_Send, "m_mobRush", 1);
         	   num_args -= 1;
-        	   if (num_args<=0) return Plugin_Continue;
+        	   if (num_args<=0) return;
     	   }
         }
     }
@@ -4312,24 +4307,11 @@ Action ZM_SayHorde(int client, int args)
    	{
    		CreateTimer(GetRandomFloat(0.1,10.0),Delayed_Free_Angry_Zombie,EntIndexToEntRef(client));
    	}
-    return Plugin_Continue;
-}
-
-
-stock int CountCharInString(char[] str, char c)
-{
-    int i, count = 0;
-    while (str[i]!='\0') {
-        if (str[i++]==c) {
-            count++;
-        }
-    }
-    return count;
 }
 
 Action Delayed_Free_Angry_Zombie(Handle timer, int entref)
 {
-     if (!g_bCvarAllow) return Plugin_Stop;
+     if (!IsValidEntRef(entref)) return Plugin_Stop;
      spawn_free_angry_zombies(EntRefToEntIndex(entref),1,true);
      return Plugin_Stop;  
 }
@@ -6912,7 +6894,7 @@ void spawn_free_angry_zombies(int victim, int count, bool refund = true)
     
     if (refund && old_count>count && g_iCostCommon>0) bank += g_iCostCommon*(old_count-count);
     if (count<=0) return;
-    if (!IsValidClient(victim) || GetClientTeam(victim)!=TEAM_SURVIVOR || !IsPlayerAlive(victim)) return;
+    if (!IsValidClient(victim) || GetClientTeam(victim)!=TEAM_SURVIVOR) return;
     
     g_iEntities = GetEntityCountEx();
 	if((g_iEntities+count)>=ENTITY_SAFER_LIMIT) return;
