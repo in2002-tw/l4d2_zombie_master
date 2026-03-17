@@ -55,7 +55,9 @@ public Plugin myinfo =
 // 18. New cvar: zm_panic_rate_multiplier
 // 19. New cvar: zm_ability_nocooldown (default 0) TBD
 // 20. zm_max_si behavior update: acceptable values -3, -2, -1, 0, etc.
-// 21. Random bug fixes.
+// 21. Many bug fixes.
+// 22. new cvar: zm_notanks
+// 23. Check IsBlocked
 
 // TO DO LIST:
 // 4. Better easier to read zombie spawner visuals (done by zyiks, not implemented)
@@ -216,8 +218,8 @@ bool zm_flow_notify = false; // "Flow hint"
 // Notify ZM about maximum Tank discount.
 bool zm_discount_notify = false; // "Max tank discount"
 
-ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer, g_hStopInactivity, g_hMaxUniqueSI, g_hRandomizer,
-       g_hUpdateRate, g_hMaxCommons, g_hSpawnMinDistance, g_hBonusCarAlarm, g_hBonusFinaleStage, g_hPanicCost, g_hBonusSurvival,
+ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer, g_hStopInactivity, g_hMaxUniqueSI, g_hRandomizer, g_hNoTanks,
+       g_hUpdateRate, g_hMaxCommons, g_hSpawnMinDistance, g_hBonusCarAlarm, g_hBonusFinaleStage, g_hPanicCost, g_hBonusSurvival, g_hAbilityNoCooldown,
        g_hCostBoomer, g_hCostSpitter, g_hCostHunter, g_hCostSmoker, g_hCostJockey, g_hMaxWitches, g_hMaxSI, g_hSpecialCooldown,
        g_hCostCharger, g_hCostTank, g_hCostWitchStatic, g_hCostWitchMoving, g_hCostCommon, g_hCostUncommon, g_hLockSaferoom,
        g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait, g_hPanicRateMultiplier,
@@ -226,7 +228,7 @@ ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer,
 float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fStopInactivity,g_fSpecialCooldown, g_fPanicRateMultiplier,
 g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout;
 
-bool g_bFairQueue, g_bDiscountTank, g_bMemes, g_bClownGlow, g_bAllowFreeze, g_bRandomizer;
+bool g_bFairQueue, g_bDiscountTank, g_bMemes, g_bClownGlow, g_bAllowFreeze;
 char g_sForceCommon[32];
 
 char g_sZMGamemode[PLATFORM_MAX_PATH]; 
@@ -975,10 +977,13 @@ public void OnPluginStart()
 	g_hPanicRateMultiplier = CreateConVar("zm_panic_rate_multiplier", "0.25", "Bank rate multiplier during active manual panic.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 	g_hPanicRateMultiplier.AddChangeHook(ConVarChanged_Cvars);
 	
-	g_hRandomizer = CreateConVar("zm_randomizer", "0", "Randomize zm_gamemode on map change.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
-	g_hRandomizer.AddChangeHook(ConVarChanged_Cvars);
-	
+	g_hRandomizer = CreateConVar("zm_randomizer", "0", "Randomize zm_gamemode on: 1 new map, 2 new round.",FCVAR_PROTECTED, true, 0.0, true, 2.0);
 	g_hSayHorde = CreateConVar("zm_say_horde", "0", "Survivors spawn free angry zombies when they talk in team chat.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
+	
+	g_hNoTanks = CreateConVar("zm_notanks", "0", "Fully disable tanks, including Survival, Finales and scripted tanks.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
+	g_hNoTanks.AddChangeHook(ConVarChanged_Cvars_ZMenu);
+	
+	g_hAbilityNoCooldown = CreateConVar("zm_ability_nocooldown", "0", "No cooldown for Special abilities.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 	
 	GetCvars();
 
@@ -3138,6 +3143,8 @@ Action zm_new_round(Handle timer = null)
         return Plugin_Stop;
     }
     
+    if (g_hRandomizer.IntValue==2) random_gamemode();
+    
     set_zm_stage(ZM_NEWROUND,true);
     autocommon_setting = AUTOCOMMON_OFF;
     autocommon_uncommons = false;
@@ -3502,6 +3509,7 @@ Action CountClients(Handle timer = null)
 	}
 	
 	new_SI_cap = MaxClients - allplayers + new_SI_cap;
+	if (ZM_finale_announced || L4D_IsSurvivalMode()) new_SI_cap -= 1; // allow non-ZM Tanks to spawn
 	if (new_SI_cap<0) new_SI_cap = 0;
 	
 	if (live_zombie_arr[ZOMBIECLASS_TANK]<=0)
@@ -5436,7 +5444,6 @@ void GetCvars()
     if (autocommon_num>g_hMaxCommons.IntValue) autocommon_num = g_hMaxCommons.IntValue;
     
     g_fPanicRateMultiplier = g_hPanicRateMultiplier.FloatValue;
-    g_bRandomizer = g_hRandomizer.BoolValue;
     
 }
 
@@ -7428,7 +7435,8 @@ int get_max_unique_SI_override()
 
 int change_special_max(int ZOMBIECLASS, int new_max, bool draw = true)
 {
-    if (new_max>max_SI) new_max = max_SI;
+    if (ZOMBIECLASS==ZOMBIECLASS_TANK && g_hNoTanks.BoolValue) new_max = 0;
+    else if (new_max>max_SI) new_max = max_SI;
     if (max_zombie_arr[ZOMBIECLASS]==new_max) return 0;
     int d = new_max - max_zombie_arr[ZOMBIECLASS];
     max_zombie_arr[ZOMBIECLASS] = new_max;
@@ -7556,7 +7564,7 @@ public void OnMapStart()
 	
 	if (g_bCvarAllow)
 	{
-    	if (g_bRandomizer) random_gamemode();
+    	if (g_hRandomizer.IntValue==1) random_gamemode();
     	if (IsValidClientZM()) QuitZM_Force(zm_client);
     	if (!g_bNavReady)
     	{
@@ -7722,6 +7730,11 @@ bool reload_pressed = false;
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse)
 {
     if (!g_bCvarAllow) return Plugin_Continue;
+	
+	if (g_hAbilityNoCooldown.BoolValue && GetClientTeam(client)==TEAM_INFECTED && IsPlayerAlive(client))
+	{
+    	L4D2_SetCustomAbilityCooldown(client,0.0);
+	}
 	
 	if (IsFakeClient(client))
 	{
@@ -8299,27 +8312,32 @@ void evtPlayerSpawned(Event event, const char[] name, bool dontBroadcast)
    	   {
        	   freeze_player(client);
    	   }
-   	   else if (GetClientTeam(client)==TEAM_INFECTED && pending_tank)
+   	   else if (GetClientTeam(client)==TEAM_INFECTED)
    	   {
-   	    
    	    int zClass = GetEntProp(client, Prop_Send, "m_zombieClass");
 	    if (zClass==ZOMBIECLASS_TANK)
        	{
-           	int health = GetEntProp(client,Prop_Data,"m_iHealth");
-           	if (DEBUG) LogMessage("[zm] Applied pending targetname and model %s %s", targetName_pending, model_pending);
-           	if (health>1) SetEntProp(client,Prop_Data,"m_iHealth",health-1); // prevent possible same-frame refund exploit
-           	DispatchKeyValue(client, "targetname", targetName_pending);
-           	SetEntProp(client,Prop_Data,"m_iMaxHealth", maxhp_pending);
-           	if (model_pending[0]!=0)
+           	if (g_hNoTanks.BoolValue)
            	{
-               	SetEntityModel(client, model_pending);
-               	RequestFrame(NextFrame_SetModel,EntIndexToEntRef(client));
+               	ForcePlayerSuicide(client);
+               	return;
            	}
-           	if (specials_frozen) freeze_player(client,true,TEAM_INFECTED);
-       	
+           	else if (pending_tank)
+           	{
+               	int health = GetEntProp(client,Prop_Data,"m_iHealth");
+               	if (DEBUG) LogMessage("[zm] Applied pending targetname and model %s %s", targetName_pending, model_pending);
+               	if (health>1) SetEntProp(client,Prop_Data,"m_iHealth",health-1); // prevent possible same-frame refund exploit
+               	DispatchKeyValue(client, "targetname", targetName_pending);
+               	SetEntProp(client,Prop_Data,"m_iMaxHealth", maxhp_pending);
+               	if (model_pending[0]!=0)
+               	{
+                   	SetEntityModel(client, model_pending);
+                   	RequestFrame(NextFrame_SetModel,EntIndexToEntRef(client));
+               	}
+           	}
        	}
+       	if (specials_frozen && IsFakeClient(client)) freeze_player(client,true,TEAM_INFECTED);
       }
-   	   
 }
 
 void Event_PlayerShoved(Event event, const char[] name, bool dontBroadcast)
