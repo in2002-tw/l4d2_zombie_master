@@ -18,11 +18,13 @@
 #include <adt_trie>
 #include <files>
 #include <l4d2_zombie_master>
+#undef REQUIRE_PLUGIN
+#include <adminmenu>
 
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.01 2026-03-17"
+#define PLUGIN_VERSION 			"0.9.02 2026-03-17"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -35,7 +37,7 @@ public Plugin myinfo =
 	url = "https://forums.alliedmods.net/showthread.php?t=352060, https://github.com/gvazdas/l4d2_zombie_master"
 }
 
-// Changelog for 0.9.0
+// Changelog for 0.9.1
 // 1. Bug fixed where uncommons can sometimes instantly die on spawn.
 // 2. Rare bug hopefully fixed where commons try to attack empty space in Finales and Survival.
 // 4. Random SI model bug fixed for tanks.
@@ -53,11 +55,12 @@ public Plugin myinfo =
 // 16. zm_randomizer
 // 17. ZM menus updated to better represent game rules, like no specials, no witches, no commons, no uncommons, etc.
 // 18. New cvar: zm_panic_rate_multiplier
-// 19. New cvar: zm_ability_nocooldown (default 0) TBD
+// 19. New cvar: zm_ability_nocooldown
 // 20. zm_max_si behavior update: acceptable values -3, -2, -1, 0, etc.
 // 21. Many bug fixes.
 // 22. new cvar: zm_notanks
 // 23. Check IsBlocked
+// 24. New admin menu.
 
 // TO DO LIST:
 // 4. Better easier to read zombie spawner visuals (done by zyiks, not implemented)
@@ -81,6 +84,8 @@ public Plugin myinfo =
 // 60. Survivors still keep teleporting and falling to their death.
 // 62. Fun command: z_mute_infected no yelling or growling, allowing to stealth attack survivors.
 // 63. Bad navmeshes where commons refuse to navigate? // m_isBlocked?
+// 64. Crouched frozen specials should stay crouched.
+// 65. Enumerate within optimizations
 
 static Handle hCreateSmoker = null;
 #define NAME_CreateSmoker "NextBotCreatePlayerBot<Smoker>"
@@ -732,7 +737,11 @@ int gamemode_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
         {
         	if (param2<0 || param2>=gamemodes.Length) return 0;
         	gamemodes.GetString(param2,new_gamemode,sizeof(new_gamemode));
-        	if (CheckCommandAccess(param1,"is_a_sm_admin",ADMFLAG_GENERIC,true)) SetConVarString(g_hZMGamemode,new_gamemode);
+        	if (CheckCommandAccess(param1,"is_a_sm_admin",ADMFLAG_GENERIC,true))
+        	{
+            	SetConVarString(g_hZMGamemode,new_gamemode);
+            	ZM_Gamemode_Command(param1,0);
+        	}
         	else create_gamemode_vote();
         }
     }
@@ -825,7 +834,7 @@ public void OnPluginStart()
 	RegConsoleCmd("zm_autocommon_max", zm_autocommon_max, "n");
 	RegConsoleCmd("zm_freeze", zm_freeze, "Freeze/unfreeze all specials.");
 	RegConsoleCmd("zm_gamemode_menu", ZM_Gamemode_Command, "Admins: select gamemode. Clients: vote for gamemode.");
-
+    
 	// Commands -- admins only
 	RegAdminCmd("zm_addbank", zm_addbank, ADMFLAG_ROOT,"Add zombux to zombie master bank. Admins only.");
     RegAdminCmd("zm_kick", zm_kick, ADMFLAG_ROOT,"Kick Zombie Master back into survivors. Admins only.");
@@ -965,7 +974,7 @@ public void OnPluginStart()
 	g_hHoldFinale = CreateConVar("zm_hold_finale", "1", "Hold Finale stages until ZM runs out of resources. Otherise the Finale will be very short.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 	g_hHoldFinale.AddChangeHook(ConVarChanged_Cvars);
 	
-	g_hZMGamemode = CreateConVar("zm_gamemode", "zm_default", "Specify gamemode cfg inside left4dead2/cfg/sourcemod/l4d2_zombie_master/",FCVAR_PROTECTED);
+	g_hZMGamemode = CreateConVar("zm_gamemode", "zm_default", "Specify gamemode cfg inside cfg/sourcemod/l4d2_zombie_master/, or random to randomize.",FCVAR_PROTECTED);
 	g_hZMGamemode.AddChangeHook(ConVarChanged_Cvars_Gamemode);
 	
 	g_hVomitCommons = CreateConVar("zm_vomit_commons", "10", "Number of angry commons spawned near survivor when vomited upon.",FCVAR_PROTECTED);
@@ -999,7 +1008,84 @@ public void OnPluginStart()
   	g_hCvarMPGameMode = FindConVar("mp_gamemode");
   	g_hCvarMPGameMode.GetString(g_sCvarMPGameMode, sizeof(g_sCvarMPGameMode));
   	g_hCvarMPGameMode.AddChangeHook(ConVarGameMode);
-	
+  	
+    TopMenu topmenu;
+    if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != null))
+        OnAdminMenuReady(topmenu);
+}
+
+TopMenu hAdminMenu = null;
+public void OnLibraryRemoved(const char[] name)
+{
+  if (StrEqual(name,"adminmenu",false)) hAdminMenu = null;
+}
+
+TopMenuObject obj_zmcommands, zm_enable, zm_gamemode_menu, zm_kick_topmenu, zm_randomizer, zm_sayhorde, zm_help, zm_random;
+public void OnAdminMenuReady(Handle aTopMenu)
+{
+  TopMenu topmenu = TopMenu.FromHandle(aTopMenu);
+  if (topmenu == hAdminMenu && obj_zmcommands != INVALID_TOPMENUOBJECT) return;
+  hAdminMenu = topmenu;
+  obj_zmcommands = AddToTopMenu(topmenu,"Zombie Master",TopMenuObject_Category,CategoryHandler,INVALID_TOPMENUOBJECT);
+  if (obj_zmcommands == INVALID_TOPMENUOBJECT) return;
+  zm_enable = AddToTopMenu(hAdminMenu,"zm_enable",TopMenuObject_Item,AdminMenu_Handler,obj_zmcommands,"zm_enable",ADMFLAG_SLAY);
+  zm_randomizer = AddToTopMenu(hAdminMenu,"zm_randomizer",TopMenuObject_Item,AdminMenu_Handler,obj_zmcommands,"zm_randomizer",ADMFLAG_SLAY);
+  zm_gamemode_menu = AddToTopMenu(hAdminMenu,"zm_gamemode_menu",TopMenuObject_Item,AdminMenu_Handler,obj_zmcommands,"zm_gamemode_menu",ADMFLAG_SLAY);
+  zm_kick_topmenu = AddToTopMenu(hAdminMenu,"zm_kick",TopMenuObject_Item,AdminMenu_Handler,obj_zmcommands,"zm_kick",ADMFLAG_SLAY);
+  zm_sayhorde = AddToTopMenu(hAdminMenu,"zm_say_horde",TopMenuObject_Item,AdminMenu_Handler,obj_zmcommands,"zm_say_horde",ADMFLAG_SLAY);
+  zm_help = AddToTopMenu(hAdminMenu,"zm_help",TopMenuObject_Item,AdminMenu_Handler,obj_zmcommands,"zm_help",ADMFLAG_SLAY);
+  zm_random = AddToTopMenu(hAdminMenu,"zm_random",TopMenuObject_Item,AdminMenu_Handler,obj_zmcommands,"zm_random",ADMFLAG_SLAY);
+}
+
+public void CategoryHandler( TopMenu topmenu,TopMenuAction action,TopMenuObject object_id,int param,char[] buffer,int maxlength)
+{
+  switch (action)
+  {
+    case TopMenuAction_DisplayTitle: Format(buffer,maxlength, "%T:", "Zombie Master", param);
+    case TopMenuAction_DisplayOption: Format(buffer,maxlength, "%T", "Zombie Master", param);
+  }
+}
+//
+public void AdminMenu_Handler(TopMenu topmenu,TopMenuAction action,TopMenuObject object_id,int param,char[] buffer,int maxlength)
+{
+  switch (action)
+  {
+    case TopMenuAction_DisplayOption:
+    {
+        if (object_id==zm_enable) Format(buffer,maxlength,"zm_enable %d",g_hCvarAllow.BoolValue);
+        else if (object_id==zm_randomizer)
+        {
+            if (g_hRandomizer.IntValue==0) Format(buffer,maxlength,"zm_randomizer: OFF");
+            else if (g_hRandomizer.IntValue==1) Format(buffer,maxlength,"zm_randomizer: Map");
+            else if (g_hRandomizer.IntValue==2) Format(buffer,maxlength,"zm_randomizer: Round");
+            else Format(buffer,maxlength,"zm_randomizer");
+        }
+        else if (object_id==zm_gamemode_menu) strcopy(buffer,maxlength,"zm_gamemode_menu"); 
+        else if (object_id==zm_kick_topmenu) strcopy(buffer,maxlength,"zm_kick");
+        else if (object_id==zm_sayhorde) Format(buffer,maxlength,"zm_say_horde %d",g_hSayHorde.BoolValue);
+        else if (object_id==zm_help) Format(buffer,maxlength,"zm_help");
+        else if (object_id==zm_random) strcopy(buffer,maxlength,"zm_gamemode random"); 
+    }
+    case TopMenuAction_SelectOption:
+    {
+        bool redisplay = true;
+        if (object_id==zm_enable) SetConVarInt(g_hCvarAllow,!g_hCvarAllow.BoolValue);
+        else if (object_id==zm_randomizer) next_randomizer_setting();
+        else if (object_id==zm_gamemode_menu) {ZM_Gamemode_Command(param,0); redisplay = false;}
+        else if (object_id==zm_kick_topmenu) zm_kick(param,0);
+        else if (object_id==zm_sayhorde) SetConVarInt(g_hSayHorde,!g_hSayHorde.BoolValue);
+        else if (object_id==zm_help) ZM_MOTD(param,0);
+        else if (object_id==zm_random) random_gamemode();
+        if (redisplay) RedisplayAdminMenu(topmenu,param);
+    }
+  }
+}
+
+void next_randomizer_setting()
+{
+    int next = g_hRandomizer.IntValue + 1;
+    if (next>2) next = 0;
+    SetConVarInt(g_hRandomizer,next);
 }
 
 int zm_menu_state = ZM_MENU_CLOSED;
@@ -4463,7 +4549,7 @@ void start_zm_round(bool play_sound = true)
  update_t_zm_activity();
  check_saferoom();
  saferoom_lock(false);
- if (g_iLockedDoor!=INVALID_ENT_REFERENCE)
+ if (IsValidEntRef(g_iLockedDoor))
  {
      if (GetEntProp(g_iLockedDoor,Prop_Send,"m_bLocked")>0) AcceptEntityInput(g_iLockedDoor, "Unlock");
      AcceptEntityInput(g_iLockedDoor, "Open");
@@ -5200,9 +5286,9 @@ Action ZM_MOTD(int client, int args)
     PrintToConsole(client, "");
     PrintToConsole(client, "=== ZOMBIE MASTER %s TUTORIAL ===", PLUGIN_VERSION);
     PrintToConsole(client, "Welcome to Left 4 Dead 2 Zombie Master!");
+    PrintToConsole(client, "Visit the Steam Guide: https://steamcommunity.com/sharedfiles/filedetails/?id=3660216145");
     PrintToConsole(client, "Before every round starts, one player, the Zombie Master, is selected to control all zombies.");
     PrintToConsole(client, "IMPORTANT: Please enable Freelook Camera in Options -> Multiplayer!!!");
-    PrintToConsole(client, "Visit the Steam Guide: https://steamcommunity.com/sharedfiles/filedetails/?id=3660216145");
     
     PrintToConsole(client, "");
     PrintToConsole(client, "=== 1. Spawning Zombies ===");
@@ -5247,9 +5333,9 @@ Action ZM_MOTD(int client, int args)
     PrintToConsole(client, "/zm_panic -> Start PANIC");
     PrintToConsole(client, "/zm_start -> (1x) Unlock saferoom (2x) Force saferoom open (3x) Instantly open saferoom.");
     PrintToConsole(client, "/zm_delete -> Delete single unit where you are pointing indicated by a white circle.");
-    PrintToConsole(client, "/zm_delete_all");
-    PrintToConsole(client, "/zm_delete_common");
-    PrintToConsole(client, "/zm_delete_specials");
+    PrintToConsole(client, "/zm_delete_all -> delete ALL zombies");
+    PrintToConsole(client, "/zm_delete_common -> delete all commons/uncommons");
+    PrintToConsole(client, "/zm_delete_specials -> delete all Special Infected");
     PrintToConsole(client, "/zm_delete_witches");
     PrintToConsole(client, "/zm_quit -> Give Up and join Survivors.");
     PrintToConsole(client, "/zm_teleport -> teleport to survivor with most progress.");
@@ -5275,7 +5361,11 @@ Action ZM_MOTD(int client, int args)
     if (CheckCommandAccess(client,"is_a_sm_admin",ADMFLAG_GENERIC,true))
     {
         PrintToConsole(client, "");
-        PrintToConsole(client, "=== 5. SERVER CVARS ===");
+        PrintToConsole(client, "=== 5. Admin commands ===");
+        PrintToConsole(client, "/zm_addbank");
+        PrintToConsole(client, "/zm_kick");
+        PrintToConsole(client, "");
+        PrintToConsole(client, "=== 6. CVARS ===");
         PrintToConsole(client, "Compatible mp_gamemode: coop l4d1coop survival l4d1survival.");
         PrintToConsole(client, "sm_cvar zm_gamemode sets the .cfg file that is read in cfg/sourcemod/l4d2_zombie_master/.");
         
@@ -5305,6 +5395,7 @@ Action ZM_MOTD(int client, int args)
     PrintToConsole(client, "For more information, and to install Zombie Master for your own server, go here:");
     PrintToConsole(client, "https://forums.alliedmods.net/showthread.php?t=352060");
     PrintToConsole(client, "https://github.com/gvazdas/l4d2_zombie_master");
+    PrintToConsole(client, "Visit the Steam Guide: https://steamcommunity.com/sharedfiles/filedetails/?id=3660216145");
     PrintToConsole(client, "=== ZOMBIE MASTER TUTORIAL END ===");
     PrintToConsole(client, "");
    
@@ -5332,6 +5423,11 @@ void load_zm_gamemode()
     g_hZMGamemode.GetString(g_sZMGamemode, sizeof(g_sZMGamemode));
     TrimString(g_sZMGamemode);
     if (g_sZMGamemode[0]==0) g_sZMGamemode = "zm_default";
+    else if (strcmp(g_sZMGamemode,"random",false)==0)
+    {
+        random_gamemode();
+        return;
+    }
     static char command[PLATFORM_MAX_PATH];
     Format(command, sizeof(command), "exec sourcemod/l4d2_zombie_master/%s", g_sZMGamemode);
     ServerCommand(command);  
