@@ -68,9 +68,9 @@
 
 
 // enum for spawner state
-#define SPAWNER_BLOCKED 0 // can never spawn infected here
-#define SPAWNER_CONDITIONAL 1 // cannot spawn here temporarily because survivors can see or are too close
-#define SPAWNER_ALLOWED 2 // can spawn infected here
+#define SPAWNER_RGB_BLOCKED 0 // can never spawn infected here
+#define SPAWNER_RGB_CONDITIONAL 1 // cannot spawn here temporarily because survivors can see or are too close
+#define SPAWNER_RGB_ALLOWED 2 // can spawn infected here
 #define RGB_ZM 16777215 // white for outlines
 
 #define SOUND_BLOCKED "ui/beep_error01.wav"

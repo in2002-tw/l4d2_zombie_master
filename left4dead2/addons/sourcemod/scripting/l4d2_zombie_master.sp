@@ -19,13 +19,14 @@
 #include <files>
 #include <l4d2_zombie_master>
 #include <l4d2_zombie_master_sdk>
+#include <l4d2_grid_lib>
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.03 2026-03-21"
+#define PLUGIN_VERSION 			"0.9.031 2026-03-21"
 #define CONFIG_FILENAME         PLUGIN_NAME
 
 public Plugin myinfo =
@@ -209,10 +210,11 @@ ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer,
        g_hCostBoomer, g_hCostSpitter, g_hCostHunter, g_hCostSmoker, g_hCostJockey, g_hMaxWitches, g_hMaxSI, g_hSpecialCooldown,
        g_hCostCharger, g_hCostTank, g_hCostWitchStatic, g_hCostWitchMoving, g_hCostCommon, g_hCostUncommon, g_hLockSaferoom,
        g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait, g_hPanicRateMultiplier,
-       g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons, g_hAllowFreeze;
+       g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons, g_hAllowFreeze,
+       g_hGridSearchRadius;
 
 float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fStopInactivity,g_fSpecialCooldown, g_fPanicRateMultiplier,
-g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout;
+g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout, g_fGridSearchRadius;
 
 bool g_bFairQueue, g_bDiscountTank, g_bMemes, g_bClownGlow, g_bAllowFreeze;
 char g_sForceCommon[32];
@@ -857,6 +859,9 @@ public void OnPluginStart()
     
     g_hSpawnMinDistance = CreateConVar("zm_spawndistance", "400", "ZM minimum spawn distance.",FCVAR_PROTECTED, true, 0.0, true, 10000.0);
     g_hSpawnMinDistance.AddChangeHook(ConVarChanged_Cvars);
+    
+    g_hGridSearchRadius = CreateConVar("zm_grid_search_radius", "500", "Search radius (units) for GridLib fallback spawn when indicator is blue.",FCVAR_PROTECTED, true, 0.0, true, 5000.0);
+    g_hGridSearchRadius.AddChangeHook(ConVarChanged_Cvars);
     
     g_hCostBoomer = CreateConVar("zm_cost_boomer", "150", "ZM boomer cost. -1 to prevent spawns.",FCVAR_PROTECTED, true, -1.0, true, 10000.0);
     g_hCostBoomer.AddChangeHook(ConVarChanged_Cvars_ZMenu);
@@ -1854,8 +1859,8 @@ void update_ZM_spawner(float target_pos[3], float spawner_pos[3], int state, boo
     if (draw && IsValidClientZM() && g_iLaser>0 && g_iHalo>0)
     {
         int color[4];
-        if (state==SPAWNER_BLOCKED) color = color_blocked;
-        else if (state==SPAWNER_CONDITIONAL) color = color_conditional;
+        if (state==SPAWNER_RGB_BLOCKED) color = color_blocked;
+        else if (state==SPAWNER_RGB_CONDITIONAL) color = color_conditional;
         else color = color_allowed;
         float draw_pos[3];
         draw_pos = spawner_pos;
@@ -1873,8 +1878,8 @@ void update_ZM_spawner(float target_pos[3], float spawner_pos[3], int state, boo
         if ( (zm_spawner_state!=state || zm_target_pos[0]!=target_pos[0] || zm_target_pos[1]!=target_pos[1] || zm_target_pos[2]!=target_pos[2]) && (t_now-t_last_spawner_sound)>=2.0)
         {
             char sound_name[64];
-            if (state==SPAWNER_BLOCKED) sound_name = SOUND_BLOCKED;
-            else if (state==SPAWNER_CONDITIONAL) sound_name = SOUND_CONDITIONAL;
+            if (state==SPAWNER_RGB_BLOCKED) sound_name = SOUND_BLOCKED;
+            else if (state==SPAWNER_RGB_CONDITIONAL) sound_name = SOUND_CONDITIONAL;
             else sound_name = "";
             if (sound_name[0]!=0)
                 EmitSoundToClient(zm_client,sound_name,zm_client,ATTN_TO_SNDLEVEL(SNDATTN_NORMAL),_,_,0.09,_,_,draw_pos,_,true);
@@ -2105,6 +2110,7 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
 	GetClientAbsOrigin(zm_client,vPos);
 	GetClientEyePosition(zm_client,vOrigin);
 	GetClientEyeAngles(zm_client,vAngles);
+	vPos_spawner = vPos;
 	
     Handle trace = TR_TraceRayFilterEx(vOrigin,vAngles,MASK_SOLID,RayType_Infinite,FilterSpawner,zm_client);
 	if(TR_DidHit(trace))
@@ -2117,111 +2123,227 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
     if (TR_PointOutsideWorld(vPos))
     {
         if (hint) update_hint("%T", "Bad location", zm_client);
-        update_ZM_spawner(vPos,vPos_spawner,SPAWNER_BLOCKED,false);
+        update_ZM_spawner(vPos,vPos_spawner,SPAWNER_RGB_BLOCKED,false);
         return SPAWNER_INVALID;
     }
     
-    // bools: anyz los checkground
-    float check_dist = 1000.0;
+    float check_dist = 500.0;
     if (witch) check_dist = 50.0;
-    zm_spawner_navArea = L4D_GetNearestNavArea(vPos,check_dist,true,true,true,TEAM_INFECTED);
-    if (zm_spawner_navArea)
+    
+    // cycle 0: is analog spawner position in a good place? -> if YES, spawn zombie
+    // cycle 1: is gridlib suggestion in a good place? -> if YES, spawn zombie
+    // cycle 2: give up
+    int num_cycle = 0;
+    float min_distance;
+    while (num_cycle<2)
     {
-        zm_spawner_navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(zm_spawner_navArea);
-        zm_spawner_navAttrFlags = L4D_GetNavArea_AttributeFlags(zm_spawner_navArea);
-        float navSize[3], navCenter[3];
-        L4D_GetNavAreaCenter(zm_spawner_navArea, navCenter);
-        L4D_GetNavAreaSize(zm_spawner_navArea, navSize);
+        bool fail = false;
+        int spawner_state = SPAWNER_OK;
+        int spawner_state_RGB = SPAWNER_RGB_ALLOWED;
         
-        if ( FloatAbs(vPos_spawner[0]-navCenter[0])>(navSize[0]/2.0) ||
-             FloatAbs(vPos_spawner[1]-navCenter[1])>(navSize[1]/2.0) || IsObstructed(vPos_spawner) )
+        //                                                  bools: anyz los checkground
+        zm_spawner_navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
+        if (zm_spawner_navArea)
         {
-            L4D_FindRandomSpot(zm_spawner_navArea,vPos_spawner);
+            zm_spawner_navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(zm_spawner_navArea);
+            zm_spawner_navAttrFlags = L4D_GetNavArea_AttributeFlags(zm_spawner_navArea);
+            float navSize[3], navCenter[3];
+            L4D_GetNavAreaCenter(zm_spawner_navArea, navCenter);
+            L4D_GetNavAreaSize(zm_spawner_navArea, navSize);
+            
+            if ( FloatAbs(vPos_spawner[0]-navCenter[0])>(navSize[0]/2.0) ||
+                 FloatAbs(vPos_spawner[1]-navCenter[1])>(navSize[1]/2.0) || IsObstructed(vPos_spawner) )
+            {
+                L4D_FindRandomSpot(zm_spawner_navArea,vPos_spawner);
+            }
+            else
+            {
+                float z_min = navCenter[2] - FloatAbs(navSize[2])/2.0;
+                if (vPos_spawner[2]<z_min) vPos_spawner[2] = navCenter[2] + FloatAbs(navSize[2])/2.0 + 1.0;
+            }
         }
         else
         {
-            float z_min = navCenter[2] - FloatAbs(navSize[2])/2.0;
-            if (vPos_spawner[2]<z_min) vPos_spawner[2] = navCenter[2] + FloatAbs(navSize[2])/2.0 + 1.0;
+            vPos_spawner = vPos;
+            zm_spawner_navSpawnAttrs = 0;
+            zm_spawner_navAttrFlags = 0;
+            if (!witch)
+            {
+                spawner_state = SPAWNER_INVALID;
+                fail = true;
+            }
         }
         
-    }
-    else
-    {
-        vPos_spawner = vPos;
-        zm_spawner_navSpawnAttrs = 0;
-        zm_spawner_navAttrFlags = 0;
-        if (!witch)
+        if (!fail)
         {
-            if (hint) update_hint("%T", "Bad location", zm_client);
-            update_ZM_spawner(vPos,vPos_spawner,SPAWNER_BLOCKED);
-            return SPAWNER_NAV;
+            latest_distance = -1.0;
+            min_distance = min_distance_to_survivors(vPos_spawner,hint);
+            if (min_distance>=0.0 && num_cycle==0) latest_distance = min_distance;
+            if (zm_stage<ZM_STARTED && spawner_nearest_survivor!=-1) min_distance *= 2.0;
+            if (min_distance>=0.0 && g_fSpawnMinDistance>0.0 && min_distance<g_fSpawnMinDistance)
+            {
+                spawner_state = SPAWNER_DISTANCE;
+                fail = true;
+            }
         }
-    }
-    
-    latest_distance = -1.0;
-    float min_distance = min_distance_to_survivors(vPos_spawner,hint);
-    if (min_distance>=0.0) latest_distance = min_distance;
-    
-    if (!nav_can_spawn_zombies(zm_spawner_navAttrFlags,zm_spawner_navSpawnAttrs,witch))
-    {
-        vPos_spawner = vPos;
-        if (hint)
+        if (!fail)
         {
-            if (witch) update_hint("%T", "Witches illegal", zm_client);
-            else update_hint("%T", "Zombies illegal", zm_client);
+            fail = !nav_can_spawn_zombies(zm_spawner_navAttrFlags,zm_spawner_navSpawnAttrs,witch);
+            if (fail) spawner_state = SPAWNER_NAV;
         }
-        update_ZM_spawner(vPos,vPos_spawner,SPAWNER_BLOCKED);
-        return SPAWNER_NAV;
-    }
-    if (l4dhooks_updated && !witch && L4D_NavArea_IsBlocked(zm_spawner_navArea,TEAM_INFECTED,false))
-    {
-        vPos_spawner = vPos;
-        if (hint) update_hint("%T", "Zombies illegal", zm_client);
-        update_ZM_spawner(vPos,vPos_spawner,SPAWNER_BLOCKED);
-        return SPAWNER_NAV;
-    }
-    
-    if (zm_stage<ZM_STARTED && spawner_nearest_survivor!=-1) min_distance *= 2.0;
-    
-    if (min_distance>=0.0 && g_fSpawnMinDistance>0.0 && min_distance<g_fSpawnMinDistance)
-    {
-        vPos_spawner = vPos;
-        if (hint) update_hint("%T %d", "Too close", zm_client, RoundFloat(min_distance));
-        update_ZM_spawner(vPos,vPos_spawner,SPAWNER_CONDITIONAL);
-        return SPAWNER_DISTANCE;
-    }
-    
-    if (IsObstructed(vPos_spawner))
-    {
-        vPos_spawner = vPos;
-        if (hint) update_hint("%T", "Obstacle", zm_client);
-        update_ZM_spawner(vPos,vPos_spawner,SPAWNER_CONDITIONAL);
-        return SPAWNER_INVALID;
-    }
-    
-    // If obscured, we prevent line of sight from blocking spawns.
-    bool obscured = ( (zm_spawner_navSpawnAttrs & NAV_SPAWN_OBSCURED) || (zm_spawner_navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
-    if (!obscured)
-    {
-        if (can_any_alive_survivor_see(vPos_spawner,hint))
+        if (!fail && !witch && l4dhooks_updated)
         {
-            update_ZM_spawner(vPos,vPos_spawner,SPAWNER_CONDITIONAL);
-            if (hint) update_hint("%T", "Visible survivors", zm_client);
-            if (hint && zm_allow_spawns && !zm_flow_notify && IsValidClientZM()) PrintHintText(zm_client, "%t", "Flow hint");
-            return SPAWNER_SIGHT;
+            fail = L4D_NavArea_IsBlocked(zm_spawner_navArea,TEAM_INFECTED,false);
+            if (fail) spawner_state = SPAWNER_NAV;
         }
+        if (!fail)
+        {
+            fail = IsObstructed(vPos_spawner);
+            if (fail) spawner_state = SPAWNER_OTHER;
+        }
+        if (!fail)
+        {
+            bool obscured = ( (zm_spawner_navSpawnAttrs & NAV_SPAWN_OBSCURED) || (zm_spawner_navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
+            if (!obscured)
+            {
+                fail = can_any_alive_survivor_see(vPos_spawner,false);
+                if (fail) spawner_state = SPAWNER_SIGHT;
+            }
+        }
+        if (fail)
+        {
+            float vPos_gridlib[3];
+            if (num_cycle<=0 && FindNearbyValidSpawnCell(vPos_spawner,vPos_gridlib,check_dist))
+            {
+                vPos_spawner = vPos_gridlib;
+                num_cycle +=1;
+                continue;
+            }
+            spawner_state_RGB = SPAWNER_RGB_BLOCKED;
+            switch (spawner_state)
+            {
+                case SPAWNER_DISTANCE:
+                {
+                    vPos_spawner = vPos;
+                    if (hint) update_hint("%T %d", "Too close", zm_client, RoundFloat(min_distance));
+                    spawner_state_RGB = SPAWNER_RGB_CONDITIONAL;
+                }
+                case SPAWNER_SIGHT:
+                {
+                    vPos_spawner = vPos;
+                    if (hint) update_hint("%T", "Visible survivors", zm_client);
+                    spawner_state_RGB = SPAWNER_RGB_CONDITIONAL;
+                    if (hint && num_cycle>0 && zm_allow_spawns && !zm_flow_notify && IsValidClientZM())
+                        PrintHintText(zm_client, "%t", "Flow hint");
+                }
+                case SPAWNER_OTHER:
+                {
+                    vPos_spawner = vPos;
+                    if (hint) update_hint("%T", "Obstacle", zm_client);
+                    spawner_state_RGB = SPAWNER_RGB_CONDITIONAL;
+                }
+                case SPAWNER_INVALID:
+                {
+                    vPos_spawner = vPos;
+                    if (hint) update_hint("%T", "Bad location", zm_client);
+                    spawner_state = SPAWNER_INVALID;
+                }
+                default: // SPAWNER_NAV 
+                {
+                    vPos_spawner = vPos;
+                    if (hint)
+                    {
+                        if (witch) update_hint("%T", "Witches illegal", zm_client);
+                        else update_hint("%T", "Zombies illegal", zm_client);
+                    }
+                }
+            }
+            update_ZM_spawner(vPos,vPos_spawner,spawner_state_RGB);
+            return spawner_state;
+            
+        }
+        num_cycle += 1;
+        if (num_cycle>1) break;
     }
     
     if (!zm_allow_spawns)
 	{
     	if (hint) update_hint("%T", "Zombie spawns OFF", zm_client);
-    	update_ZM_spawner(vPos,vPos_spawner,SPAWNER_CONDITIONAL);
+    	update_ZM_spawner(vPos,vPos_spawner,SPAWNER_RGB_CONDITIONAL);
     	return SPAWNER_OTHER;
 	}
     
-    update_ZM_spawner(vPos,vPos_spawner,SPAWNER_ALLOWED);
+    update_ZM_spawner(vPos,vPos_spawner,SPAWNER_RGB_ALLOWED);
     return SPAWNER_OK;
     
+}
+
+/**
+ * When the spawn indicator is blue (SPAWNER_RGB_CONDITIONAL), search nearby GridLib
+ * cells for a valid spawn position that isn't visible to or too close to survivors.
+ *
+ * @param origin    The aimed spawn position to search around
+ * @param outPos    Output: the valid nearby cell position, if found
+ * @return          true if a valid cell was found, false otherwise
+ */
+bool FindNearbyValidSpawnCell(const float origin[3], float outPos[3], float radius = -1.0)
+{
+    if (radius<=0.0) radius = g_fGridSearchRadius;
+    if (radius<=0.0)
+    {
+        LogMessage("[zm] radius %f skipped", radius);
+        return false;
+    }
+    
+    LogMessage("[zm] FindNearbyValidSpawnCell origin=(%.0f,%.0f,%.0f) radius=%.0f", origin[0], origin[1], origin[2], radius);
+   
+    if (!GridLib_IsReady())
+    {
+        LogMessage("[zm] FindNearbyValidSpawnCell: GridLib not ready");
+        return false;
+    }
+
+    int cells[8];
+    int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 8);
+    LogMessage("[zm] FindNearbyValidSpawnCell: %d candidates found", count);
+
+    for (int i = 0; i < count; i++)
+    {
+        // Skip nav-blocked cells (saferooms, player start, etc.)
+        if (GridLib_GetCellSpawnAttributes(cells[i]) & GRIDLIB_NAV_BLOCKED_ZOMBIES)
+            continue;
+
+        float cellPos[3], normal[3];
+        Address navArea;
+        bool obstructed;
+        if (!GridLib_GetCellData(cells[i], cellPos, normal, navArea, obstructed))
+            continue;
+
+        if (obstructed)
+            continue;
+
+        // Distance check against all alive survivors
+        float minDist = min_distance_to_survivors(cellPos);
+        if (minDist >= 0.0 && g_fSpawnMinDistance > 0.0 && minDist < g_fSpawnMinDistance)
+        {
+            LogMessage("[zm] FindNearbyValidSpawnCell: cell %d too close (%.0f)", i, minDist);
+            continue;
+        }
+
+        // Visibility check
+        if (can_any_alive_survivor_see(cellPos, false))
+        {
+            LogMessage("[zm] FindNearbyValidSpawnCell: cell %d visible to survivors", i);
+            continue;
+        }
+
+        LogMessage("[zm] FindNearbyValidSpawnCell: valid cell %d at (%.0f,%.0f,%.0f)", i, cellPos[0], cellPos[1], cellPos[2]);
+        outPos = cellPos;
+        return true;
+    }
+
+    LogMessage("[zm] FindNearbyValidSpawnCell: no valid cell found");
+    return false;
 }
 
 bool saferoom_interacted = false;
@@ -3217,6 +3339,12 @@ Action zm_new_round(Handle timer = null)
     {
         zm_stage = ZM_END;
         return Plugin_Stop;
+    }
+    
+    if (!GridLib_IsReady())
+    {
+        GridLib_Initialize();
+        GridLib_StartPrecomputation();
     }
     
     if (g_hRandomizer.IntValue==2) random_gamemode();
@@ -5479,6 +5607,7 @@ void GetCvars()
     g_iBankInitialPlayer = g_hBankInitialPlayer.IntValue;
     max_zombie_arr[ZOMBIECLASS_COMMON] = g_hMaxCommons.IntValue;
     g_fSpawnMinDistance = g_hSpawnMinDistance.FloatValue;
+    g_fGridSearchRadius = g_hGridSearchRadius.FloatValue;
     g_fStopInactivity = g_hStopInactivity.FloatValue;
     
     costs_SI[ZOMBIECLASS_BOOMER] = g_hCostBoomer.IntValue;
@@ -6448,9 +6577,9 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
     else spawner_state = can_ZM_spawn();
     if (spawner_state!=SPAWNER_OK)
     {
-        use_randompz = true;
         target_client = get_spawner_target_survivor(flow,spawner_state);
 	    if (target_client<0) return;
+	    use_randompz = true;
     }
 	
 	angry = angry || panic;
@@ -7643,6 +7772,11 @@ public void OnMapStart()
         	CreateTimer(1.0, Timer_StartPrecomputeNav, _, TIMER_FLAG_NO_MAPCHANGE);
     	}
     	zm_update();
+    	if (!GridLib_IsReady())
+        {
+            GridLib_Initialize();
+            GridLib_StartPrecomputation();
+        }
 	}
 
 	// env_shake needs to be "precached"
@@ -7857,6 +7991,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse)
 public void OnMapEnd()
 {
 	if (DEBUG) LogMessage("[zm] OnMapEnd");
+	if (GridLib_IsReady()) GridLib_Cleanup();
 	if (!g_bCvarAllow) return;
 	g_iLockedDoor = INVALID_ENT_REFERENCE; // we don't know if there's gonna be a door next map
 	ResetTimer();
@@ -8100,6 +8235,12 @@ void IsAllowed()
     	
     	HookUserMessage(GetUserMessageId("PZDmgMsg"), OnPZDmgMsg, true);
     	HookUserMessage(GetUserMessageId("Damage"), OnPZDmgMsg, true);
+    	
+    	if (!GridLib_IsReady())
+        {
+            GridLib_Initialize();
+            GridLib_StartPrecomputation();
+        }
 		
 	}
     
