@@ -5,6 +5,8 @@
 #define _zm_sdk_included
 ///////////////////////////////////////
 
+#define GAMEDATA_FILE			    "l4d2_zombie_master"
+
 Handle hCreateSmoker = null;
 #define NAME_CreateSmoker "NextBotCreatePlayerBot<Smoker>"
 #define NAME_CreateSmoker_L4D1 "reloffs_NextBotCreatePlayerBot<Smoker>"
@@ -34,7 +36,6 @@ GameData hGameData;
 //GameData hGameData_l4dhooks;
 void GetGameData()
 {
-	if (DEBUG) LogMessage("[zm] GetGameData");
 	hGameData = LoadGameConfigFile(GAMEDATA_FILE);
 	//hGameData_l4dhooks = LoadGameConfigFile("left4dhooks.l4d2");
 

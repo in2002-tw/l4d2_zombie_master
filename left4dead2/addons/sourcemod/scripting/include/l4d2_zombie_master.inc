@@ -91,12 +91,104 @@
 #define MODEL_TANK "models/infected/hulk.mdl"
 
 #define MODEL_RIOT "models/infected/common_male_riot.mdl"
+#define MODEL_RIOT2 "models/infected/common_male_riot_l4d1.mdl"
+
 #define MODEL_CEDA "models/infected/common_male_ceda.mdl"
+#define MODEL_CEDA2 "models/infected/common_male_ceda_l4d1.mdl"
+
 #define MODEL_CLOWN "models/infected/common_male_clown.mdl"
+
 #define MODEL_MUD "models/infected/common_male_mud.mdl"
+#define MODEL_MUD2 "models/infected/common_male_mud_l4d1.mdl"
+
 #define MODEL_ROAD "models/infected/common_male_roadcrew.mdl"
+#define MODEL_ROAD2 "models/infected/common_male_roadcrew_rain.mdl"
+#define MODEL_ROAD3 "models/infected/common_male_roadcrew_l4d1.mdl"
+#define MODEL_ROAD4 "models/infected/common_male_baggagehandler_02.mdl"
+
 #define MODEL_JIMMY "models/infected/common_male_jimmy.mdl"
+
 #define MODEL_FALLEN "models/infected/common_male_fallen_survivor.mdl"
+#define MODEL_FALLEN2 "models/infected/common_male_parachutist.mdl"
+#define MODEL_FALLEN3 "models/infected/common_male_fallen_survivor_l4d1.mdl" // this one has 2 bodygroups as well
+
+void get_uncommon_model(char label[16], char model[64])
+{
+    model = "";
+    switch (label[0])
+    {
+        case 'r':
+        {
+            if (strcmp(label,"random",false)==0)
+            {
+                switch (GetRandomInt(1,5))
+                {
+                    case 1: get_uncommon_model("riot",model);
+                    case 2: get_uncommon_model("road",model);
+                    case 3: get_uncommon_model("ceda",model);
+                    case 4: get_uncommon_model("clown",model);
+                    case 5: get_uncommon_model("mud",model);
+                }
+                return;
+            }
+            else if (strcmp(label,"riot",false)==0)
+            {
+                switch (GetRandomInt(0,1))
+                {
+                    case 1: model = MODEL_RIOT2;
+                    default: model = MODEL_RIOT;
+                }
+            }
+            else if (strcmp(label,"road",false)==0)
+            {
+                switch (GetRandomInt(0,3))
+                {
+                    case 1: model = MODEL_ROAD2;
+                    case 2: model = MODEL_ROAD3;
+                    case 3: model = MODEL_ROAD4;
+                    default: model = MODEL_ROAD;
+                }
+            }
+        }
+        case 'c':
+        {
+            if (strcmp(label,"ceda",false)==0)
+            {
+                switch (GetRandomInt(0,1))
+                {
+                    case 1: model = MODEL_CEDA2;
+                    default: model = MODEL_CEDA;
+                }
+            }
+            else if (strcmp(label,"clown",false)==0) model = MODEL_CLOWN;
+        }
+        case 'm':
+        {
+            if (strcmp(label,"mud",false)==0)
+            {
+                switch (GetRandomInt(0,1))
+                {
+                    case 1: model = MODEL_MUD2;
+                    default: model = MODEL_MUD;
+                }
+            }
+        }
+        case 'j': model = MODEL_JIMMY;
+        case 'f':
+        {
+            if (strcmp(label,"fallen",false)==0)
+            {
+                switch (GetRandomInt(0,2))
+                {
+                    case 1: model = MODEL_FALLEN2;
+                    case 2: model = MODEL_FALLEN3;
+                    default: model = MODEL_FALLEN;
+                }
+            }
+        }
+        default: model = ""; 
+    }
+}
 
 #define SOUND_READY "ui/critical_event_1.wav"
 #define SOUND_OFFER "ui/pickup_misc42.wav"
@@ -504,7 +596,7 @@ stock bool valid_uncommon(char arg[32])
 	return false;
 }
 
-stock void process_horde_arg(int &count, char type[32], bool &angry, bool &flow, char arg[32])
+stock void process_horde_arg(int &count, char type[16], bool &angry, bool &flow, char arg[16])
 {
     if (!angry)
     {
