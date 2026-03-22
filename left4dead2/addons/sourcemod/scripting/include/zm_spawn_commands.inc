@@ -49,10 +49,10 @@ Action ZM_Spawn_Horde(int client, int args)
     int count = 10;
     bool angry = false;
     bool flow = false;
-    char type[32] = "";
+    char type[16] = "";
     if (args>0)
     {
-        static char arg[32] = "";
+        static char arg[16] = "";
         GetCmdArg(1,arg,sizeof(arg));
         process_horde_arg(count,type,angry,flow,arg);
     	if (args>1) {GetCmdArg(2,arg,sizeof(arg)); process_horde_arg(count,type,angry,flow,arg);}
@@ -235,7 +235,7 @@ void ZM_Horde(int client, int count=10, char type[64]="", bool angry = false, bo
     else spawner_state = can_ZM_spawn();
     LogMessage("[zm] ZM_Horde: spawner_state=%d count=%d flow=%d gridlib_ready=%d pos=(%.0f,%.0f,%.0f)",
         spawner_state, count, flow, GridLib_IsReady(), zm_spawner_pos[0], zm_spawner_pos[1], zm_spawner_pos[2]);
-    if (spawner_state==SPAWNER_OK || spawner_state==SPAWNER_CONDITIONAL)
+    if (spawner_state==SPAWNER_OK || spawner_state==SPAWNER_RGB_CONDITIONAL)
     {
         if (count > 1 && GridLib_IsReady())
         {
@@ -547,7 +547,7 @@ void ZM_Witch(int client,int witch_type, bool free = false, bool flow = false)
 	if (spawner_state!=SPAWNER_OK)
 	{
         float gridPos[3];
-        if (spawner_state==SPAWNER_CONDITIONAL && FindNearbyValidSpawnCell(zm_spawner_pos, gridPos))
+        if (spawner_state==SPAWNER_RGB_CONDITIONAL && FindNearbyValidSpawnCell(zm_spawner_pos, gridPos))
         {
             if (DEBUG) LogMessage("[zm] ZM_Horde: using GridLib fallback position");
             spawn_pos = gridPos;
@@ -721,7 +721,7 @@ Action ZM_Spawn_Witch(int client, int args)
 	if (args>0)
 	{
 	    int arg_int;
-        static char arg[32];
+        static char arg[16];
         bool hit = false;
     	// Check Argument 1
     	GetCmdArg(1,arg,sizeof(arg));
@@ -937,7 +937,7 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
         if (spawner_state!=SPAWNER_OK)
         {
             float gridPos[3];
-            if (spawner_state==SPAWNER_CONDITIONAL && FindNearbyValidSpawnCell(zm_spawner_pos, gridPos))
+            if (spawner_state==SPAWNER_RGB_CONDITIONAL && FindNearbyValidSpawnCell(zm_spawner_pos, gridPos))
             {
                 if (DEBUG) LogMessage("[zm] ZM_Spawn_SI: using GridLib fallback position");
                 spawn_pos = gridPos;

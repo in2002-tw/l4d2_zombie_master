@@ -5,8 +5,6 @@
 #define _zm_sdk_included
 ///////////////////////////////////////
 
-#define GAMEDATA_FILE			    "l4d2_zombie_master"
-
 Handle hCreateSmoker = null;
 #define NAME_CreateSmoker "NextBotCreatePlayerBot<Smoker>"
 #define NAME_CreateSmoker_L4D1 "reloffs_NextBotCreatePlayerBot<Smoker>"

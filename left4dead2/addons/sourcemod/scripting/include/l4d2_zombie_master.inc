@@ -112,7 +112,7 @@
 #define MODEL_FALLEN2 "models/infected/common_male_parachutist.mdl"
 #define MODEL_FALLEN3 "models/infected/common_male_fallen_survivor_l4d1.mdl" // this one has 2 bodygroups as well
 
-void get_uncommon_model(char label[16], char model[64])
+stock void get_uncommon_model(char label[16], char model[64])
 {
     model = "";
     switch (label[0])

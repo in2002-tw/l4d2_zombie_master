@@ -28,7 +28,7 @@ bool DEBUG = false;
 #define CONFIG_FILENAME         PLUGIN_NAME
 
 #include <zm_globals>
-#include <zm_sdk>
+#include <l4d2_zombie_master_sdk>
 #include <zm_spawner>
 #include <zm_spawn_commands>
 #undef REQUIRE_PLUGIN
