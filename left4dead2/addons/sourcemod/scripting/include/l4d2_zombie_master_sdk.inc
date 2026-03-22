@@ -29,6 +29,13 @@ Handle hCreateTank = null;
 Handle hInfectedAttackSurvivorTeam = null;
 //hTankEnterStasis, hTankLeaveStasis = null;
 
+// PVS (Potentially Visible Set) engine calls
+Handle hGetClusterForOrigin = null;
+Handle hGetPVSForCluster = null;
+Handle hCheckOriginInPVS = null;
+Address g_pEngineServer = Address_Null;
+#define PVS_BUFFER_SIZE 8192
+
 // https://github.com/Ilusion9/entityIO-sm
 Handle g_DHook_AcceptInput = null;
 
@@ -98,7 +105,79 @@ void PrepSDKCall()
 	    DHookAddParam(g_DHook_AcceptInput, HookParamType_Int);
 	}
 
+	// PVS engine calls
+	g_pEngineServer = GameConfGetAddress(hGameData, "engine_ptr");
+	if (g_pEngineServer != Address_Null)
+	{
+		LogMessage("[zm] Engine server pointer: %x", g_pEngineServer);
+
+		// GetClusterForOrigin(Vector const&) → int
+		StartPrepSDKCall(SDKCall_Raw);
+		PrepSDKCall_SetVirtual(GameConfGetOffset(hGameData, "IVEngineServer::GetClusterForOrigin"));
+		PrepSDKCall_AddParameter(SDKType_Vector, SDKPass_ByRef);
+		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
+		hGetClusterForOrigin = EndPrepSDKCall();
+		if (hGetClusterForOrigin != null) LogMessage("[zm] SDKCall ready: GetClusterForOrigin");
+		else LogMessage("[zm] WARNING: Failed to create GetClusterForOrigin SDKCall");
+
+		// GetPVSForCluster(int cluster, int pvslength, unsigned char* outputpvs) → int
+		StartPrepSDKCall(SDKCall_Raw);
+		PrepSDKCall_SetVirtual(GameConfGetOffset(hGameData, "IVEngineServer::GetPVSForCluster"));
+		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+		PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);
+		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
+		hGetPVSForCluster = EndPrepSDKCall();
+		if (hGetPVSForCluster != null) LogMessage("[zm] SDKCall ready: GetPVSForCluster");
+		else LogMessage("[zm] WARNING: Failed to create GetPVSForCluster SDKCall");
+
+		// CheckOriginInPVS(Vector const&, unsigned char const*, int) → bool
+		StartPrepSDKCall(SDKCall_Raw);
+		PrepSDKCall_SetVirtual(GameConfGetOffset(hGameData, "IVEngineServer::CheckOriginInPVS"));
+		PrepSDKCall_AddParameter(SDKType_Vector, SDKPass_ByRef);
+		PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);
+		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
+		hCheckOriginInPVS = EndPrepSDKCall();
+		if (hCheckOriginInPVS != null) LogMessage("[zm] SDKCall ready: CheckOriginInPVS");
+		else LogMessage("[zm] WARNING: Failed to create CheckOriginInPVS SDKCall");
+	}
+	else
+	{
+		LogMessage("[zm] WARNING: Could not find engine server pointer, PVS checks disabled");
+	}
+
 	delete hGameData;
+}
+
+// PVS wrapper functions
+stock int PVS_GetClusterForOrigin(const float origin[3])
+{
+	if (hGetClusterForOrigin == null || g_pEngineServer == Address_Null) return -1;
+	return SDKCall(hGetClusterForOrigin, g_pEngineServer, origin);
+}
+
+stock bool PVS_GetForCluster(int cluster, char pvsBuf[PVS_BUFFER_SIZE])
+{
+	if (hGetPVSForCluster == null || g_pEngineServer == Address_Null) return false;
+	SDKCall(hGetPVSForCluster, g_pEngineServer, cluster, PVS_BUFFER_SIZE, pvsBuf);
+	return true;
+}
+
+stock bool PVS_CheckOriginInPVS(const float origin[3], const char pvsBuf[PVS_BUFFER_SIZE])
+{
+	if (hCheckOriginInPVS == null || g_pEngineServer == Address_Null) return false;
+	return SDKCall(hCheckOriginInPVS, g_pEngineServer, origin, pvsBuf, PVS_BUFFER_SIZE);
+}
+
+stock bool PVS_IsInAnySurvivorPVS(const float origin[3], const char survivorPVS[][PVS_BUFFER_SIZE], int survivorPVSCount)
+{
+	for (int s = 0; s < survivorPVSCount; s++)
+	{
+		if (PVS_CheckOriginInPVS(origin, survivorPVS[s]))
+			return true;
+	}
+	return false;
 }
 
 void LoadStringFromAdddress(Address addr, char[] buffer, int maxlength) {

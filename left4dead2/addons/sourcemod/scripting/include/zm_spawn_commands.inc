@@ -295,6 +295,27 @@ void ZM_Horde(int client, int count=10, char type[64]="", bool angry = false, bo
 	else if (strcmp(current_model,"random")==0) random = true;
 	float angle[3];
 
+	// Build survivor PVS data and eye positions for gridlib visibility filtering
+	char survivorPVS[4][PVS_BUFFER_SIZE];
+	float survivorEyePos[4][3];
+	int survivorPVSCount = 0;
+	if (use_gridlib && hCheckOriginInPVS != null)
+	{
+		for (int s = 1; s <= MaxClients && survivorPVSCount < 4; s++)
+		{
+			if (!IsClientInGame(s) || GetClientTeam(s) != TEAM_SURVIVOR || !IsPlayerAlive(s))
+				continue;
+			GetClientEyePosition(s, survivorEyePos[survivorPVSCount]);
+			int cluster = PVS_GetClusterForOrigin(survivorEyePos[survivorPVSCount]);
+			if (cluster >= 0)
+			{
+				PVS_GetForCluster(cluster, survivorPVS[survivorPVSCount]);
+				survivorPVSCount++;
+			}
+		}
+		LogMessage("[zm] ZM_Horde: built PVS for %d survivors", survivorPVSCount);
+	}
+
 	for( int i = 0; i < count; i++  )
 	{
 		if (use_gridlib)
@@ -308,15 +329,39 @@ void ZM_Horde(int client, int count=10, char type[64]="", bool angry = false, bo
 				LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) invalid data, skipping", i, gridlib_cell_count, cellIdx);
 				continue;
 			}
-			if (cellObstructed)
+			if (cellObstructed || IsObstructed(randomPos))
 			{
 				LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) obstructed at (%.0f,%.0f,%.0f), skipping", i, gridlib_cell_count, cellIdx, randomPos[0], randomPos[1], randomPos[2]);
 				continue;
 			}
-			if (GridLib_GetCellSpawnAttributes(cellIdx) & GRIDLIB_NAV_BLOCKED_ZOMBIES)
+			// PVS + single ray trace visibility check
+			if (survivorPVSCount > 0)
 			{
-				LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) nav-blocked, skipping", i, gridlib_cell_count, cellIdx);
-				continue;
+				bool actuallyVisible = false;
+				float cellEye[3];
+				cellEye[0] = randomPos[0];
+				cellEye[1] = randomPos[1];
+				cellEye[2] = randomPos[2] + 36.0; // mid-height
+				for (int s = 0; s < survivorPVSCount; s++)
+				{
+					if (!PVS_CheckOriginInPVS(randomPos, survivorPVS[s]))
+						continue;
+					// In PVS — confirm with a single ray trace
+					Handle trace = TR_TraceRayFilterEx(cellEye, survivorEyePos[s],
+						MASK_VISIBLE, RayType_EndPoint, FilterSpawner, -1);
+					bool hit = TR_DidHit(trace);
+					delete trace;
+					if (!hit)
+					{
+						actuallyVisible = true;
+						break;
+					}
+				}
+				if (actuallyVisible)
+				{
+					LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) visible to survivor, skipping", i, gridlib_cell_count, cellIdx);
+					continue;
+				}
 			}
 			LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) spawning at (%.0f,%.0f,%.0f) dist=%.0f",
 				i, gridlib_cell_count, cellIdx, randomPos[0], randomPos[1], randomPos[2],

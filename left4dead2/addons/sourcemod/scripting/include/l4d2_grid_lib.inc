@@ -816,6 +816,32 @@ static Action GridLib_Timer_Precompute(Handle timer)
 	LogMessage("[GridLib]   Cells: %d | Areas: %d | Skipped: %d | Excluded (obstructed): %d | Duration: %.2fs",
 	          g_TotalCells, areasProcessed, areasSkipped, cellsExcluded, duration);
 
+	// Log nav area stats
+	if (g_NavAreaCells != null)
+	{
+		StringMapSnapshot navSnap = g_NavAreaCells.Snapshot();
+		int maxCells = 0;
+		int totalNavCells = 0;
+		char maxKey[20];
+		for (int s = 0; s < navSnap.Length; s++)
+		{
+			char sKey[20];
+			navSnap.GetKey(s, sKey, sizeof(sKey));
+			ArrayList sCellList;
+			g_NavAreaCells.GetValue(sKey, sCellList);
+			int sCount = sCellList.Length;
+			totalNavCells += sCount;
+			if (sCount > maxCells)
+			{
+				maxCells = sCount;
+				maxKey = sKey;
+			}
+		}
+		LogMessage("[GridLib] Nav area stats: %d areas, %d total cells, largest=%s with %d cells, avg=%.1f",
+			navSnap.Length, totalNavCells, maxKey, maxCells, float(totalNavCells) / float(navSnap.Length));
+		delete navSnap;
+	}
+
 	return Plugin_Stop;
 }
 
