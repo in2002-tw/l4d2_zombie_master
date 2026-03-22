@@ -170,6 +170,12 @@
 					"signature"	"engine_ptr"
 					"read"		"0"
 				}
+				"windows"
+				{
+					"signature"	"engine_ptr"
+					"read"		"12"
+					"read"		"0"
+				}
 			}
 
 		}
@@ -181,14 +187,17 @@
             "IVEngineServer::GetClusterForOrigin"
             {
                 "linux"     "12"
+                "windows"    "12"
             }
             "IVEngineServer::GetPVSForCluster"
             {
                 "linux"     "13"
+                "windows"    "13"
             }
             "IVEngineServer::CheckOriginInPVS"
             {
                 "linux"     "14"
+                "windows"    "14"
             }
             
             // CBaseServer::GetClient(int) - returns IClient*
@@ -415,6 +424,8 @@
             {
                 "library"   "server"
                 "linux"     "@engine"
+                "windows"   "\x68\x2A\x2A\x2A\x2A\xFF\x55\x08\x83\xC4\x0C\xA3\x2A\x2A\x2A\x2A\x85\xC0"
+                /* 68 ? ? ? ? FF 55 08 83 C4 0C A3 ? ? ? ? 85 C0 */
             }
             
             "SurvivorBot::EnforceProximityToHumans"
