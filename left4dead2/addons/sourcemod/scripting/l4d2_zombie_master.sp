@@ -18,16 +18,21 @@
 #include <adt_trie>
 #include <files>
 #include <l4d2_zombie_master>
-#include <l4d2_zombie_master_sdk>
 #include <l4d2_grid_lib>
-#undef REQUIRE_PLUGIN
-#include <adminmenu>
 
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.031 2026-03-21"
+#define PLUGIN_VERSION 			"0.9.02 2026-03-17"
+#define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
+
+#include <zm_globals>
+#include <zm_sdk>
+#include <zm_spawner>
+#include <zm_spawn_commands>
+#undef REQUIRE_PLUGIN
+#include <adminmenu>
 
 public Plugin myinfo =
 {
@@ -60,14 +65,11 @@ public Plugin myinfo =
 // 20. zm_max_si behavior update: acceptable values -3, -2, -1, 0, etc.
 // 21. Many bug fixes.
 // 22. new cvar: zm_notanks
-// 23. L4D_NavArea_IsBlocked added.
+// 23. Check IsBlocked
 // 24. New admin menu.
-// 25. Activity detection now sees chat messages.
-// 26. New models for uncommons.
-// 27. More things moved to /include
-// 28. Major spawner overhaul: GridLib implemented
 
 // TO DO LIST:
+// 4. Better easier to read zombie spawner visuals (done by zyiks, not implemented)
 // 5. Gas station tornado (done by zyiks, not implemented)
 // 15. Performance bottlenecks.
 // 16. Is there a way to prevent observers from being able to see the ZM info? Try SendProxy?
@@ -77,176 +79,20 @@ public Plugin myinfo =
 // 40. Context interact when looking at something with R
 // 41. Special context interact: delete, move, attack nearest
 // 42. Panic Trap
+// 45. Admin menu
 // 47. Witches in survivor closets
 // 50. Random pz can spawn in saferoom :) nice valve
 // 51. Find out why commons get auto culled on finale start. Can avoid culling if they are attacking other infected...
 // 52. Smoker, Charger stupid behavior after ability fail.
 // 57. Frozen tanks should be in stasis to prevent music // EFL_DORMANT Entity_Flags
 // 58. Autokill obstructed stuck units
+// 59. Some maps have busted Intro states. Try checking if survivor cameras are busy instead.
 // 60. Survivors still keep teleporting and falling to their death.
 // 62. Fun command: z_mute_infected no yelling or growling, allowing to stealth attack survivors.
+// 63. Bad navmeshes where commons refuse to navigate? // m_isBlocked?
 // 64. Crouched frozen specials should stay crouched.
 // 65. Enumerate within optimizations
 
-// SetEntPropFloat(witch, Prop_Send,"m_flModelScale", scale); 
-
-// Idle tank: 1. TankBehavior NOT STARTED  ( 0xAD39A30 ) 
-// Attacking Tank: 2. TankAttack STARTED  ( 0xD410FB0 ) 
-
-ConVar g_hCvarDebug, g_hCvarAllow, z_max_player_zombies, infectedbots_enable, jukebox_horde, shoot_alert_enable, clown_world_enable;
-bool g_bCvarAllow;
-bool g_bSpawnWitchBride = false; // avoid crash
-bool l4dhooks_updated = false;
-
-int zm_stage = ZM_END;
-void set_zm_stage(int stage, bool override = false)
-{
-    if (override || zm_stage<stage) zm_stage = stage;
-}
-
-// Zombie Master Live Variables
-float fog_distance = FOG_DISTANCE;
-bool zm_can_start = false;
-int zm_client = -1;
-int zm_client_userid = -1;
-int bank = 0;
-float bank_rate = 0.0;
-float bank_add = 0.0; // in case very small numbers need to be tracked
-float t_last_update = 0.0;
-float t_last_action = 0.0; // prevent ZM spamming buttons
-int g_iAliveSurvivors = -1;
-int max_SI = 16;
-int live_SI = 0;
-int SI_cap = 16;
-bool panic = false;
-float t_last_panic = 0.0;
-int g_iEntities; // track number of edicts and entities
-bool zm_allow_spawns = true; // in survival, prevent spawns until survivors have started timer
-Handle zm_timer = INVALID_HANDLE; // zm_update timer, repeats periodically
-Handle clients_timer = INVALID_HANDLE; // CountClients() timer which does not run twice if there's already a timer set to run it
-char ZM_hint[128]; 
-bool EMS_hud_ready = false; // track whether HUD was initialized
-int roundcount = 0;
-bool ZM_finale_announced = false;
-float t_finale; // prevent finale stages from advancing too quickly
-bool fallen_spawned = false; // spawn fallen survivor once per round
-bool jimmy_spawned = false; // spawn jimmy gibbs jr once per round
-int panic_target = -1; // legacy
-int lastdoor = -1;
-bool manual_panic = false; // track whether panic was started by game or by ZM
-int script_CommonLimit = -1;
-//bool scope_changed = false;
-//float t_scope_change = 0.0;
-bool survival_activated = false; // track if survival panic button was activated but ZM isn't present
-bool pending_tank = false;
-char targetName_pending[64]; // pending targetname for takeover tank
-char model_pending[64]; // pending model for takeover tank
-int maxhp_pending = 0; // pending max hp for takeover tank
-bool active_looktarget = false; // live update HP for special infected ZM is looking at
-Handle hp_timers[MAXENTITIES+1] = {INVALID_HANDLE, ...}; // prevent extremely frequent glow updates
-bool l4d2_specials = true;
-bool force_started = false;
-bool g_bMapStarted = false;
-bool clients_in_server = false; // track whether HUD needs to be updated
-float t_round_start = 0.0;
-bool natural_first_wait = true; // wait for first natural mob timer reset, when survivors leave saferoom usually.
-bool clients_active[MAXPLAYERS+1] = {false,...};
-bool first_active = false; // track whether ANY player has shown signs of life before starting to offer ZM
-bool dominated[MAXPLAYERS+1] = {false,...};
-bool zm_win_announced = false;
-float clients_t_join[MAXPLAYERS+1] = {0.0,...};
-Handle fq_timer = INVALID_HANDLE;
-Handle ems_hud_timer = INVALID_HANDLE;
-bool recordpos = true; // for tank stutter fix
-
-float t_vomited[MAXPLAYERS+1] = {0.0,...}; // tracking when to spawn horde
-
-bool specials_frozen = false;
-bool ZM_specials_frozen = false;
-
-int autocommon_setting = AUTOCOMMON_OFF;
-bool autocommon_uncommons = false;
-int autocommon_num = 10;
-float t_last_autocommon = 0.0;
-static float autocommon_updaterate = 2.0;
-
-bool holdfinale = true; // hold finale stages until ZM runs out of resources. if not let stages change ASAP
-
-int g_ExplosionSprite = -1;
-
-bool meme_delivered = false;
-//bool lipsync_available = false; // custom funny louis and ellis voice lines
-
-int first_tank_stage = 0;
-int first_tank_price = 0;
-
-static int color_blocked[4] = {255,0,0,128};
-static int color_conditional[4] = {0,0,255,128};
-static int color_allowed[4] = {0,255,0,128};
-static int color_unit_select[4] = {255,255,255,128};
-
-float zm_target_pos[3];
-float zm_spawner_pos[3];
-Address zm_spawner_navArea;
-int zm_spawner_navAttrFlags, zm_spawner_navSpawnAttrs;
-int zm_spawner_state;
-float t_last_spawner_update;
-float t_last_spawner_sound;
-int g_iLaser = 0;
-int g_iHalo = 0;
-
-ConVar g_hCvarMPGameMode;
-char g_sCvarMPGameMode[32];
-
-// Notify ZM about being able to control units with USE
-bool zm_use_notify = false;
-// Notify ZM about being able to spawn zombies automatically by looking at survivors.
-bool zm_flow_notify = false; // "Flow hint"
-// Notify ZM about maximum Tank discount.
-bool zm_discount_notify = false; // "Max tank discount"
-
-ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer, g_hStopInactivity, g_hMaxUniqueSI, g_hRandomizer, g_hNoTanks,
-       g_hUpdateRate, g_hMaxCommons, g_hSpawnMinDistance, g_hBonusCarAlarm, g_hBonusFinaleStage, g_hPanicCost, g_hBonusSurvival, g_hAbilityNoCooldown,
-       g_hCostBoomer, g_hCostSpitter, g_hCostHunter, g_hCostSmoker, g_hCostJockey, g_hMaxWitches, g_hMaxSI, g_hSpecialCooldown,
-       g_hCostCharger, g_hCostTank, g_hCostWitchStatic, g_hCostWitchMoving, g_hCostCommon, g_hCostUncommon, g_hLockSaferoom,
-       g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait, g_hPanicRateMultiplier,
-       g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons, g_hAllowFreeze,
-       g_hGridSearchRadius;
-
-float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fStopInactivity,g_fSpecialCooldown, g_fPanicRateMultiplier,
-g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout, g_fGridSearchRadius;
-
-bool g_bFairQueue, g_bDiscountTank, g_bMemes, g_bClownGlow, g_bAllowFreeze;
-char g_sForceCommon[32];
-
-char g_sZMGamemode[PLATFORM_MAX_PATH]; 
-
-int g_iBankInitial,g_iBankInitialPlayer, g_iPanicCost, g_iVomitCommons;
-
-int costs_SI[9];
-int live_zombie_arr[9];
-int available_SI;
-int available_zombie_arr[9];
-float timestamp_available_arr[9];
-int max_zombie_arr[9];
-int g_iCostCommon, g_iCostUncommon, g_iCostWitchStatic, g_iCostWitchMoving, g_iBonusCarAlarm,
-g_iBonusFinaleStage, g_iBonusSurvival, g_iMaxWitches, g_iMaxSI, g_iMaxUniqueSI;
-
-bool g_bLockSaferoom;
-
-int info_director = -1;
-
-Action Timer_Free_Angry_Zombies(Handle timer, int count)
-{
-     if (!g_bCvarAllow || zm_stage!=ZM_STARTED) return Plugin_Stop;
-     CountCommons();
-     if (live_zombie_arr[ZOMBIECLASS_COMMON]>=count) return Plugin_Stop;
-     count = count - live_zombie_arr[ZOMBIECLASS_COMMON];
-     if (count<=0) return Plugin_Stop;
-     int target = L4D_GetHighestFlowSurvivor();
-     spawn_free_angry_zombies(target,count);
-     return Plugin_Stop;  
-}
 
 public Action L4D_OnGetScriptValueInt(const char[] key, int &retVal)
 {
@@ -352,7 +198,6 @@ int get_rounds(int client=-1, char auth[65] = "")
     return cell.rounds;
 }
 
-bool playcount_increased = false;
 void increase_playcount(int client=-1, char auth[65] = "")
 {
     zm_data cell;
@@ -386,7 +231,7 @@ void reset_fair_queue()
     client_offer = -1;
     roundcount_offer = -1;
     StringMapSnapshot snapshot = g_Steam.Snapshot();
-    char auth[128];
+    static char auth[128];
     int maxKeys = snapshot.Length;
     zm_data cell;
     for (int i = 0; i < maxKeys; i++)
@@ -551,7 +396,7 @@ void create_offer_menu(int client)
 	if (DEBUG) LogMessage("[zm] create_offer_menu");
 	if (menu_offer!=INVALID_HANDLE) CloseHandle(menu_offer);
 	menu_offer = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),offer_menu_Handler);
-	char buffer[64]; 
+	static char buffer[64]; 
     Format(buffer, sizeof(buffer), "%T", "Offer ZM", client);
 	menu_offer.SetTitle(buffer); 
     
@@ -633,8 +478,6 @@ ConVar g_hSayHorde;
 
 float commons_add = 0.0; // in case rate is very slow
 
-int entref_control = INVALID_ENT_REFERENCE; // track the last special infected ZM looked at
-int entref_delete = INVALID_ENT_REFERENCE; // track the last zombie ZM looked at
 
 int g_iGlowList[MAXENTITIES+1] = {INVALID_ENT_REFERENCE, ...}; // track glow children of parent entities
 
@@ -643,7 +486,6 @@ ConVar g_hPrepTimeZM;
 float g_fPrepTimeZM;
 float t_zm_join = 0.0;
 
-int g_iLockedDoor = INVALID_ENT_REFERENCE;
 float saferoom_cooldown = 5.0;
 bool saferoom_locked = false;
 float t_last_join = 0.0;
@@ -668,17 +510,17 @@ Action Timer_load_zm_global_settings(Handle timer)
 }
 
 ArrayList gamemodes;
-char new_gamemode[64] = "";
+static char new_gamemode[64] = "";
 void load_gamemodes()
 {    
     gamemodes = new ArrayList(64);
     gamemodes.PushString("zm_default");
     
-    char path[PLATFORM_MAX_PATH] = "cfg/sourcemod/l4d2_zombie_master/";
+    static char path[PLATFORM_MAX_PATH] = "cfg/sourcemod/l4d2_zombie_master/";
     if (!DirExists(path)) return;
     DirectoryListing dir = OpenDirectory(path);
     if (dir==null) return;
-    char filename[64];
+    static char filename[64];
     while (dir.GetNext(filename, sizeof(filename)))
     {
         TrimString(filename);
@@ -699,8 +541,8 @@ void create_menu_gamemode()
 	if (DEBUG) LogMessage("[zm] create_menu_gamemode");
 	if (menu_gamemode!=INVALID_HANDLE) CloseHandle(menu_gamemode);
 	menu_gamemode = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),gamemode_menu_Handler);
-	char buffer1[8];
-	char buffer2[64];
+	static char buffer1[8];
+	static char buffer2[64];
 	Format(buffer2,sizeof(buffer2),"zm_gamemode %s",g_sZMGamemode);
 	menu_gamemode.SetTitle(buffer2);
 	for(int i = 0; i<gamemodes.Length; i++)
@@ -744,7 +586,7 @@ void create_gamemode_vote()
 {
     if (IsVoteInProgress()) return;
     Menu menu = new Menu(Handle_VoteGamemode);
-    char buffer[128];
+    static char buffer[128];
     Format(buffer,sizeof(buffer), "zm_gamemode -> %s?", new_gamemode);
     menu.SetTitle(buffer);
     menu.AddItem("yes", "Yes");
@@ -776,8 +618,6 @@ Action ZM_Gamemode_Command(int client, int args)
 public void OnPluginStart()
 {
 	if (DEBUG) LogMessage("[zm] OnPluginStart");
-	l4dhooks_updated = GetFeatureStatus(FeatureType_Native,"L4D_NavArea_IsBlocked")==FeatureStatus_Available;
-    if (!l4dhooks_updated) LogMessage("Please update l4dhooks to improve performance.");
 	load_gamemodes();
 	zm_stage = ZM_END;
 	CreateTimer(1.0,Timer_load_zm_global_settings);
@@ -859,7 +699,7 @@ public void OnPluginStart()
     
     g_hSpawnMinDistance = CreateConVar("zm_spawndistance", "400", "ZM minimum spawn distance.",FCVAR_PROTECTED, true, 0.0, true, 10000.0);
     g_hSpawnMinDistance.AddChangeHook(ConVarChanged_Cvars);
-    
+
     g_hGridSearchRadius = CreateConVar("zm_grid_search_radius", "500", "Search radius (units) for GridLib fallback spawn when indicator is blue.",FCVAR_PROTECTED, true, 0.0, true, 5000.0);
     g_hGridSearchRadius.AddChangeHook(ConVarChanged_Cvars);
     
@@ -959,7 +799,7 @@ public void OnPluginStart()
 	g_hForceCommon = CreateConVar("zm_force_common", "", "Force all ZM commons to spawn as this type. Values: riot ceda clown mud road jimmy.",FCVAR_PROTECTED);
 	g_hForceCommon.AddChangeHook(ConVarChanged_Cvars_ZMenu);
 	
-	g_hHoldFinale = CreateConVar("zm_hold_finale", "1", "Hold Finale stages until ZM runs out of resources. Otherwise the Finale will be very short.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
+	g_hHoldFinale = CreateConVar("zm_hold_finale", "1", "Hold Finale stages until ZM runs out of resources. Otherise the Finale will be very short.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 	g_hHoldFinale.AddChangeHook(ConVarChanged_Cvars);
 	
 	g_hZMGamemode = CreateConVar("zm_gamemode", "zm_default", "Specify gamemode cfg inside cfg/sourcemod/l4d2_zombie_master/, or random to randomize.",FCVAR_PROTECTED);
@@ -1136,7 +976,7 @@ void create_main_menu()
 	
 	int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
-	char buffer[64]; 
+	static char buffer[64]; 
 	
 	Format(buffer, sizeof(buffer), "%T", "Zombie Master", zm_language);
 	menu_main.SetTitle(buffer);
@@ -1216,13 +1056,13 @@ void create_common_menu()
 	
 	int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
-	char buffer[64]; 
+	static char buffer[64]; 
     	
     Format(buffer, sizeof(buffer), "%T", "Common", zm_language);
 	menu_common.SetTitle(buffer);
     
-    if (g_iCostCommon>=0 && !valid_uncommon(g_sForceCommon)) Format(buffer,sizeof(buffer),"%T x5 %d", "Common", zm_language, g_iCostCommon*5);
-    else if (g_iCostUncommon>=0) Format(buffer,sizeof(buffer),"%T x5 %d", "Uncommon", zm_language, g_iCostUncommon*5);
+    if (g_iCostCommon>=0 && !valid_uncommon(g_sForceCommon)) Format(buffer,sizeof(buffer),"%T x200 %d", "Common", zm_language, g_iCostCommon*200);
+    else if (g_iCostUncommon>=0) Format(buffer,sizeof(buffer),"%T x200 %d", "Uncommon", zm_language, g_iCostUncommon*200);
     else buffer = "-";
     AddMenuItem(menu_common, "0", buffer);
     
@@ -1266,7 +1106,7 @@ int common_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
         	if (param1!=zm_client || zm_stage>=ZM_END) return 0;
         	switch(param2)
         	{
-            	case 0: ZM_Horde(zm_client,5);
+            	case 0: ZM_Horde(zm_client,200);
             	case 1: ZM_Horde(zm_client,10);
             	case 2: ZM_Horde(zm_client,20);
             	case 3: zm_menu_state=ZM_MENU_UNCOMMON;
@@ -1302,7 +1142,7 @@ void create_uncommon_menu()
 	
 	int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
-	char buffer[64]; 
+	static char buffer[64]; 
 	
 	Format(buffer, sizeof(buffer), "%T", "Uncommon", zm_language);
 	menu_uncommon.SetTitle(buffer);
@@ -1388,7 +1228,7 @@ void create_special_menu()
     
     int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
-	char buffer[64]; 
+	static char buffer[64]; 
     int occupied, max;
     
     Format(buffer, sizeof(buffer), "%T", "Special", zm_language);
@@ -1497,7 +1337,7 @@ void create_boss_menu()
 	
 	int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
-	char buffer[64]; 
+	static char buffer[64]; 
 	
 	Format(buffer, sizeof(buffer), "%T", "Boss", zm_language);
 	menu_boss.SetTitle(buffer);
@@ -1548,8 +1388,8 @@ int boss_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
             	case 0: ZM_Witch(zm_client,WITCH_MOVING);
             	case 1: ZM_Witch(zm_client,WITCH_STATIC);
             	case 2: ZM_Tank(zm_client,0);
-            	case 3: { if (!jimmy_spawned) ZM_Horde(zm_client,1,"jimmy"); }
-            	case 4: { if (!fallen_spawned) ZM_Horde(zm_client,1,"fallen"); }
+            	case 3: { if (!jimmy_spawned) ZM_Horde(zm_client,1,"jimmy");}
+            	case 4: { if (!fallen_spawned) ZM_Horde(zm_client,1,"fallen");}
             	case 6: zm_menu_state=ZM_MENU_MAIN;
         	}
         	RequestFrame(reopen_zm_menu,true);
@@ -1576,7 +1416,7 @@ void create_cleanup_menu()
 	
 	int zm_language = LANG_SERVER;
     if (IsValidClientZM()) zm_language = zm_client;
-    char buffer[64]; 
+    static char buffer[64]; 
 	
 	Format(buffer, sizeof(buffer), "%T", "Cleanup", zm_language);
 	menu_cleanup.SetTitle(buffer);
@@ -1643,7 +1483,7 @@ void create_other_menu()
 	
 	int zm_language = LANG_SERVER;
     if (IsValidClientZM()) zm_language = zm_client;
-    char buffer[64]; 
+    static char buffer[64]; 
 	
 	Format(buffer, sizeof(buffer), "%T", "Other", zm_language);
 	menu_other.SetTitle(buffer);
@@ -1739,7 +1579,7 @@ void create_autocommon_menu()
 	if (menu_autocommon!=INVALID_HANDLE) CloseHandle(menu_autocommon);
 	menu_autocommon = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),autocommon_menu_Handler);
 	
-	char buffer[64]; 
+	static char buffer[64]; 
     int zm_language = LANG_SERVER;
     if (IsValidClientZM()) zm_language = zm_client;
     	
@@ -1784,7 +1624,7 @@ int autocommon_menu_Handler(Menu menu, MenuAction action, int param1, int param2
             	case 2:
             	{
                 	if (g_iCostUncommon<0) autocommon_uncommons=false;
-                	else if (g_iCostCommon<0 || valid_uncommon(g_sForceCommon)) autocommon_uncommons=true;
+                	else if (g_iCostCommon<0) autocommon_uncommons=true;
                 	else autocommon_uncommons=~autocommon_uncommons;
                 	create_autocommon_menu();
                 	return 0;
@@ -1842,7 +1682,7 @@ void set_bank_begin()
     commons_add = 0.0;
 }
 
-char myFormattedString[128];
+static char myFormattedString[128];
 void update_hint(const char[] myString, any ...)
 {
 	if (!IsValidClientZM()) return;
@@ -1852,500 +1692,13 @@ void update_hint(const char[] myString, any ...)
     active_looktarget = false;
 }
 
-// ZM Pointer
-
-void update_ZM_spawner(float target_pos[3], float spawner_pos[3], int state, bool draw=true)
-{
-    if (draw && IsValidClientZM() && g_iLaser>0 && g_iHalo>0)
-    {
-        int color[4];
-        if (state==SPAWNER_RGB_BLOCKED) color = color_blocked;
-        else if (state==SPAWNER_RGB_CONDITIONAL) color = color_conditional;
-        else color = color_allowed;
-        float draw_pos[3];
-        draw_pos = spawner_pos;
-        TE_SetupBeamRingPoint(draw_pos,HULL_DX-2.0,HULL_DX+2.0,g_iLaser,g_iHalo,0,0,g_fUpdateRate*2.0,1.5,0.0,color,0,0);
-        TE_SendToClient(zm_client);
-        draw_pos[2] += HULL_DZ;
-        TE_SetupBeamRingPoint(draw_pos,HULL_DX-2.0,HULL_DX+2.0,g_iLaser,g_iHalo,0,0,g_fUpdateRate*2.0,1.5,0.0,color,0,0);
-        TE_SendToClient(zm_client);
-        draw_pos[2] += HULL_DZ;
-        TE_SetupBeamRingPoint(draw_pos,HULL_DX-2.0,HULL_DX+2.0,g_iLaser,g_iHalo,0,0,g_fUpdateRate*2.0,1.5,0.0,color,0,0);
-        TE_SendToClient(zm_client);
-        
-        float t_now = GetEngineTime();
-        
-        if ( (zm_spawner_state!=state || zm_target_pos[0]!=target_pos[0] || zm_target_pos[1]!=target_pos[1] || zm_target_pos[2]!=target_pos[2]) && (t_now-t_last_spawner_sound)>=2.0)
-        {
-            char sound_name[64];
-            if (state==SPAWNER_RGB_BLOCKED) sound_name = SOUND_BLOCKED;
-            else if (state==SPAWNER_RGB_CONDITIONAL) sound_name = SOUND_CONDITIONAL;
-            else sound_name = "";
-            if (sound_name[0]!=0)
-                EmitSoundToClient(zm_client,sound_name,zm_client,ATTN_TO_SNDLEVEL(SNDATTN_NORMAL),_,_,0.09,_,_,draw_pos,_,true);
-            t_last_spawner_sound = t_now;
-        }
-        t_last_spawner_update = t_now;
-    }
-    zm_target_pos = target_pos;
-    zm_spawner_pos = spawner_pos;
-    zm_spawner_state = state;
-} 
-
-bool can_any_alive_survivor_see(float vecPos[3], bool hint = true)
-{
-   if (DEBUG) LogMessage("[zm] can_any_alive_survivor_see");
-   bool visible = false;
-   
-   float VecPos2[3]; AddVectors(vecPos,{0.0,0.0,HULL_DZ},VecPos2);
-   float VecPos3[3]; AddVectors(vecPos,{-HULL_DX,-HULL_DX,HULL_DZ},VecPos3);
-   float VecPos4[3]; AddVectors(vecPos,{HULL_DX,HULL_DX,HULL_DZ},VecPos4);
-   float VecPos5[3]; AddVectors(vecPos,{HULL_DX,-HULL_DX,HULL_DDZ},VecPos5);
-   float VecPos6[3]; AddVectors(vecPos,{0.0,0.0,HULL_DDZ},VecPos6);
-   
-   // Check line of sight with saferoom door
-   if (!L4D_IsSurvivalMode() && zm_stage<ZM_STARTED && IsValidEntRef(g_iLockedDoor))
-   {
-        int filter_client = -1;
-        if (IsValidClientZM()) filter_client = zm_client;
-        int door = EntRefToEntIndex(g_iLockedDoor);
-        float saferoom_pos[3];
-        L4D_GetEntityWorldSpaceCenter(door,saferoom_pos);
-        saferoom_pos[2] -= 10.0;
-        
-        if (GetVectorDistance(saferoom_pos,vecPos)<=fog_distance)
-        {
-            Handle trace = TR_TraceRayFilterEx(vecPos,saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,filter_client);
-            if(TR_DidHit(trace) && TR_GetEntityIndex(trace)==door) visible = true;
-            delete trace;
-            if (!visible)
-            {
-                trace = TR_TraceRayFilterEx(VecPos2,saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,filter_client);
-                if(TR_DidHit(trace) && TR_GetEntityIndex(trace)==door) visible = true;
-                delete trace;
-            }
-            if (!visible)
-            {
-                trace = TR_TraceRayFilterEx(VecPos3,saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,filter_client);
-                if(TR_DidHit(trace) && TR_GetEntityIndex(trace)==door) visible = true;
-                delete trace;
-            }
-            if (!visible)
-            {
-                trace = TR_TraceRayFilterEx(VecPos4,saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,filter_client);
-                if(TR_DidHit(trace) && TR_GetEntityIndex(trace)==door) visible = true;
-                delete trace;
-            }
-            if (!visible)
-            {
-                trace = TR_TraceRayFilterEx(VecPos5,saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,filter_client);
-                if(TR_DidHit(trace) && TR_GetEntityIndex(trace)==door) visible = true;
-                delete trace;
-            }
-            if (!visible)
-            {
-                trace = TR_TraceRayFilterEx(VecPos6,saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,filter_client);
-                if(TR_DidHit(trace) && TR_GetEntityIndex(trace)==door) visible = true;
-                delete trace;
-            }
-        }
-    }
-    
-    if (visible)
-    {
-        if (hint) update_hint("%T", "Visible saferoom", zm_client);
-        return true;
-    }
-   
-    //Ray traces are (probably) expensive so let's do easy calculations first.
-    float pos[3];
-    bool skip = true;
-    bool skipList[MAXPLAYERS+1] = {true, ...};
-    for( int i = 1; i <= MaxClients; i++ )
-    {
-          if (IsClientInGame(i) && GetClientTeam(i) == TEAM_SURVIVOR && IsPlayerAlive(i))
-          {
-            GetClientAbsOrigin(i,pos);
-            if (GetVectorDistance(pos,vecPos)<fog_distance)
-            {
-                skip=false;
-                skipList[i] = false;
-            }
-          }
-    }
-    
-   if (skip) return false;
-   
-   // Check VecPos2 first - that's most likely to hit.
-   for( int i = 1; i <= MaxClients; i++ )
-   {
-        if (skipList[i]) continue;
-        if (L4D2_IsVisibleToPlayer(i,TEAM_SURVIVOR,3,0,VecPos2)) {visible=true; break;}
-   }
-   if (!visible)
-   {
-        for( int i = 1; i <= MaxClients; i++ )
-        {
-             if (skipList[i]) continue;
-             if (L4D2_IsVisibleToPlayer(i,TEAM_SURVIVOR,3,0,vecPos)) {visible=true; break;}
-             if (L4D2_IsVisibleToPlayer(i,TEAM_SURVIVOR,3,0,VecPos3)) {visible=true; break;}
-             if (L4D2_IsVisibleToPlayer(i,TEAM_SURVIVOR,3,0,VecPos4)) {visible=true; break;}
-             if (L4D2_IsVisibleToPlayer(i,TEAM_SURVIVOR,3,0,VecPos5)) {visible=true; break;}
-             if (L4D2_IsVisibleToPlayer(i,TEAM_SURVIVOR,3,0,VecPos6)) {visible=true; break;}
-        }
-   }
-   
-   if (visible)
-   {
-       if (hint) update_hint("%T", "Visible survivors", zm_client);
-       return true;
-   }
-   return false;
-}
-
-// Find smallest distance to survivor. Check both directions.
-int spawner_nearest_survivor = -1;
-float min_distance_to_survivors(float pos[3], bool store_client=false)
-{
-   if (DEBUG) LogMessage("[zm] min_distance_to_survivors");
-   // d_min is the final value. nav distance and vector distance are calculated independently, and then we think.
-   float d_nav_temp, d_raw_temp;
-   float d_min = -1.0;
-   float d_nav = -1.0;
-   float d_raw = -1.0;
-   //LogMessage("[zm] min_distance_to_survivors START %f", d_min);
-   // -1.0 are invalid values, we will deal with them later
-   float pos2[3];
-   if (store_client) spawner_nearest_survivor = -1;
-   for( int i = 1; i <= MaxClients; i++ )
-   {
-        if (!IsClientInGame(i) || !IsPlayerAlive(i) || GetClientTeam(i)!=TEAM_SURVIVOR) continue;
-        //GetClientAbsOrigin(i,pos2);
-        L4D_GetEntityWorldSpaceCenter(i,pos2);
-        d_raw_temp = GetVectorDistance(pos,pos2);
-        if (d_raw<0.0 || d_raw_temp<d_raw)
-        {
-            d_raw = d_raw_temp;
-            //LogMessage("[zm] d_raw %d %f", i, d_raw);
-            if (store_client) spawner_nearest_survivor = i;
-        }
-        
-        d_nav_temp = L4D2_NavAreaTravelDistance(pos,pos2,false); // can return -1.0 for no path
-        if (d_nav_temp>=0.0 && (d_nav<0.0 || d_nav_temp<d_nav))
-        {
-            d_nav = d_nav_temp;
-            //LogMessage("[zm] d_nav pos->pos2 %d %f", i, d_nav);
-            if (store_client) spawner_nearest_survivor = i;
-        }
-        
-        // If round has started, check if survivors might appear here soon.
-        if (zm_stage==ZM_STARTED)
-        {
-            d_nav_temp = L4D2_NavAreaTravelDistance(pos2,pos,false);
-            if (d_nav_temp>=0.0 && (d_nav<0.0 || d_nav_temp<d_nav))
-            {
-                d_nav = d_nav_temp;
-                //LogMessage("[zm] d_nav pos2->pos %d %f", i, d_nav);
-                if (store_client) spawner_nearest_survivor = i;
-            }
-        }
-   }
-   
-   if (!L4D_IsSurvivalMode())
-   {
-        // Check first saferoom
-        if (zm_stage<ZM_STARTED && IsValidEntRef(g_iLockedDoor))
-        {
-             L4D_GetEntityWorldSpaceCenter(EntRefToEntIndex(g_iLockedDoor),pos2);
-             d_raw_temp = GetVectorDistance(pos,pos2);
-             if (d_raw<0.0 || d_raw_temp<d_raw)
-             {
-                 d_raw = d_raw_temp;
-                 //LogMessage("[zm] d_raw saferoom1 %f", d_raw);
-             }
-             d_nav_temp = L4D2_NavAreaTravelDistance(pos,pos2,false);
-             if (d_nav_temp>=0.0 && (d_nav<0.0 || d_nav_temp<d_nav))
-             {
-                 d_nav = d_nav_temp;
-                 //LogMessage("[zm] d_nav saferoom1 %f", d_nav);
-             }
-        }
-        
-        // Check last saferoom
-        if (IsValidEntity(lastdoor))
-        {
-            L4D_GetEntityWorldSpaceCenter(lastdoor,pos2);
-            d_raw_temp = GetVectorDistance(pos,pos2);
-            if ( d_raw_temp<=75.0 && (d_raw<0.0 || d_raw_temp<d_raw) )
-            {
-                d_raw = d_raw_temp;
-                if (d_raw<d_nav) d_nav = d_raw;
-                //LogMessage("[zm] d_raw saferoom2 %f", d_raw);
-                if (store_client) spawner_nearest_survivor = -1;
-            }
-            d_nav_temp = L4D2_NavAreaTravelDistance(pos,pos2,false);
-            if (d_nav_temp>=0.0 && d_nav_temp<=75.0 && (d_nav<0.0 || d_nav_temp<d_nav))
-            {
-                d_nav = d_nav_temp;
-                if (d_nav<d_raw) d_raw = d_nav;
-                //LogMessage("[zm] d_nav saferoom2 %f", d_nav);
-                if (store_client) spawner_nearest_survivor = -1;
-            }
-        }
-    }
-    
-    if (d_nav>=0.0) d_min = d_nav>d_raw ? d_nav : d_raw;
-    //LogMessage("[zm] d_min %f", d_min);
-    return d_min;
-}
-
-float latest_distance = 0.0;
-int can_ZM_spawn(bool witch = false, bool hint = true)
-{
-	if (DEBUG) LogMessage("[zm] can_ZM_spawn");
-	if (!IsValidClientZM()) return SPAWNER_OTHER;
-	if (zm_stage>=ZM_END) return SPAWNER_OTHER;
-	
-	float vAngles[3],vOrigin[3],vPos[3],vPos_spawner[3];
-	GetClientAbsOrigin(zm_client,vPos);
-	GetClientEyePosition(zm_client,vOrigin);
-	GetClientEyeAngles(zm_client,vAngles);
-	
-    Handle trace = TR_TraceRayFilterEx(vOrigin,vAngles,MASK_SOLID,RayType_Infinite,FilterSpawner,zm_client);
-	if(TR_DidHit(trace)) TR_GetEndPosition(vPos,trace);
-	vPos_spawner = vPos;
-	delete trace;
-    
-    if (TR_PointOutsideWorld(vPos))
-    {
-        if (hint) update_hint("%T", "Bad location", zm_client);
-        update_ZM_spawner(vPos,vPos_spawner,SPAWNER_RGB_BLOCKED,false);
-        return SPAWNER_INVALID;
-    }
-    
-    float check_dist = 500.0;
-    if (witch) check_dist = 50.0;
-    
-    // cycle 0: is analog spawner position in a good place? -> if YES, spawn zombie
-    // cycle 1: is gridlib suggestion in a good place? -> if YES, spawn zombie
-    // cycle 2: give up
-    int num_cycle = 0;
-    float min_distance;
-    while (num_cycle<2)
-    {
-        bool fail = false;
-        int spawner_state = SPAWNER_OK;
-        int spawner_state_RGB = SPAWNER_RGB_ALLOWED;
-        
-        //                                                  bools: anyz los checkground
-        zm_spawner_navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
-        if (zm_spawner_navArea)
-        {
-            zm_spawner_navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(zm_spawner_navArea);
-            zm_spawner_navAttrFlags = L4D_GetNavArea_AttributeFlags(zm_spawner_navArea);
-            float navSize[3], navCenter[3];
-            L4D_GetNavAreaCenter(zm_spawner_navArea, navCenter);
-            L4D_GetNavAreaSize(zm_spawner_navArea, navSize);
-            
-            if ( FloatAbs(vPos_spawner[0]-navCenter[0])>(navSize[0]/2.0) ||
-                 FloatAbs(vPos_spawner[1]-navCenter[1])>(navSize[1]/2.0) || IsObstructed(vPos_spawner) )
-            {
-                L4D_FindRandomSpot(zm_spawner_navArea,vPos_spawner);
-            }
-            else
-            {
-                float z_min = navCenter[2] - FloatAbs(navSize[2])/2.0;
-                if (vPos_spawner[2]<z_min) vPos_spawner[2] = navCenter[2] + FloatAbs(navSize[2])/2.0 + 1.0;
-            }
-        }
-        else
-        {
-            vPos_spawner = vPos;
-            zm_spawner_navSpawnAttrs = 0;
-            zm_spawner_navAttrFlags = 0;
-            if (!witch)
-            {
-                spawner_state = SPAWNER_INVALID;
-                fail = true;
-            }
-        }
-        
-        if (!fail)
-        {
-            latest_distance = -1.0;
-            min_distance = min_distance_to_survivors(vPos_spawner,hint);
-            if (min_distance>=0.0 && num_cycle==0) latest_distance = min_distance;
-            if (zm_stage<ZM_STARTED && spawner_nearest_survivor!=-1) min_distance *= 2.0;
-            if (min_distance>=0.0 && g_fSpawnMinDistance>0.0 && min_distance<g_fSpawnMinDistance)
-            {
-                spawner_state = SPAWNER_DISTANCE;
-                fail = true;
-            }
-            if (min_distance>=0.0 && min_distance<100.0) num_cycle += 1; // less than 100.0 units -> targeting survivor, end early.
-        }
-        if (!fail)
-        {
-            fail = !nav_can_spawn_zombies(zm_spawner_navAttrFlags,zm_spawner_navSpawnAttrs,witch);
-            if (fail) spawner_state = SPAWNER_NAV;
-        }
-        if (!fail && !witch && l4dhooks_updated)
-        {
-            fail = L4D_NavArea_IsBlocked(zm_spawner_navArea,TEAM_INFECTED,false);
-            if (fail) spawner_state = SPAWNER_NAV;
-        }
-        if (!fail)
-        {
-            fail = IsObstructed(vPos_spawner);
-            if (fail) spawner_state = SPAWNER_OTHER;
-        }
-        if (!fail)
-        {
-            bool obscured = ( (zm_spawner_navSpawnAttrs & NAV_SPAWN_OBSCURED) || (zm_spawner_navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
-            if (!obscured)
-            {
-                fail = can_any_alive_survivor_see(vPos_spawner,false);
-                if (fail)
-                {
-                    //fail = !L4D_FindRandomSpot(zm_spawner_navArea,vPos_spawner) || can_any_alive_survivor_see(vPos_spawner,false);
-                    spawner_state = SPAWNER_SIGHT;
-                }
-            }
-        }
-        if (fail)
-        {
-            float vPos_gridlib[3];
-            if (num_cycle<=0 && FindNearbyValidSpawnCell(vPos_spawner,vPos_gridlib,check_dist) && L4D2_NavAreaTravelDistance(vPos_gridlib,vPos_spawner,false)<check_dist)
-            {
-                vPos_spawner = vPos_gridlib;
-                num_cycle +=1;
-                continue;
-            }
-            vPos_spawner = vPos;
-            spawner_state_RGB = SPAWNER_RGB_BLOCKED;
-            switch (spawner_state)
-            {
-                case SPAWNER_DISTANCE:
-                {
-                    if (hint) update_hint("%T %d", "Too close", zm_client, RoundFloat(min_distance));
-                    spawner_state_RGB = SPAWNER_RGB_CONDITIONAL;
-                }
-                case SPAWNER_SIGHT:
-                {
-                    if (hint) update_hint("%T", "Visible survivors", zm_client);
-                    spawner_state_RGB = SPAWNER_RGB_CONDITIONAL;
-                    if (hint && num_cycle>0 && zm_allow_spawns && !zm_flow_notify && IsValidClientZM())
-                        PrintHintText(zm_client, "%t", "Flow hint");
-                }
-                case SPAWNER_OTHER:
-                {
-                    if (hint) update_hint("%T", "Obstacle", zm_client);
-                    spawner_state_RGB = SPAWNER_RGB_CONDITIONAL;
-                }
-                case SPAWNER_INVALID:
-                {
-                    if (hint) update_hint("%T", "Bad location", zm_client);
-                    spawner_state = SPAWNER_INVALID;
-                }
-                default: // SPAWNER_NAV 
-                {
-                    if (hint)
-                    {
-                        if (witch) update_hint("%T", "Witches illegal", zm_client);
-                        else update_hint("%T", "Zombies illegal", zm_client);
-                    }
-                }
-            }
-            update_ZM_spawner(vPos,vPos_spawner,spawner_state_RGB);
-            return spawner_state;
-        }
-        num_cycle += 1;
-        if (num_cycle>1) break; // give up
-    }
-    if (!zm_allow_spawns)
-	{
-    	if (hint) update_hint("%T", "Zombie spawns OFF", zm_client);
-    	update_ZM_spawner(vPos,vPos_spawner,SPAWNER_RGB_CONDITIONAL);
-    	return SPAWNER_OTHER;
-	}
-    update_ZM_spawner(vPos,vPos_spawner,SPAWNER_RGB_ALLOWED);
-    return SPAWNER_OK;
-}
-
-/**
- * When the spawn indicator is blue (SPAWNER_RGB_CONDITIONAL), search nearby GridLib
- * cells for a valid spawn position that isn't visible to or too close to survivors.
- *
- * @param origin    The aimed spawn position to search around
- * @param outPos    Output: the valid nearby cell position, if found
- * @return          true if a valid cell was found, false otherwise
- */
-bool FindNearbyValidSpawnCell(const float origin[3], float outPos[3], float radius = -1.0)
-{
-    if (radius<=0.0) radius = g_fGridSearchRadius;
-    if (radius<=0.0)
-    {
-        LogMessage("[zm] radius %f skipped", radius);
-        return false;
-    }
-    
-    LogMessage("[zm] FindNearbyValidSpawnCell origin=(%.0f,%.0f,%.0f) radius=%.0f", origin[0], origin[1], origin[2], radius);
-   
-    if (!GridLib_IsReady())
-    {
-        LogMessage("[zm] FindNearbyValidSpawnCell: GridLib not ready");
-        return false;
-    }
-
-    int cells[16];
-    int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 16);
-    LogMessage("[zm] FindNearbyValidSpawnCell: %d candidates found", count);
-
-    for (int i = 0; i < count; i++)
-    {
-        // Skip nav-blocked cells (saferooms, player start, etc.)
-        if (GridLib_GetCellSpawnAttributes(cells[i]) & GRIDLIB_NAV_BLOCKED_ZOMBIES)
-            continue;
-
-        float cellPos[3], normal[3];
-        Address navArea;
-        bool obstructed;
-        if (!GridLib_GetCellData(cells[i], cellPos, normal, navArea, obstructed))
-            continue;
-
-        if (obstructed)
-            continue;
-
-        // Distance check against all alive survivors
-        float minDist = min_distance_to_survivors(cellPos);
-        if (minDist >= 0.0 && g_fSpawnMinDistance > 0.0 && minDist < g_fSpawnMinDistance)
-        {
-            LogMessage("[zm] FindNearbyValidSpawnCell: cell %d too close (%.0f)", i, minDist);
-            continue;
-        }
-
-        // Visibility check
-        if (can_any_alive_survivor_see(cellPos, false))
-        {
-            LogMessage("[zm] FindNearbyValidSpawnCell: cell %d visible to survivors", i);
-            continue;
-        }
-
-        LogMessage("[zm] FindNearbyValidSpawnCell: valid cell %d at (%.0f,%.0f,%.0f)", i, cellPos[0], cellPos[1], cellPos[2]);
-        outPos = cellPos;
-        return true;
-    }
-
-    LogMessage("[zm] FindNearbyValidSpawnCell: no valid cell found");
-    return false;
-}
-
 bool saferoom_interacted = false;
 int hits = 0;
 MRESReturn DHook_Saferoom_AcceptInput(int pThis, DHookReturn hReturn, DHookParam hParams)
 {
 	if (!g_bCvarAllow || zm_stage>=ZM_STARTED) return MRES_Ignored;
 	
-	char inputName[256];
+	static char inputName[256];
 	hParams.GetString(1, inputName, sizeof(inputName));
 	int activator = hParams.IsNull(2) ? -1 : hParams.Get(2);
 	int caller = hParams.IsNull(3) ? -1 : hParams.Get(3);	
@@ -2378,7 +1731,7 @@ void check_saferoom()
        g_iLockedDoor = INVALID_ENT_REFERENCE;
        return;
    }
-   
+
    if (g_iLockedDoor==INVALID_ENT_REFERENCE && L4D_HasMapStarted())
    {
         if (DEBUG) LogMessage("[zm] check_saferoom");
@@ -2755,7 +2108,7 @@ public Action L4D2_OnChangeFinaleStage(int &finaleType, const char[] arg)
 {	
 	if (!g_bCvarAllow || zm_stage!=ZM_STARTED || finaleType==FINALE_NONE) return Plugin_Continue;
 	int current = L4D2_GetCurrentFinaleStage();
-	char current_label[32], label[32]; //
+	static char current_label[32], label[32]; //
 	get_finale_label(current,current_label);
 	get_finale_label(finaleType,label);
 	int pending_mob = L4D2Direct_GetPendingMobCount();
@@ -2899,7 +2252,7 @@ void Chase(int target)
 		AcceptEntityInput(entity, "Enable");
 		if (DEBUG) LogMessage("[zm] Chase enabled");
 		panic_target = target;
-		char name[MAX_NAME_LENGTH];
+		static char name[MAX_NAME_LENGTH];
         GetClientName(target,name,sizeof(name));
         update_hint("%T", "Chasing x", zm_client, name);
 	}
@@ -3020,12 +2373,12 @@ void toggle_panic(bool state = true, bool overwrite = false, bool free = false)
     
 }
 
-char g_sHUD_Text[512];
-char g_sHUD_TextArray[4][128];
-char g_sBuffer[128];
-char g_sSpaces[128] = "                                                                                                                               ";
-char g_sData_HUD_ZM_Text[128];
-char g_sData_HUD_TIMER_Text[128];
+static char g_sHUD_Text[512];
+static char g_sHUD_TextArray[4][128];
+static char g_sBuffer[128];
+static char g_sSpaces[128] = "                                                                                                                               ";
+static char g_sData_HUD_ZM_Text[128];
+static char g_sData_HUD_TIMER_Text[128];
 
 void update_EMS_HUD(bool force = false, float delay = 0.1)
 {
@@ -3061,7 +2414,7 @@ Action perform_HUD_update(Handle timer = null)
     if (IsValidClientZM() && zm_stage<ZM_END)
     {
         
-        char panic_str[32];
+        static char panic_str[32];
         if (panic || ZM_finale_announced || (L4D_IsSurvivalMode() && zm_stage==ZM_STARTED) )
         {
             float panic_left;
@@ -3080,10 +2433,10 @@ Action perform_HUD_update(Handle timer = null)
         }
         else Format(panic_str, sizeof(panic_str), "");
         
-        char bank_str[32];
-        char common_str[32];
-        char special_str[32];
-        char witch_str[32];
+        static char bank_str[32];
+        static char common_str[32];
+        static char special_str[32];
+        static char witch_str[32];
         
         if (bank_rate>0.0) Format(bank_str, sizeof(bank_str), "%T %d (%.1f)", "Bank", zm_client, bank, bank_rate);
         else Format(bank_str, sizeof(bank_str), "%T %d", "Bank", zm_client, bank);
@@ -3139,7 +2492,7 @@ Action perform_HUD_update(Handle timer = null)
        
        if (IsValidClient(client_offer))
        {
-           char name[MAX_NAME_LENGTH]; 
+           static char name[MAX_NAME_LENGTH]; 
            GetClientName(client_offer,name,sizeof(name));
            int timeleft = RoundFloat(g_fFairQueueWait - (t_now - t_offer));
            if (timeleft<0) timeleft = 0;
@@ -3334,12 +2687,6 @@ Action zm_new_round(Handle timer = null)
         return Plugin_Stop;
     }
     
-    if (!GridLib_IsReady())
-    {
-        GridLib_Initialize();
-        GridLib_StartPrecomputation();
-    }
-    
     if (g_hRandomizer.IntValue==2) random_gamemode();
     
     set_zm_stage(ZM_NEWROUND,true);
@@ -3432,7 +2779,6 @@ Action zm_new_round(Handle timer = null)
     
     if (infectedbots_enable) SetConVarInt(infectedbots_enable, 0);
     if (shoot_alert_enable) SetConVarInt(shoot_alert_enable, 0);
-    if (clown_world_enable && strcmp(g_sZMGamemode,"zm_clowns",false)==0) SetConVarInt(clown_world_enable, 1);
     if (jukebox_horde) SetConVarInt(jukebox_horde, 0);
     
     safezone_navAreaId = -1;
@@ -3527,7 +2873,7 @@ void sanity_check_available(int zClass, float t_now = -1.0)
     else if ( available_zombie_arr[zClass]<max_zombie_arr[zClass] &&
               t_now>(timestamp_available_arr[zClass]+0.15) ) //timers can jitter
     {
-        char zClassName[32]; 
+        static char zClassName[32]; 
         get_zombieclass_name(zClass,zClassName);
         LogMessage("[zm] unexpected sanity_check %s fallthrough, report to mod authors", zClassName);
         add_available_zombie(zClass);
@@ -3544,7 +2890,7 @@ void create_timer_add_available_zombie(float delay,int zClass, int round, int co
         add_available_zombie(zClass);
         return;
     }
-    char zClassName[32]; 
+    static char zClassName[32]; 
     get_zombieclass_name(zClass,zClassName);
     if (DEBUG) LogMessage("[zm] create_timer_add_available_zombie %d %s, delay: %f", count, zClassName, delay);
     timestamp_available_arr[zClass] = GetEngineTime() + delay;
@@ -3573,7 +2919,7 @@ void add_available_zombie(int zClass, int add=1, bool draw = true)
     
     if (zm_stage>=ZM_PREP)
     {
-        char zClassName[32]; 
+        static char zClassName[32]; 
         get_zombieclass_name(zClass,zClassName);
         if (DEBUG) LogMessage("[zm] add_available_zombie %d %s", add, zClassName);
     }
@@ -3802,7 +3148,7 @@ void remove_ZM_glow(int entity)
     if (entref_glow==INVALID_ENT_REFERENCE) return;
     if ( IsValidEntRef(entref_glow) && HasEntProp(entref_glow, Prop_Send, "m_CollisionGroup") )
     {
-       char class[32];
+       static char class[32];
        GetEntityClassname(entref_glow, class, sizeof(class));
        if (strcmp(class,"prop_dynamic_ornament")==0)
        {
@@ -3947,7 +3293,7 @@ void CreateZMGlow(int target, bool red = false)
 	int eFlags = GetEdictFlags(target);
 	if ((eFlags & FL_EDICT_ALWAYS)<=0) SetEdictFlags(target, eFlags | FL_EDICT_ALWAYS);
 	
-	char sModelName[64];
+	static char sModelName[64];
 	GetEntPropString(target, Prop_Data, "m_ModelName", sModelName, sizeof(sModelName));
 	
 	SetEntityModel(glow, sModelName);
@@ -4016,7 +3362,7 @@ void update_glow(int i)
     }
     else
     {
-        char class[16];
+        static char class[16];
         GetEntityClassname(i,class,sizeof(class));
         if (strcmp(class,"witch")==0) update_zm_glow(i);
     }
@@ -4083,7 +3429,7 @@ void update_zm_glow(int parent)
         	}
     	}
 	    
-       	char targetName[64];
+       	static char targetName[64];
         GetEntPropString(parent, Prop_Data, "m_iName", targetName, sizeof(targetName));
        	bool flashing = false;
        	if (EntIndexToEntRef(parent)==entref_control || strcmp(targetName,"zm_unit_spotted")==0 ) flashing = true;
@@ -4102,7 +3448,7 @@ void UpdateSurvivorGlow(int client)
     
     if (DEBUG)
     {
-        char name[MAX_NAME_LENGTH]; 
+        static char name[MAX_NAME_LENGTH]; 
         GetClientName(client,name,sizeof(name));
         LogMessage("[zm] UpdateSurvivorGlow %s alive %d SurvivorGlow %d",name,alive,survivor_glow);
     }
@@ -4138,7 +3484,7 @@ Action OnTakeDamageWitch(int victim, int &attacker, int &inflictor, float &damag
 {
     if (damage>32.0)
     {
-        char class[32];
+        static char class[32];
         GetEntityClassname(inflictor, class, sizeof(class));
         switch (class[0])
         {
@@ -4209,10 +3555,10 @@ Action ZMControlSI(int client, int args)
             zm_deathPos = vEye;
             zm_deathAngles = vAngles;
             
-            char sModelName[64];
+            static char sModelName[64];
             GetEntPropString(zm_client, Prop_Data, "m_ModelName", sModelName, sizeof(sModelName));
             
-            char targetName[64];
+            static char targetName[64];
             GetEntPropString(zm_client, Prop_Data, "m_iName", targetName, sizeof(targetName));
             if (strcmp(targetName,"zm_control")==0) targetName = "";
             else if (strcmp(targetName,"zm_unit_control")==0) targetName = "zm_unit";
@@ -4277,7 +3623,7 @@ Action ZMControlSI(int client, int args)
         return Plugin_Continue;
     }
     
-    char class[32];
+    static char class[32];
   	GetEntityClassname(entity, class, sizeof(class));
   	if (strcmp(class,"player")==0 && L4D2_GetSurvivorVictim(entity)<=0 )
   	{
@@ -4296,7 +3642,7 @@ Action ZMControlSI(int client, int args)
          int fFlags = GetEntProp(entity, Prop_Data, "m_fFlags");
          zClass = GetEntProp(entity, Prop_Send, "m_zombieClass");
          
-         char targetName[64];
+         static char targetName[64];
          GetEntPropString(entity, Prop_Data, "m_iName", targetName, sizeof(targetName));
          if (strcmp(targetName,"zm_unit")==0) DispatchKeyValue(entity, "targetname", "zm_unit_dead");
          else
@@ -4305,7 +3651,7 @@ Action ZMControlSI(int client, int args)
              if (targetName[0]==0) DispatchKeyValue(zm_client, "targetname", "zm_control");
          }
          
-         char sModelName[64];
+         static char sModelName[64];
          GetEntPropString(entity, Prop_Data, "m_ModelName", sModelName, sizeof(sModelName));
          
          remove_ZM_glow(entity);
@@ -4487,15 +3833,6 @@ Action ZM_Chase_ZM(int client, int args)
     return Plugin_Continue;
 }
 
-public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
-{
-    if (!g_bCvarAllow || command[0]==0) return Plugin_Continue;
-    if (!IsValidClient(client) || IsFakeClient(client)) return Plugin_Continue;
-    first_active = true;
-	set_client_active(null,client);
-	return Plugin_Continue;
-}
-
 public void OnClientSayCommand_Post(int client, const char[] command, const char[] sArgs)
 {
     if (!g_hSayHorde.BoolValue || L4D_IsInIntro()>0) return;
@@ -4522,13 +3859,6 @@ public void OnClientSayCommand_Post(int client, const char[] command, const char
    	{
    		CreateTimer(GetRandomFloat(0.1,10.0),Delayed_Free_Angry_Zombie,EntIndexToEntRef(client));
    	}
-}
-
-Action Delayed_Free_Angry_Zombie(Handle timer, int entref)
-{
-     if (!IsValidEntRef(entref)) return Plugin_Stop;
-     spawn_free_angry_zombies(EntRefToEntIndex(entref),1,true);
-     return Plugin_Stop;  
 }
 
 Action CountCommons(Handle timer = null, bool fast = true)
@@ -4596,11 +3926,11 @@ Action random_meme(Handle timer = null)
     }
 	
 	listplayers.Sort(Sort_Random, Sort_Integer);
-	char model[PLATFORM_MAX_PATH];
-    char sound[PLATFORM_MAX_PATH];
-    char soundFake[PLATFORM_MAX_PATH];
+	static char model[PLATFORM_MAX_PATH];
+    static char sound[PLATFORM_MAX_PATH];
+    static char soundFake[PLATFORM_MAX_PATH];
     //char vcdPath[PLATFORM_MAX_PATH];
-    char PathFake[PLATFORM_MAX_PATH];
+    static char PathFake[PLATFORM_MAX_PATH];
 	for(int x = 0; x < listplayers.Length; x++)
     {
         i = listplayers.Get(x);
@@ -4645,7 +3975,11 @@ void start_zm_round(bool play_sound = true)
  if (zm_stage<ZM_STARTED)
  {
      PrintToChatAll("[zm] %t", "Round started");
-     if (IsValidClientZM()) PrintHintText(zm_client, "%t", "Round started");
+     if (IsValidClientZM())
+     {
+         PrintHintText(zm_client, "%t", "Round started");
+         freeze_player(zm_client,false,TEAM_INFECTED);
+     }
      update_hint("%T", "Round started", zm_client);
      if (play_sound) EmitSoundToAll(SOUND_START);
      t_round_start = GetEngineTime();
@@ -4660,7 +3994,6 @@ void start_zm_round(bool play_sound = true)
      CountClients();
      update_EMS_HUD(true,0.0);
      if (shoot_alert_enable) ServerCommand("l4d2_shoot_alert_common_resetcvars");
-     //if (clown_world_enable) ServerCommand("clown_world_resetcvars");
  }
  zm_allow_spawns = true;
  set_zm_stage(ZM_STARTED);
@@ -4700,7 +4033,7 @@ void update_ZM_looktarget_HP(int health_manual = -1)
      if (health>0)
      {
         int zClass = GetEntProp(entref_control, Prop_Send, "m_zombieClass");
-        char zClassName[32]; 
+        static char zClassName[32]; 
         get_zombieclass_name(zClass,zClassName);
         int max_health = GetEntProp(entref_control,Prop_Data,"m_iMaxHealth");
   	    update_hint("%T", "Selected Special", zm_client, zClassName, health, max_health);
@@ -4740,7 +4073,7 @@ bool TraceFilter_Looktarget(int entity, int contentsMask)
 {
 	if (entity==zm_client || entity<=0) return false;
 	if (IsValidClient(entity) && IsPlayerAlive(entity)) return true;
-	char class[32];
+	static char class[32];
     GetEntityClassname(entity, class, sizeof(class));
     switch (class[0])
     {
@@ -4750,7 +4083,6 @@ bool TraceFilter_Looktarget(int entity, int contentsMask)
 	return false;
 }
 
-int entref_lastlook = INVALID_ENT_REFERENCE;
 void update_ZM_looktarget(bool draw = true)
 {
    if (!IsValidClientZM())
@@ -4774,23 +4106,22 @@ void update_ZM_looktarget(bool draw = true)
    int health = GetEntProp(target,Prop_Data,"m_iHealth");
    if (health<=0) return;
    entref_lastlook = EntIndexToEntRef(target);
-   char class[32];
+   static char class[32];
    GetEntityClassname(target, class, sizeof(class));
-   if (class[0]=='i' || class[0]=='w' || class[0]=='p')
+   if ( strcmp(class,"infected")==0 || strcmp(class,"witch")==0 || (strcmp(class,"player")==0 && GetClientTeam(target)==TEAM_INFECTED && IsFakeClient(target)) )
    {
-       if ( strcmp(class,"infected")==0 || strcmp(class,"witch")==0 || (strcmp(class,"player")==0 && GetClientTeam(target)==TEAM_INFECTED && IsFakeClient(target)) )
-       {
-      	 int entref_temp = EntIndexToEntRef(target);
-      	 if (draw && entref_temp!=entref_delete)
-      	 {
-      	    float vOrigin[3];
-      	    L4D_GetEntityWorldSpaceCenter(target,vOrigin);
-          	TE_SetupBeamRingPoint(vOrigin,50.0,0.0,g_iLaser,g_iHalo,0,0,1.0,1.5,0.0,color_unit_select,0,0);
-            TE_SendToClient(zm_client);
-      	 }
-      	 entref_delete = entref_temp;
-      	 if (strcmp(class,"player")==0 && !L4D_IsPlayerIncapacitated(target)) update_entref_control(entref_temp,draw);
-       }
+  	 int entref_temp = EntIndexToEntRef(target);
+  	 if (draw && entref_temp!=entref_delete)
+  	 {
+  	    float vOrigin[3];
+  	    L4D_GetEntityWorldSpaceCenter(target,vOrigin);
+      	TE_SetupBeamRingPoint(vOrigin,50.0,0.0,g_iLaser,g_iHalo,0,0,1.0,1.5,0.0,color_unit_select,0,0);
+        TE_SendToClient(zm_client);
+  	 }
+  	 entref_delete = entref_temp;
+  	 if (strcmp(class,"player")==0 && !L4D_IsPlayerIncapacitated(target)) update_entref_control(entref_temp,draw);
+  	 
+   
    }
    
 }
@@ -4949,7 +4280,7 @@ Action zm_autocommon_mode(int client, int args)
     if (!g_bCvarAllow || !IsValidClientZM() || zm_client!=client) return Plugin_Continue;
     if (args>0)
     {
-        char type[32];
+        static char type[32];
         GetCmdArg(1, type, sizeof(type));
         TrimString(type);
         if (strcmp(type,"always",false)==0) autocommon_setting = AUTOCOMMON_ALWAYS;
@@ -5147,7 +4478,7 @@ Action zm_update(Handle timer = null)
     float witch_pos[3];
     int entity = -1;
     int counted_witches = 0;
-    char targetName[20];
+    static char targetName[20];
     while ( ((entity = FindEntityByClassname(entity, "witch")) != -1) )
     {
     	 if (!IsValidEntity(entity)) continue;
@@ -5312,8 +4643,6 @@ public void OnAllPluginsLoaded()
 	if (jukebox_horde) SetConVarFlags(jukebox_horde, GetConVarFlags(jukebox_horde) & ~FCVAR_NOTIFY);
 	shoot_alert_enable = FindConVar("l4d2_shoot_alert_common_enable");
 	if (shoot_alert_enable) SetConVarFlags(shoot_alert_enable, GetConVarFlags(shoot_alert_enable) & ~FCVAR_NOTIFY);
-	clown_world_enable = FindConVar("clown_world_enable");
-	if (clown_world_enable) SetConVarFlags(clown_world_enable, GetConVarFlags(clown_world_enable) & ~FCVAR_NOTIFY);
 	SetCvarsZM();
 }
 
@@ -5490,8 +4819,8 @@ Action ZM_MOTD(int client, int args)
         PrintToConsole(client, "Compatible mp_gamemode: coop l4d1coop survival l4d1survival.");
         PrintToConsole(client, "sm_cvar zm_gamemode sets the .cfg file that is read in cfg/sourcemod/l4d2_zombie_master/.");
         
-        char name[64];
-        char value[64];
+        static char name[64];
+        static char value[64];
         bool isCommand;
         int flags;
         ConVar cvar;
@@ -5525,7 +4854,7 @@ Action ZM_MOTD(int client, int args)
 
 void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-	char sGameMode[32];
+	static char sGameMode[32];
 	g_hCvarMPGameMode.GetString(sGameMode, sizeof(sGameMode));
 	if(strcmp(g_sCvarMPGameMode, sGameMode, false) == 0) return;
 	g_sCvarMPGameMode = sGameMode;
@@ -5549,10 +4878,9 @@ void load_zm_gamemode()
         random_gamemode();
         return;
     }
-    char command[PLATFORM_MAX_PATH];
+    static char command[PLATFORM_MAX_PATH];
     Format(command, sizeof(command), "exec sourcemod/l4d2_zombie_master/%s", g_sZMGamemode);
     ServerCommand(command);
-    if (clown_world_enable && strcmp(g_sZMGamemode,"zm_clowns",false)==0) SetConVarInt(clown_world_enable, 1);
 }
 
 void ConVarChanged_Cvars_Gamemode(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -5571,8 +4899,6 @@ void on_changed_rules()
 {
    GetCvars();
    SetCvarsZM();
-   if (g_iCostUncommon<0) autocommon_uncommons=false;
-   else if (g_iCostCommon<0 || valid_uncommon(g_sForceCommon)) autocommon_uncommons=true;
    if (g_bCvarAllow && IsValidClientZM())
    {
       update_menus();
@@ -5592,13 +4918,13 @@ void ConVarChanged_Cvars(ConVar convar, const char[] oldValue, const char[] newV
 
 void GetCvars()
 {
-    
+
     if (DEBUG) LogMessage("[zm] GetCvars");
     g_fUpdateRate = g_hUpdateRate.FloatValue;
     ResetTimer();
-    
+
     DEBUG = g_hCvarDebug.BoolValue || DEBUG;
-    
+
     g_fBankRateBase = g_hBankRateBase.FloatValue;
     g_fBankRatePlayer = g_hBankRatePlayer.FloatValue;
     g_iBankInitial = g_hBankInitial.IntValue;
@@ -5607,7 +4933,7 @@ void GetCvars()
     g_fSpawnMinDistance = g_hSpawnMinDistance.FloatValue;
     g_fGridSearchRadius = g_hGridSearchRadius.FloatValue;
     g_fStopInactivity = g_hStopInactivity.FloatValue;
-    
+
     costs_SI[ZOMBIECLASS_BOOMER] = g_hCostBoomer.IntValue;
     costs_SI[ZOMBIECLASS_SPITTER] = g_hCostSpitter.IntValue;
     costs_SI[ZOMBIECLASS_HUNTER] = g_hCostHunter.IntValue;
@@ -5622,50 +4948,50 @@ void GetCvars()
     g_iMaxWitches = g_hMaxWitches.IntValue;
     g_iMaxSI = g_hMaxSI.IntValue;
     g_iMaxUniqueSI = g_hMaxUniqueSI.IntValue;
-    
+
     g_iBonusCarAlarm = g_hBonusCarAlarm.IntValue;
     g_iBonusFinaleStage = g_hBonusFinaleStage.IntValue;
     g_iBonusSurvival = g_hBonusSurvival.IntValue;
-    
+
     g_iPanicCost = g_hPanicCost.IntValue;
     g_fPanicDuration = g_hPanicDuration.FloatValue;
-    
+
     g_bLockSaferoom = g_hLockSaferoom.BoolValue;
-    
+
     g_fPrepTimeZM = g_hPrepTimeZM.FloatValue;
-    
+
     g_fSpecialCooldown = g_hSpecialCooldown.FloatValue;
     g_fTankCooldown = g_hTankCooldown.FloatValue;
     g_fWitchCooldown = g_hWitchCooldown.FloatValue;
     g_fCommonRate = g_hCommonRate.FloatValue;
-    
+
     g_fMinFinaleStage = g_hMinFinaleStage.FloatValue;
-    
+
     g_bFairQueue = g_hFairQueue.BoolValue;
     if (!g_bFairQueue) fair_exhausted = true;
     g_fFairQueueWait = g_hFairQueueWait.FloatValue;
     g_fMenuTimeout = g_hMenuTimeout.FloatValue;
-    
+
     g_bDiscountTank = g_hDiscountTank.BoolValue;
     g_bMemes = g_hMemes.BoolValue;
     g_bClownGlow = g_hClownGlow.BoolValue;
-    
+
     g_hForceCommon.GetString(g_sForceCommon, sizeof(g_sForceCommon));
     TrimString(g_sForceCommon);
-    
+
     holdfinale = g_hHoldFinale.BoolValue;
-    
+
     g_iVomitCommons = g_hVomitCommons.IntValue;
-    
+
     g_bAllowFreeze = g_hAllowFreeze.BoolValue;
     if (!g_bAllowFreeze) ZM_specials_frozen = false;
-    
+
     if (g_iCostUncommon<0) autocommon_uncommons = false;
     else if (g_iCostCommon<0) autocommon_uncommons = true;
     if (autocommon_num>g_hMaxCommons.IntValue) autocommon_num = g_hMaxCommons.IntValue;
-    
+
     g_fPanicRateMultiplier = g_hPanicRateMultiplier.FloatValue;
-    
+
 }
 
 void zm_fake_gamemode()
@@ -5725,7 +5051,7 @@ Action JoinZM(int client, int args)
   		{
       		if (IsValidClient(client_offer))
       		{
-          		char name[MAX_NAME_LENGTH]; 
+          		static char name[MAX_NAME_LENGTH]; 
                 GetClientName(client_offer,name,sizeof(name));
                 int timeleft = RoundFloat(g_fFairQueueWait - (GetEngineTime() - t_offer));
                 if (timeleft<0) timeleft = 0;
@@ -5760,7 +5086,7 @@ Action JoinZM(int client, int args)
   	//SetVariantString("function InputKill() {return plugin_shouldKill}");
    	//AcceptEntityInput(client, "RunScriptCode");
     
-    char name[MAX_NAME_LENGTH]; 
+    static char name[MAX_NAME_LENGTH]; 
     GetClientName(client,name,sizeof(name));
     int playcount = get_rounds(client);
     PrintToChatAll("[zm] %t (%d)", "ZM joined", name, playcount);
@@ -5834,7 +5160,7 @@ void QuitZM(int client, bool print = true)
 	       FindConVar("mp_gamemode").ReplicateToClient(zm_client,g_sCvarMPGameMode);
            if (print)
            {
-               char name[MAX_NAME_LENGTH]; 
+               static char name[MAX_NAME_LENGTH]; 
                GetClientName(client,name,sizeof(name));
                PrintToChatAll("[zm] %t", "ZM quit", name);
                update_t_zm_activity();
@@ -6112,7 +5438,7 @@ Action saferoom_disturb(Handle timer, float vPos[3])
 {
     if (!IsValidEntRef(g_iLockedDoor) || zm_stage>=ZM_STARTED) return Plugin_Stop;
     int random = GetRandomInt(1,3);
-    char sound[64];
+    static char sound[64];
     switch (random)
     {
         case 1: {sound=SOUND_DOORSLAM;}
@@ -6132,7 +5458,7 @@ void CreateShake(float intensity, float range, float vPos[3])
 {
 	if( !g_bMapStarted ) return;
     
-    char sTemp[8];
+    static char sTemp[8];
     
     if (!IsValidEntRef(entref_shake))
     {
@@ -6182,7 +5508,7 @@ Action Open_Saferoom(Handle timer, bool scary = false)
 			CreateShake(50.0,5000.0,vPos);
 			CreateShake(50.0,5000.0,vPos);
 			
-			char sound_explosion[64];
+			static char sound_explosion[64];
 			switch (GetRandomInt(1,3))
 			{
     			case 1: sound_explosion = EXPLOSION1;
@@ -6191,7 +5517,7 @@ Action Open_Saferoom(Handle timer, bool scary = false)
 			}
 			EmitSoundToAll(sound_explosion,g_iLockedDoor,_,SNDLEVEL_GUNFIRE,_,SNDVOL_NORMAL);
 			
-			char sModel[64];
+			static char sModel[64];
         	GetEntPropString(g_iLockedDoor, Prop_Data, "m_ModelName", sModel, sizeof(sModel));
 			GetEntPropVector(g_iLockedDoor, Prop_Data, "m_vecAbsOrigin", vPos);
             GetEntPropVector(g_iLockedDoor, Prop_Send, "m_angRotation", vAng);
@@ -6307,7 +5633,7 @@ Action zm_start(int client, int args)
             if (zm_stage<ZM_STARTED && IsValidEntRef(g_iLockedDoor) && !force_started)
             {
                 int random = GetRandomInt(1,5);
-                char sound[64];
+                static char sound[64];
                 switch (random)
                 {
                     case 1: {sound=SOUND_SCARY1;}
@@ -6363,112 +5689,6 @@ Action ZM_Menu(int client, int args)
     return Plugin_Continue;
 }
 
-Action ZM_Spawn_Horde(int client, int args)
-{
-    if (!g_bCvarAllow || client!=zm_client) return Plugin_Continue;
-    int count = 10;
-    bool angry = false;
-    bool flow = false;
-    char type[16] = "";
-    if (args>0)
-    {
-        char arg[16] = "";
-        GetCmdArg(1,arg,sizeof(arg));
-        process_horde_arg(count,type,angry,flow,arg);
-    	if (args>1) {GetCmdArg(2,arg,sizeof(arg)); process_horde_arg(count,type,angry,flow,arg);}
-    	if (args>2) {GetCmdArg(3,arg,sizeof(arg)); process_horde_arg(count,type,angry,flow,arg);}
-    	if (args>3) {GetCmdArg(4,arg,sizeof(arg)); process_horde_arg(count,type,angry,flow,arg);}
-    }
-    ZM_Horde(client,count,type,angry,flow);
-    return Plugin_Continue;
-}
-
-int get_spawner_target_survivor(bool flow = false, int spawner_state = SPAWNER_DISTANCE)
-{
-    if (!zm_allow_spawns) return -1;
-    int target_client = -1;
-    if (flow) target_client = L4D_GetHighestFlowSurvivor();
-    else
-    {
-        int lastlook = -1;
-        if (IsValidClientZM())
-        {
-            int observermode = GetEntProp(zm_client, Prop_Send, "m_iObserverMode");
-            if (observermode==4 || observermode==5)
-            {
-                lastlook = GetEntPropEnt(zm_client, Prop_Send, "m_hObserverTarget");
-                if (IsValidClient(lastlook) && IsPlayerAlive(lastlook) && GetClientTeam(lastlook)==TEAM_SURVIVOR)
-                    target_client = lastlook;
-            }
-        }
-        if (target_client<0 && IsValidEntRef(entref_lastlook))
-        {
-            lastlook = EntRefToEntIndex(entref_lastlook);
-            if (IsValidClient(lastlook) && IsPlayerAlive(lastlook) && GetClientTeam(lastlook)==TEAM_SURVIVOR)
-                target_client = lastlook;
-        }
-        
-        if (target_client<0 && spawner_state!=SPAWNER_OK)
-	    {
-            target_client = spawner_nearest_survivor;
-            float test_pos[3];
-            test_pos = zm_spawner_pos;
-            test_pos[2] += 25.0;
-           	if (latest_distance<0.0 || latest_distance>250.0 || 
-           	!IsValidClient(target_client) || !IsPlayerAlive(target_client) ||
-           	( latest_distance>50.0 && !L4D2_IsVisibleToPlayer(target_client,TEAM_SURVIVOR,3,0,test_pos) ) )
-           	{
-               	target_client = -1;
-           	}
-        }
-        
-        if (target_client<0)
-	    {
-        	update_ZM_looktarget();
-        	if (IsValidEntRef(entref_lastlook)) lastlook = EntRefToEntIndex(entref_lastlook);
-        	if (IsValidClient(lastlook) && GetClientTeam(lastlook)==TEAM_SURVIVOR && IsPlayerAlive(lastlook))
-            	target_client = lastlook;	
-        }
-       	
-   	}
-	
-	if (!IsValidClient(target_client) || !IsPlayerAlive(target_client) || GetClientTeam(target_client)!=TEAM_SURVIVOR)
-        	return -1;
-	return target_client;
-}
-
-Action clown_check_rush(Handle timer, int entref)
-{
-    if (!IsValidEntRef(entref)) return Plugin_Stop;
-    if (!HasEntProp(entref, Prop_Send, "m_mobRush")) return Plugin_Stop;
-    if (panic) return Plugin_Continue;
-    bool glow = false;
-    if ((GetEntProp(entref, Prop_Send, "m_mobRush"))>0) glow = true;
-    else
-    {
-       	int looktarget = GetEntPropEnt(entref, Prop_Send, "m_clientLookatTarget");
-       	if (IsValidClient(looktarget) && IsPlayerAlive(looktarget) && GetClientTeam(looktarget)==TEAM_SURVIVOR)
-       	{
-           	float pos[3];
-           	L4D_GetEntityWorldSpaceCenter(entref,pos);
-           	pos[2] += 36.0;
-           	glow = L4D2_IsVisibleToPlayer(looktarget,TEAM_SURVIVOR,3,0,pos);
-       	}
-    }
-    if (glow)
-    {
-       	int eFlags = GetEdictFlags(entref);
-        if ((eFlags & FL_EDICT_ALWAYS)<=0) SetEdictFlags(entref, eFlags | FL_EDICT_ALWAYS);
-       	L4D2_SetEntityGlow(entref,L4D2Glow_Constant,3000,0,{160,40,40},false);
-       	return Plugin_Stop;
-   	}
-    return Plugin_Continue;
-}
-
-void get_random_xy_orientation(float angle[3])
-{
-    angle[1] = GetRandomFloat(-180.0,180.0);
-}
 
 //Action Unfreeze_Zombie(Handle timer, int entref)
 //{
@@ -6477,523 +5697,12 @@ void get_random_xy_orientation(float angle[3])
 //    return Plugin_Stop;
 //}
 
-void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bool flow = false, bool hint = true)
-{
-	if (!g_bCvarAllow) return;
-	if (!(client==zm_client || client==0)) return;
-	
-	if (DEBUG) LogMessage("[zm] ZM_Horde");
-	
-	if (hint && is_zm_spamming()) return;
-	
-	CountCommons(null,false);
-	if (live_zombie_arr[ZOMBIECLASS_COMMON]>=max_zombie_arr[ZOMBIECLASS_COMMON])
-	{
-        if (hint) update_hint("%T", "Limit reached", zm_client);
-        return;
-	}
-	
-	if (!is_zombie_available_cooldown(ZOMBIECLASS_COMMON))
-	{
-        if (hint) update_hint("%T", "Cooldown active", zm_client);
-        return;
-	}
-	
-	if ((live_zombie_arr[ZOMBIECLASS_COMMON]+count)>max_zombie_arr[ZOMBIECLASS_COMMON])
-	   count = max_zombie_arr[ZOMBIECLASS_COMMON]-live_zombie_arr[ZOMBIECLASS_COMMON];
-	if (count>available_zombie_arr[ZOMBIECLASS_COMMON]) count = available_zombie_arr[ZOMBIECLASS_COMMON];
-	
-	g_iEntities = GetEntityCountEx();
-	if(count<=0 || (g_iEntities+count)>=ENTITY_SAFER_LIMIT)
-	{
-	   if (hint) update_hint("%T", "Limit reached", zm_client);
-	   return;
-    }
-    
-    if (IsValidClientZM()) update_t_zm_activity();
-    
-    TrimString(type);
-    bool force_type = false;
-    if (g_sForceCommon[0]!=0 && valid_uncommon(g_sForceCommon))
-    {
-        strcopy(type,sizeof(type),g_sForceCommon);
-        force_type = true;
-    }
-    else if (type[0]!=0 && !valid_uncommon(type)) strcopy(type,sizeof(type),"");
-	
-	if (g_iCostCommon<0 && type[0]==0) strcopy(type,sizeof(type),"random");
-	else if (type[0]!=0 && g_iCostUncommon<0) strcopy(type,sizeof(type),"");
-	
-	if (strcmp(type,"jimmy",false)==0)
-	{
-    	if (jimmy_spawned && !force_type) return;
-    	if (!force_type) count = 1;
-	}
-	else if (strcmp(type,"fallen",false)==0)
-   	{
-       	if (fallen_spawned && !force_type) return;
-       	if (!force_type) count = 1;
-   	}
-   	
-   	TrimString(type);
-	
-	int temp_cost = -1;
-	bool price_angry = angry && ( !panic && !ZM_finale_announced && !L4D_IsSurvivalMode() );
-	switch (price_angry)
-	{
-       	case false: // Not angry - regular price
-       	{
-           	if (type[0]!=0) temp_cost = g_iCostUncommon;
-           	else temp_cost = g_iCostCommon;
-       	}
-       	default: // Angry - more expensive. Doubly more expensive if angry uncommon.
-       	{
-           	if (type[0]!=0) temp_cost = 2*g_iCostUncommon;
-           	else if (g_iCostCommon>=0) temp_cost = g_iCostUncommon; // disables aggro common if commons are disabled
-       	}
-	}
-	
-	if (temp_cost<0)
-	{
-    	if (hint) update_hint("%T", "Limit reached", zm_client);
- 	    return;
-	}
-	
-	int max_count = RoundToFloor(float(bank)/(temp_cost));
-	if (count>max_count) count = max_count;
-	
-	if ( count<=0 || (bank-temp_cost*count)<0 )
-	{
-       	if (hint) update_hint("%T", "afford_common", zm_client);
-       	return;
-	}
-	
-	int target_client = -1;
-	bool use_randompz = false;
-	int spawner_state;
-    if (flow) spawner_state = SPAWNER_DISTANCE;
-    else spawner_state = can_ZM_spawn();
-    if (spawner_state!=SPAWNER_OK)
-    {
-        target_client = get_spawner_target_survivor(flow,spawner_state);
-	    if (target_client<0) return;
-	    use_randompz = true;
-    }
-	
-	angry = angry || panic;
-	bool expected_angry = angry || panic || ZM_finale_announced || L4D_IsSurvivalMode();
-	
-	float flow_survivor;
-	float flow_survivor_fraction;
-    if (use_randompz && !angry)
-    {
-        flow_survivor = L4D2Direct_GetFlowDistance(target_client);
-        flow_survivor_fraction = get_survivor_flow_fraction(target_client);
-	}
-	
-	int tries = (count<=10) ? 5 : 3;
-	int spawned = 0;
-	float randomPos[3], angle[3];
-	bool glow, random;
-	
-	char set_model[64] = "";
-	if (strcmp(type,"random")==0) random = true;
-    else if (g_bClownGlow && strcmp(type,"clown")==0) glow = true;
-
-	for( int i = 0; i < count; i++  )
-	{
-		if (use_randompz)
-		{
-      		if (!IsValidClient(target_client) || !IsPlayerAlive(target_client))
-          		break;
-      		if(!L4D_GetRandomPZSpawnPosition(target_client,ZOMBIECLASS_COMMON,tries,randomPos))
-          		continue;
-          	if (zm_stage<ZM_STARTED && can_any_alive_survivor_see(randomPos,false))
-              	continue;
-          	
-          	if (!expected_angry)
-          	{
-          	
-              	// If not angry, check that the spawn is strictly ahead of the survivor's flow.
-              	// Prevents useless zombies spawns where the survivors are unlikely to go.
-              	if (flow_survivor_fraction<=0.91 && L4D_GetFlowFromPoint(randomPos)<flow_survivor)
-                  	continue;
-                
-                // Check that we are on NAV_SPAWN_ESCAPE_ROUTE -- sucks because escape route is very narrow on some maps.
-                //Address temp_navArea = L4D_GetNearestNavArea(randomPos,500.0,true,true,true,TEAM_INFECTED);
-                //if (!temp_navArea) continue;
-                //if (L4D_GetNavArea_SpawnAttributes(temp_navArea) & ~NAV_SPAWN_ESCAPE_ROUTE)
-                //    continue;
-            
-            }
-            
-            //if (IsObstructed(randomPos)) continue;
-        	
-		}
-		else
-		{
-      		if (zm_spawner_navArea && count>1)
-      		{
-          		L4D_FindRandomSpot(zm_spawner_navArea,randomPos);
-          		if ( can_any_alive_survivor_see(randomPos,false) || IsObstructed(randomPos) ) randomPos=zm_spawner_pos;
-      		}
-      		else randomPos=zm_spawner_pos;
-		}
-		
-        if (!angry) get_random_xy_orientation(angle);
-		
-		int zombie = -1;
-		if (type[0]!=0) get_uncommon_model(type,set_model);
-		if (set_model[0]==0) zombie = L4D_SpawnCommonInfected(randomPos,angle);
-		else
-		{
-      		zombie = CreateEntityByName("infected");
-      		if (zombie!=-1)
-      		{
-          		if (random) glow = strcmp(set_model,MODEL_CLOWN)==0;
-          		SetEntityModel(zombie,set_model);
-          		TeleportEntity(zombie,randomPos,angle,NULL_VECTOR);
-                DispatchSpawn(zombie);
-              	if (glow && !ZM_finale_announced && !L4D_IsSurvivalMode())
-                  	CreateTimer(1.0,clown_check_rush,EntIndexToEntRef(zombie),TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
-                if (strcmp(set_model,MODEL_FALLEN3,false)==0) SetEntProp(zombie,Prop_Send,"m_nBody",GetRandomInt(0,1));
-          	}
-		}
-		
-        if (zombie>0)
-        {
-           if (!playcount_increased && zm_stage>=ZM_STARTED && IsValidClientZM()) increase_playcount(zm_client);
-           spawned += 1;
-           bank -= temp_cost;
-           live_zombie_arr[ZOMBIECLASS_COMMON] += 1;
-           g_iEntities += 1;
-           if (angry)
-           {
-               if (hInfectedAttackSurvivorTeam) SDKCall(hInfectedAttackSurvivorTeam,zombie);
-               SetEntProp(zombie, Prop_Send, "m_mobRush", 1);
-           }
-           
-           if (type[0]!=0 || price_angry) DispatchKeyValue(zombie, "targetname", "zm_unit_uncommon");
-           else DispatchKeyValue(zombie, "targetname", "zm_unit_common");
-           if (use_randompz && hint) mark_flow_survivor_and_zombie(-1,zombie);
-           //SetEntProp(zombie,Prop_Send,"m_nSkin",GetRandomInt(0, 10));
-           SetEntityRenderColor(zombie,GetRandomInt(0,255),GetRandomInt(0,255),GetRandomInt(0,255),255);
-        }
-    }
-		
-	if (spawned<=0)
-	{
-    	if (hint) update_hint("%T", "Spawn failed", zm_client);
-    	if (live_zombie_arr[ZOMBIECLASS_COMMON]<10) SetConVarInt(FindConVar("director_panic_forever"), 0);
-	}
-	else
-	{
-	    if (use_randompz && hint) mark_flow_survivor_and_zombie(target_client,-1);
-        
-	    if (hint)
-	    {
-    	    char label[32];
-    	    Format(label, sizeof(label), "%T", "Common", zm_client);
-    	    update_hint("%T", "Spawned X Y", zm_client, spawned, label);
-	    }
-	    add_available_zombie(ZOMBIECLASS_COMMON,-spawned);
-	    if (!force_type)
-	    {
-    	    if (strcmp(type,"jimmy")==0)
-    	    {
-        	    jimmy_spawned = true;
-        	    create_boss_menu();
-    	    }
-    	    else if (strcmp(type,"fallen")==0)
-    	    {
-        	    fallen_spawned = true;
-        	    create_boss_menu();
-    	    }
-	    }
-    	if (panic && live_zombie_arr[ZOMBIECLASS_COMMON]>=10) SetConVarInt(FindConVar("director_panic_forever"), 1);
-    	//zm_update();
-    	update_EMS_HUD();
-	}
-}
 
 void reset_time_of_day()
 {
     SetConVarInt(FindConVar("sv_force_time_of_day"),-1);
 }
 
-void ZM_Witch(int client,int witch_type, bool free = false, bool flow = false)
-{
-
-	if (!g_bCvarAllow) return;
-	if (!(client==zm_client || client==0)) return;
-	
-	if (DEBUG) LogMessage("[zm] ZM_Witch");
-	
-	if (is_zm_spamming()) return;
-	
-	int temp_cost;
-	if (!free)
-	{
-    	if (witch_type==WITCH_STATIC) temp_cost=g_iCostWitchStatic;
-    	else temp_cost=g_iCostWitchMoving;
-    	if ((bank-temp_cost)<0) 
-    	{
-        	update_hint("%T", "Cannot afford", zm_client);
-        	return;
-    	}
-	}
-	
-	CountWitches(false);
-	if (live_zombie_arr[ZOMBIECLASS_WITCH]>=max_zombie_arr[ZOMBIECLASS_WITCH] || temp_cost<0) 
-	{
-    	update_hint("%T", "Limit reached", zm_client);
-    	return;
-	}
-	
-	if (!is_zombie_available_cooldown(ZOMBIECLASS_WITCH))
-	{
-    	update_hint("%T", "Cooldown active", zm_client);
-        return;
-	}
-	
-	if (IsValidClientZM()) update_t_zm_activity();
-	
-	bool use_randompz = false;
-	float spawn_pos[3];
-	
-	int spawner_state;
-	int target_client = -1;
-    if (flow) spawner_state = SPAWNER_DISTANCE;
-    else spawner_state = can_ZM_spawn(true);
-    spawn_pos = zm_spawner_pos;
-	if (spawner_state!=SPAWNER_OK)
-	{
-        use_randompz = true;
-        target_client = get_spawner_target_survivor(flow,spawner_state);
-	    if (target_client<0) return;
-	    if(!L4D_GetRandomPZSpawnPosition(target_client,ZOMBIECLASS_WITCH,10,spawn_pos))
-	    {
-        	update_hint("%T", "Spawn failed", zm_client);
-        	return;
-        }
-        
-       	if (zm_stage<ZM_STARTED && can_any_alive_survivor_see(spawn_pos,false))
-	    {
-           	update_hint("%T", "Spawn failed", zm_client);
-           	return;
-        }
-        
-        // prevent negative flow spawns
-        float flow_survivor_fraction = get_survivor_flow_fraction(target_client);
-        if (flow_survivor_fraction<=0.91 && L4D_GetFlowFromPoint(spawn_pos)<L4D2Direct_GetFlowDistance(target_client))
-        {
-            update_hint("%T", "Spawn failed", zm_client);
-            return;
-        }
-        
-        if (IsObstructed(spawn_pos))
-        {
-            update_hint("%T", "Spawn failed", zm_client);
-            return;
-        }
-        
-        // Check that we are on NAV_SPAWN_ESCAPE_ROUTE
-        //Address temp_navArea = L4D_GetNearestNavArea(spawn_pos,500.0,true,true,true,TEAM_INFECTED);
-        //if (!temp_navArea || L4D_GetNavArea_SpawnAttributes(temp_navArea) & ~NAV_SPAWN_ESCAPE_ROUTE )
-        //{
-        //    update_hint("%T", "Spawn failed", zm_client);
-        //    return;
-        //}
-	}
-	
-	if (witch_type==WITCH_STATIC) SetConVarInt(FindConVar("sv_force_time_of_day"),0);
-	else SetConVarInt(FindConVar("sv_force_time_of_day"),3);
-	
-	float angle[3];
-	get_random_xy_orientation(angle);
-	
-	int witch;
-	if(g_bSpawnWitchBride) witch = L4D2_SpawnWitchBride(spawn_pos,angle);
-    else witch = L4D2_SpawnWitch(spawn_pos,angle);
-	
-	if (witch>0)
-	{
-       	if (strcmp(g_sZMGamemode,"zm_jimmypocalypse",false)==0 && witch_type==WITCH_STATIC) SetEntityModel(witch,MODEL_JIMMY);
-       	if (!free) bank -= temp_cost;
-       	live_zombie_arr[ZOMBIECLASS_WITCH] += 1;
-       	if (DEBUG) LogMessage("[zm] Created witch %d", witch);
-       	CreateTimer(g_fUpdateRate, CreateZMGlow_white, EntIndexToEntRef(witch), TIMER_FLAG_NO_MAPCHANGE);
-       	entref_delete = EntIndexToEntRef(witch);
-       	add_available_zombie(ZOMBIECLASS_WITCH,-1);
-       	char label[32];
-   	    Format(label, sizeof(label), "%T", "Witch", zm_client);
-   	    update_hint("%T", "Spawned X Y", zm_client, 1, label);
-       	DispatchKeyValue(witch, "targetname", "zm_unit");
-       	if (use_randompz) mark_flow_survivor_and_zombie(target_client,witch);
-       	if (!playcount_increased && zm_stage>=ZM_STARTED) increase_playcount(zm_client);
-	}
-	else update_hint("%T", "Spawn failed", zm_client);
-
-}
-
-void CountWitches(bool fast = true)
-{
-    if (live_zombie_arr[ZOMBIECLASS_WITCH]<=0 && fast) return;
-    if (DEBUG) LogMessage("[zm] CountWitches expensive");
-    live_zombie_arr[ZOMBIECLASS_WITCH] = L4D2_GetWitchCount();
-}
-
-Action kill_entity(Handle timer, int entref)
-{
-    if (!IsValidEntRef(entref)) return Plugin_Stop;
-    AcceptEntityInput(entref,"Kill");
-    return Plugin_Stop;
-}
-
-void dissolve_forcekill(int entity)
-{
-    L4D_Dissolve(entity); // doesn't always kill them
-    CreateTimer(2.0,kill_entity,EntIndexToEntRef(entity),TIMER_FLAG_NO_MAPCHANGE);
-}
-
-void delete_all_infected(bool common=true, bool witch=true, bool special=true)
-{
-   	bool anything_to_delete = false;
-   	if (common && live_zombie_arr[ZOMBIECLASS_COMMON]>0) anything_to_delete = true;
-   	if (witch && live_zombie_arr[ZOMBIECLASS_WITCH]>0) anything_to_delete = true;
-   	if (special && live_SI>0) anything_to_delete = true;
-   	if (!anything_to_delete) return;
-   	
-   	reset_live_zombie_arr(common,witch,special);
-   	
-   	if (DEBUG) LogMessage("[zm] delete_all_infected");
-   	
-   	char class[32];
-   	int entity;
-   	for(entity = 1; entity<=MAXENTITIES; entity++)
-   	{
-   		if(IsValidEntity(entity))
-   		{    
-   		     if (IsValidClient(entity) && !IsFakeClient(entity)) continue;
-   		     if (GetEntProp(entity,Prop_Data,"m_iMaxHealth")<=0) continue;
-      	     GetEntityClassname(entity, class, sizeof(class));
-      	     if ( (ZM_finale_announced || L4D_IsSurvivalMode()) && strcmp(class,"player")==0 && GetEntProp(entity, Prop_Send, "m_zombieClass")==ZOMBIECLASS_TANK )
-             {
-                 char targetName[20];
-                 GetEntPropString(entity, Prop_Data, "m_iName", targetName, sizeof(targetName));
-                 if (strcmp(targetName,"zm_unit")!=0)
-                 {
-                     live_zombie_arr[ZOMBIECLASS_TANK] += 1;
-                     continue;
-                 }
-             }
-      	     
-      	     if ( (common && strcmp(class,"infected")==0) || (witch && strcmp(class,"witch")==0) || (special && strcmp(class,"player")==0 && GetClientTeam(entity)==TEAM_INFECTED) )
-      	     {
-          	     remove_ZM_glow(entity);
-          	     if (strcmp(class,"player")==0) AcceptEntityInput(entity,"Kill");
-                 else dissolve_forcekill(entity);
-      	     }
-   		}
-   	}
-   	
-   	if (special && clients_timer==INVALID_HANDLE)
-   	   clients_timer = CreateTimer(0.1,CountClients);
-   	if (common) live_zombie_arr[ZOMBIECLASS_COMMON] = 1; // Dissolve doesn't always work
-}
-
-Action ZM_Spawn_Witch(int client, int args)
-{	
-	if (!g_bCvarAllow || client!=zm_client) return Plugin_Continue;
-	int witch_type = WITCH_STATIC;
-	bool flow = false;
-	if (args>0)
-	{
-	    int arg_int;
-        char arg[32];
-        bool hit = false;
-    	// Check Argument 1
-    	GetCmdArg(1,arg,sizeof(arg));
-    	if (strcmp(arg,"flow")==0) flow = true;
-    	else
-    	{
-        	arg_int = GetCmdArgInt(1);
-        	if (arg_int==WITCH_STATIC || arg_int==WITCH_MOVING) witch_type = arg_int;
-    	}
-    	
-    	// Check Argument 2
-    	if (args>1)
-    	{
-        	hit = false;
-        	if (!flow)
-        	{
-            	GetCmdArg(2,arg,sizeof(arg));
-            	if (strcmp(arg,"flow")==0)
-            	{
-                	flow = true;
-                	hit = true;
-            	}
-        	}
-        	if (!hit)
-        	{
-            	arg_int = GetCmdArgInt(2);
-            	if (arg_int==WITCH_STATIC || arg_int==WITCH_MOVING) witch_type = arg_int;
-        	}
-    	}
-	}
-	ZM_Witch(client,witch_type,_,flow);
-	return Plugin_Continue;
-}
-
-void zm_del_pointing(int client)
-{
-   
-   if (!g_bCvarAllow || !IsValidClientZM() || client!=zm_client) return;
-   
-   if (DEBUG) LogMessage("[zm] zm_del_pointing");
-   
-   if (is_zm_spamming()) return;
-   
-   update_t_zm_activity();
-   update_ZM_looktarget(false);
-   if (!IsValidEntRef(entref_delete))
-   {
-       update_hint("%T", "Invalid target", zm_client);
-       return;
-   }
-   int target = EntRefToEntIndex(entref_delete);
-   if ( !IsValidEntity(target) || (target<=MaxClients && !IsFakeClient(target)) ) 
-   {
-       update_hint("%T", "Invalid target", zm_client);
-       return;
-   }
-   
-   char class[32];
-   GetEntityClassname(target, class, sizeof(class));
-   
-   if ( (ZM_finale_announced || L4D_IsSurvivalMode()) && strcmp(class,"player")==0 &&
-       GetEntProp(target, Prop_Send, "m_zombieClass")==ZOMBIECLASS_TANK )
-   {
-       char targetName[20];
-       GetEntPropString(target, Prop_Data, "m_iName", targetName, sizeof(targetName));
-       if (strcmp(targetName,"zm_unit")!=0)
-       {
-           update_hint("%T", "Cannot delete", zm_client);
-           return;
-       }
-   }
-   
-   if (strcmp(class,"player")==0) AcceptEntityInput(target,"Kill");
-   else dissolve_forcekill(target);
-   
-   if (strcmp(class,"player")==0)
-   {
-       if (clients_timer==INVALID_HANDLE) clients_timer = CreateTimer(0.1,CountClients);
-   }
-   else if (strcmp(class,"witch")==0) CountWitches();
-   else CountCommons();
-   
-}
 
 public void L4D_OnIncapacitated_Post(int client, int inflictor, int attacker, float damage, int damagetype, int weapon)
 {
@@ -7019,7 +5728,7 @@ public Action evtPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     
     if(GetClientTeam(victim)!=TEAM_INFECTED) return Plugin_Continue;
     
-    char targetName[20];
+    static char targetName[20];
     GetEntPropString(victim, Prop_Data, "m_iName", targetName, sizeof(targetName));
     
     if (active_looktarget && entref_control==EntIndexToEntRef(victim))
@@ -7075,46 +5784,6 @@ public Action evtPlayerDeath(Event event, const char[] name, bool dontBroadcast)
 }
 // 
 
-void spawn_free_angry_zombies(int victim, int count, bool refund = true)
-{
-    
-    int old_count = count;
-    
-    if (DEBUG) LogMessage("[zm] spawn_free_angry_zombies");
-    
-    CountCommons(null,false);
-    
-    if ((live_zombie_arr[ZOMBIECLASS_COMMON]+count)>max_zombie_arr[ZOMBIECLASS_COMMON])
-       count = max_zombie_arr[ZOMBIECLASS_COMMON]-live_zombie_arr[ZOMBIECLASS_COMMON];
-    
-    if (refund && old_count>count && g_iCostCommon>0) bank += g_iCostCommon*(old_count-count);
-    if (count<=0) return;
-    if (!IsValidClient(victim) || GetClientTeam(victim)!=TEAM_SURVIVOR) return;
-    
-    g_iEntities = GetEntityCountEx();
-	if((g_iEntities+count)>=ENTITY_SAFER_LIMIT) return;
-    
-    float vecPos[3];
-    for( int i = 0; i < count; i++  )
-    {
-        int zombie = -1;
-        if(L4D_GetRandomPZSpawnPosition(victim,ZOMBIECLASS_TANK,10,vecPos))
-        {
-            zombie = L4D_SpawnCommonInfected(vecPos);
-            if (zombie>0)
-            {
-                live_zombie_arr[ZOMBIECLASS_COMMON] += 1;
-                if (hInfectedAttackSurvivorTeam) SDKCall(hInfectedAttackSurvivorTeam,zombie);
-                SetEntProp(zombie, Prop_Send, "m_mobRush", 1);
-                SetEntPropEnt(zombie, Prop_Send, "m_clientLookatTarget",victim);
-            }
-            
-        }
-    }
-    
-    if (IsValidClientZM()) update_EMS_HUD();
-    
-}
 
 float t_last_hitmarker = 0.0;
 void update_vomited(int victim)
@@ -7159,296 +5828,6 @@ public Action EvtWitchKilled(Event event, const char[] name, bool dontBroadcast)
 	return Plugin_Continue;
 }
 
-void mark_flow_survivor_and_zombie(int survivor=-1, int zombie=-1)
-{
-    
-    if (!IsValidClientZM()) return;
-    zm_flow_notify = true;
-     
-    float vOrigin[3], draw_start[3], draw_end[3];
-    
-    if (zombie>0 && IsValidEntity(zombie))
-    {
-    	L4D_GetEntityWorldSpaceCenter(zombie,vOrigin);
-        draw_start = vOrigin; draw_start[2] += 2000.0;
-        draw_end = vOrigin; draw_end[2] -= 2000.0;
-        TE_SetupBeamPoints(draw_start,draw_end,g_iLaser,g_iHalo,0,0,2.5,2.0,4.0,1,1.0,color_allowed,0);
-        TE_SendToClient(zm_client);
-    }
-    
-    if (survivor>0 && IsValidEntity(survivor))
-    {
-        L4D_GetEntityWorldSpaceCenter(survivor,vOrigin);
-        draw_start = vOrigin; draw_start[2] += 2000.0;
-        draw_end = vOrigin; draw_end[2] -= 2000.0;
-        TE_SetupBeamPoints(draw_start,draw_end,g_iLaser,g_iHalo,0,0,0.5,2.0,4.0,1,1.0,color_conditional,0);
-        TE_SendToClient(zm_client);
-    }
-    
-}
-
-void OnNextFrame_ZeroCooldown(int entity)
-{
-    if (!IsValidClient(entity)) return;
-    L4D2_SetCustomAbilityCooldown(entity,0.0);
-}
-
-int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=false, float pos[3] = {0.0,0.0,0.0}, bool glow = true, bool flow = false)
-{
-	if (!g_bCvarAllow || ZOMBIECLASS<=0) return -1;
-	if (!(client==zm_client || client==0)) return -1;
-	
-	if (!l4d2_specials)
-    {
-        if (ZOMBIECLASS==ZOMBIECLASS_SPITTER || ZOMBIECLASS==ZOMBIECLASS_JOCKEY || ZOMBIECLASS==ZOMBIECLASS_CHARGER)
-            return -1;
-    }
-	
-	if (DEBUG) LogMessage("[zm] ZM_Spawn_SI");
-	
-	if (!setpos && is_zm_spamming()) return -1;
-	
-	int cost_SI;
-	if (!free)
-	{
-    	cost_SI = costs_SI[ZOMBIECLASS];
-    	if ((bank-cost_SI)<0)
-    	{
-        	update_hint("%T", "afford_special", zm_client);
-        	return -1;
-    	}
-	}
-	
-	int target_client = -1;
-	float spawn_pos[3];
-	bool use_randompz = false;
-	
-	if (!setpos)
-	{
-	    if (live_SI>=max_SI || live_zombie_arr[ZOMBIECLASS]>=max_zombie_arr[ZOMBIECLASS] || cost_SI<0)
-        {
-            update_hint("%T", "Limit reached", zm_client);
-            return -1;
-        }
-	    
-	    if (!is_zombie_available_cooldown(ZOMBIECLASS))
-        {
-           	update_hint("%T", "Cooldown active", zm_client);
-           	return -1;
-        }
-	        
-        int spawner_state;
-        if (flow) spawner_state = SPAWNER_DISTANCE;
-        else spawner_state = can_ZM_spawn();
-        spawn_pos = zm_spawner_pos;
-        if (spawner_state!=SPAWNER_OK)
-        {
-            use_randompz = true;
-            target_client = get_spawner_target_survivor(flow,spawner_state);
-            if (target_client<0) return -1;
-            if(!L4D_GetRandomPZSpawnPosition(target_client,ZOMBIECLASS,10,spawn_pos) || IsObstructed(spawn_pos))
-            {
-               update_hint("%T", "Spawn failed", zm_client);
-               return -1;
-            }
-            if (zm_stage<ZM_STARTED && can_any_alive_survivor_see(spawn_pos,false))
-       	    {
-                 update_hint("%T", "Spawn failed", zm_client);
-                 return -1;
-            }
-        }
-    }
-    else spawn_pos = pos;
-    
-    if (IsValidClientZM()) update_t_zm_activity();
-	
-	int bot = -1;
-    
-	switch (ZOMBIECLASS)
-	{
-        case ZOMBIECLASS_SMOKER: bot = SDKCall(hCreateSmoker, "ZM Smoker");
-    	case ZOMBIECLASS_BOOMER: bot = SDKCall(hCreateBoomer, "ZM Boomer");
-    	case ZOMBIECLASS_HUNTER: bot = SDKCall(hCreateHunter, "ZM Hunter");
-    	case ZOMBIECLASS_SPITTER: bot = SDKCall(hCreateSpitter, "ZM Spitter");
-    	case ZOMBIECLASS_JOCKEY: bot = SDKCall(hCreateJockey, "ZM Jockey");
-    	case ZOMBIECLASS_CHARGER: bot = SDKCall(hCreateCharger, "ZM Charger");
-    	case ZOMBIECLASS_TANK: bot = SDKCall(hCreateTank, "ZM Tank");
-	}
-	
-	if (IsValidClient(bot))
-	{
-       	float angle[3];
-        get_random_xy_orientation(angle);
-       	ChangeClientTeam(bot, TEAM_INFECTED);
-       	SetEntProp(bot, Prop_Send, "m_usSolidFlags", 16);
-       	SetEntProp(bot, Prop_Send, "deadflag", 0);
-       	SetEntProp(bot, Prop_Send, "m_lifeState", 0);
-       	SetEntProp(bot, Prop_Send, "m_iObserverMode", 0);
-       	SetEntProp(bot, Prop_Send, "m_iPlayerState", 0);
-       	SetEntProp(bot, Prop_Send, "m_zombieState", 0);
-       	// asdf if tank try setting zombieclass to 0 here temporarily? maybe it will stop music
-       	DispatchSpawn(bot);
-       	ActivateEntity(bot);
-       	TeleportEntity(bot, spawn_pos, angle, NULL_VECTOR);
-       	if (zm_stage<ZM_STARTED || specials_frozen)
-       	{
-           	freeze_player(bot,true,TEAM_INFECTED);
-       	}
-       	else SetEntProp(bot, Prop_Send, "movetype", 2);
-       	if (!free) bank -= cost_SI;
-       	
-       	request_crouch(EntIndexToEntRef(bot));
-        RequestFrame(request_crouch,EntIndexToEntRef(bot));
-       	
-       	if (glow) CreateTimer(g_fUpdateRate, CreateZMGlow_white, EntIndexToEntRef(bot), TIMER_FLAG_NO_MAPCHANGE);
-       	
-       	entref_delete = EntIndexToEntRef(bot);
-       	active_looktarget = true;
-        update_entref_control(entref_delete,true);
-        
-        if (!setpos)
-        {
-            
-            active_looktarget = true;
-            add_available_zombie(ZOMBIECLASS,-1);
-            L4D2_SetCustomAbilityCooldown(bot,0.0); //spitter fix
-            RequestFrame(OnNextFrame_ZeroCooldown,bot);
-            
-            if (ZOMBIECLASS==ZOMBIECLASS_TANK && g_bDiscountTank && first_tank_stage==0)
-            {
-               	first_tank_price = cost_SI;
-               	first_tank_stage += 1;
-               	update_dynamic_tank();
-            }
-            
-            if (IsValidClientZM())
-            {
-                if (!zm_use_notify)
-                {
-                    update_hint("%T", "ZM control hint", zm_client);
-                    if (IsValidClientZM()) PrintHintText(zm_client, "%t", "ZM control hint");
-                }
-                else
-                {
-                    char name[32];
-                    get_zombieclass_name(ZOMBIECLASS,name);
-                    Format(name, sizeof(name), "%T", name, zm_client);
-                    update_hint("%T", "Spawned X Y", zm_client, 1, name);
-                }
-            }
-            
-            if (use_randompz) mark_flow_survivor_and_zombie(target_client,bot);
-            if (!playcount_increased && zm_stage>=ZM_STARTED) increase_playcount(zm_client);
-        }
-        else update_EMS_HUD();
-        
-        //L4D2_CommandABot(bot,L4D_GetHighestFlowSurvivor(),BOT_CMD_ATTACK);
-
-	}
-	else update_hint("%T", "Spawn failed", zm_client);
-    
-	return bot;
-}
-
-Action ZM_Smoker(int client, int args)
-{
-   char extra[32];
-   if (args>0) GetCmdArg(1, extra, sizeof(extra));
-   ZM_Unit_Special(client,ZOMBIECLASS_SMOKER,extra);
-   return Plugin_Continue;
-}
-
-Action ZM_Boomer(int client, int args)
-{
-   char extra[32] = "";
-   if (args>0) GetCmdArg(1, extra, sizeof(extra));
-   ZM_Unit_Special(client,ZOMBIECLASS_BOOMER,extra);
-   return Plugin_Continue;
-}
-
-Action ZM_Hunter(int client, int args)
-{
-   char extra[32] = "";
-   if (args>0) GetCmdArg(1, extra, sizeof(extra));
-   ZM_Unit_Special(client,ZOMBIECLASS_HUNTER,extra);
-   return Plugin_Continue;
-}
-
-Action ZM_Spitter(int client, int args)
-{
-   char extra[32] = "";
-   if (args>0) GetCmdArg(1, extra, sizeof(extra));
-   ZM_Unit_Special(client,ZOMBIECLASS_SPITTER,extra);
-   return Plugin_Continue;
-}
-
-Action ZM_Jockey(int client, int args)
-{
-   char extra[32] = "";
-   if (args>0) GetCmdArg(1, extra, sizeof(extra));
-   ZM_Unit_Special(client,ZOMBIECLASS_JOCKEY,extra);
-   return Plugin_Continue;
-}
-
-Action ZM_Charger(int client, int args)
-{
-   char extra[32] = "";
-   if (args>0) GetCmdArg(1, extra, sizeof(extra));
-   ZM_Unit_Special(client,ZOMBIECLASS_CHARGER,extra);
-   return Plugin_Continue;
-}
-
-Action ZM_Tank(int client, int args)
-{
-   char extra[32] = "";
-   if (args>0) GetCmdArg(1, extra, sizeof(extra));
-   ZM_Unit_Special(client,ZOMBIECLASS_TANK,extra);
-   return Plugin_Continue;
-}
-
-Action ZM_Unit_Special(int client, int ZOMBIECLASS, char[] arg = "")
-{
-    bool flow = false;
-    if (strcmp(arg,"flow",false)==0) flow = true;
-    int bot = ZM_Spawn_SI(client,ZOMBIECLASS,_,_,_,_,flow);
-    if (IsValidClient(bot)) DispatchKeyValue(bot, "targetname", "zm_unit");
-    return Plugin_Continue;
-}
-
-Action ZM_Delete(int client, int args)
-{
-   if (!g_bCvarAllow) return Plugin_Continue;
-   zm_del_pointing(client);
-   return Plugin_Continue;
-}
-
-Action ZM_Delete_All(int client, int args)
-{
-   if (!g_bCvarAllow) return Plugin_Continue;
-   if (IsValidClientZM() && client==zm_client) delete_all_infected(true,true,true);
-   return Plugin_Continue;
-}
-
-Action ZM_Delete_Commons(int client, int args)
-{
-   if (!g_bCvarAllow) return Plugin_Continue;
-   if (IsValidClientZM() && client==zm_client) delete_all_infected(true,false,false);
-   return Plugin_Continue;
-}
-
-Action ZM_Delete_Specials(int client, int args)
-{
-   if (!g_bCvarAllow) return Plugin_Continue;
-   if (IsValidClientZM() && client==zm_client) delete_all_infected(false,false,true);
-   return Plugin_Continue;
-}
-
-Action ZM_Delete_Witches(int client, int args)
-{
-   if (!g_bCvarAllow) return Plugin_Continue;
-   if (IsValidClientZM() && client==zm_client) delete_all_infected(false,true,false);
-   return Plugin_Continue;
-}
 
 
 void ResetCvars()
@@ -7635,7 +6014,10 @@ int change_special_max(int ZOMBIECLASS, int new_max, bool draw = true)
 public void OnMapStart()
 {
     if (DEBUG) LogMessage("[zm] OnMapStart");
-	
+
+	GridLib_Initialize();
+	GridLib_StartPrecomputation();
+
 	PluginPrecacheModel(MODEL_SMOKER);
 	PluginPrecacheModel(MODEL_BOOMER);
 	PluginPrecacheModel(MODEL_HUNTER);
@@ -7645,20 +6027,12 @@ public void OnMapStart()
 	PluginPrecacheModel(MODEL_TANK);
 	
 	PluginPrecacheModel(MODEL_RIOT); // Riot Police
-	PluginPrecacheModel(MODEL_RIOT2); // Riot Police
 	PluginPrecacheModel(MODEL_CEDA); // CEDA Hazmat
-	PluginPrecacheModel(MODEL_CEDA2); // CEDA Hazmat
 	PluginPrecacheModel(MODEL_CLOWN); // Clown
 	PluginPrecacheModel(MODEL_MUD); // Mud
-	PluginPrecacheModel(MODEL_MUD2); // Mud
 	PluginPrecacheModel(MODEL_ROAD); // Road Worker
-	PluginPrecacheModel(MODEL_ROAD2); // Road Worker
-	PluginPrecacheModel(MODEL_ROAD3); // Road Worker
-	PluginPrecacheModel(MODEL_ROAD4); // Road Worker
 	PluginPrecacheModel(MODEL_JIMMY); // Jimmy Gibbs
 	PluginPrecacheModel(MODEL_FALLEN); // Fallen Survivor
-	PluginPrecacheModel(MODEL_FALLEN2); // Fallen Survivor
-	PluginPrecacheModel(MODEL_FALLEN3); // Fallen Survivor
 	
 	g_ExplosionSprite = PrecacheModel("sprites/sprite_fire01.vmt");
 	g_iLaser = PrecacheModel(VMT_LASERBEAM, true);
@@ -7709,13 +6083,13 @@ public void OnMapStart()
             ConVar g_hDownloadUrl = FindConVar("sv_downloadurl");
             if (g_hDownloadUrl!=null)
             {
-                char currentUrl[256];
+                static char currentUrl[256];
                 g_hDownloadUrl.GetString(currentUrl,sizeof(currentUrl));
                 TrimString(currentUrl);
                 if (currentUrl[0]=='\0') g_hDownloadUrl.SetString("https://gvazdas.github.io/l4d2_zombie_master/left4dead2", false, false);
             }
             
-            char buffer[128];
+            static char buffer[128];
             //if (lipsync_available) Format(buffer, sizeof(buffer), "sound/%s", SOUND_ELLIS_ZM);
             Format(buffer, sizeof(buffer), "sound/%s", SOUND_ELLIS_ZM_MP3);
             AddFileToDownloadsTable(buffer);
@@ -7749,7 +6123,7 @@ public void OnMapStart()
     PrecacheSound(SOUND_HITMARKER);
 
 	g_bSpawnWitchBride = false;
-	char sMap[64];
+	static char sMap[64];
 	GetCurrentMap(sMap, sizeof(sMap));
 	if(StrEqual("c6m1_riverbank", sMap, false)) g_bSpawnWitchBride = true;
 	else g_bSpawnWitchBride = false;
@@ -7770,11 +6144,6 @@ public void OnMapStart()
         	CreateTimer(1.0, Timer_StartPrecomputeNav, _, TIMER_FLAG_NO_MAPCHANGE);
     	}
     	zm_update();
-    	if (!GridLib_IsReady())
-        {
-            GridLib_Initialize();
-            GridLib_StartPrecomputation();
-        }
 	}
 
 	// env_shake needs to be "precached"
@@ -7920,76 +6289,78 @@ Action set_client_active(Handle timer, int client)
     if (clients_active[client]) return Plugin_Stop;
     if (DEBUG) LogMessage("[zm] set_client_active %d", client);
     clients_active[client] = true;
-    if (zm_stage<ZM_STARTED && fq_timer==null) fq_timer = CreateTimer(0.1,fair_queue_update);
+    if (zm_stage<ZM_STARTED && fq_timer==INVALID_HANDLE)
+        fq_timer = CreateTimer(0.1,fair_queue_update);
     return Plugin_Stop;
 }
 
-// this runs very frequently, find a better way.
-bool use_pressed, reload_pressed = false;
+// asdf TO DO this runs very frequently, find a better way.
+bool use_pressed = false;
+bool reload_pressed = false;
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse)
 {
-    if (!g_bCvarAllow || !IsValidClient(client)) return Plugin_Continue;
+    if (!g_bCvarAllow) return Plugin_Continue;
 	
-	if (g_hAbilityNoCooldown.BoolValue && IsPlayerAlive(client) && GetClientTeam(client)==TEAM_INFECTED)
+	if (g_hAbilityNoCooldown.BoolValue && GetClientTeam(client)==TEAM_INFECTED && IsPlayerAlive(client))
 	{
-    	int ability = GetEntPropEnt(client, Prop_Send, "m_customAbility");
-    	if (IsValidEntity(ability))
-    	{
-        	float gametime = GetGameTime();
-        	float cooldown = GetEntPropFloat(ability,Prop_Send,"m_timestamp") - gametime;
-        	if (cooldown>1.0 && cooldown<3000.0) SetEntPropFloat(ability,Prop_Send,"m_timestamp",gametime+1.0);
-    	}
+    	L4D2_SetCustomAbilityCooldown(client,0.0);
 	}
 	
-	if (IsFakeClient(client)) return Plugin_Continue;
-
-	if (buttons>0 || impulse>0)
+	if (IsFakeClient(client))
+	{
+    	return Plugin_Continue;
+	}
+	
+	if (impulse==100) toggle_ZM_vision(client);
+	
+	if ( (!first_active || !clients_active[client]) && (buttons>0 || impulse>0) )
 	{
     	first_active = true;
     	set_client_active(null,client);
-	}
+    }
 	
-	if (client!=zm_client) return Plugin_Continue;
-	
-   	if (recordpos && IsPlayerAlive(zm_client)) // move this to controlSI and player_death
-   	{
-       	GetClientEyePosition(zm_client,zm_deathPos);
-        GetClientEyeAngles(zm_client,zm_deathAngles);
-   	}
-   	update_ZM_looktarget(true);
-   	
-   	if (buttons&IN_USE>0)
-   	{
-       	if (!use_pressed)
+	if (client==zm_client)
+	{
+        	
+       	if (recordpos && IsPlayerAlive(zm_client))
        	{
-           	if (live_SI>0) ZMControlSI(client,0);
-           	else open_menu(client,ZM_MENU_SPECIAL);
+           	GetClientEyePosition(zm_client, zm_deathPos);
+            GetClientEyeAngles(zm_client, zm_deathAngles);
+       	}
+       	
+       	update_ZM_looktarget(true);
+       	if (!use_pressed && (buttons&IN_USE)>0)
+       	{
+           	if (live_SI>0) ZMControlSI(zm_client,0);
+           	else open_menu(zm_client,ZM_MENU_SPECIAL);
            	use_pressed = true;
        	}
-   	}
-   	else use_pressed = false;
-   	
-   	if (buttons&IN_RELOAD>0)
-   	{
-       	if (!reload_pressed)
+       	else if (use_pressed && (buttons&IN_USE)<=0)
+           	use_pressed = false;
+       	
+       	if (!reload_pressed && (buttons&IN_RELOAD)>0)
        	{
            	if (zm_menu_state==ZM_MENU_MAIN) close_menus(client);
-           	else open_menu(client,ZM_MENU_MAIN);
+           	else open_menu(zm_client,ZM_MENU_MAIN);
            	reload_pressed = true;
        	}
-   	}
-   	else reload_pressed = false;
-   	
-   	if (impulse==100) toggle_ZM_vision(client);
+       	else if (reload_pressed && (buttons&IN_RELOAD)<=0)
+           	reload_pressed = false;
         
-    if (zm_stage<ZM_STARTED && !zm_can_start && !force_started) buttons &= ~IN_ATTACK & ~IN_ATTACK2;
-	return Plugin_Continue;	
+        if (zm_stage<ZM_STARTED && !zm_can_start && !force_started) buttons &= ~IN_ATTACK & ~IN_ATTACK2;
+        
+	}
+	
+	return Plugin_Continue;
+	
 }
 
 public void OnMapEnd()
 {
 	if (DEBUG) LogMessage("[zm] OnMapEnd");
-	if (GridLib_IsReady()) GridLib_Cleanup();
+
+	GridLib_Cleanup();
+
 	if (!g_bCvarAllow) return;
 	g_iLockedDoor = INVALID_ENT_REFERENCE; // we don't know if there's gonna be a door next map
 	ResetTimer();
@@ -8072,7 +6443,7 @@ void evtRoundEnd(Event event, const char[] name, bool dontBroadcast)
         	zm_win_announced = true;
         	EmitSoundToClient(zm_client,SOUND_ZM_WIN);
         	PrintHintText(zm_client, "%t", "ZM win text");
-        	char zm_name[MAX_NAME_LENGTH]; 
+        	static char zm_name[MAX_NAME_LENGTH]; 
             GetClientName(zm_client,zm_name,sizeof(zm_name));
             PrintToChatAll("[zm] %t", "ZM won", zm_name);
     	}
@@ -8233,12 +6604,6 @@ void IsAllowed()
     	
     	HookUserMessage(GetUserMessageId("PZDmgMsg"), OnPZDmgMsg, true);
     	HookUserMessage(GetUserMessageId("Damage"), OnPZDmgMsg, true);
-    	
-    	if (!GridLib_IsReady())
-        {
-            GridLib_Initialize();
-            GridLib_StartPrecomputation();
-        }
 		
 	}
     
@@ -8312,7 +6677,7 @@ void IsAllowed()
 Action Event_ServerCvar(Handle event, char[] name, bool dontBroadcast)
 {
 	if (!g_bCvarAllow) return Plugin_Continue;
-	char sConVarName[64];
+	static char sConVarName[64];
 	GetEventString(event, "cvarname", sConVarName, sizeof(sConVarName));
 	if (StrContains(sConVarName,"zm_",false)==0) return Plugin_Handled;
 	return Plugin_Continue;
@@ -8402,7 +6767,7 @@ MRESReturn DHook_Director_AcceptInput(int pThis, DHookReturn hReturn, DHookParam
 	if (DEBUG) LogMessage("[zm] DHook_Director_AcceptInput");
 	if (!g_bCvarAllow) return MRES_Ignored;
 	
-	char inputName[256];
+	static char inputName[256];
 	hParams.GetString(1, inputName, sizeof(inputName));
 	int activator = hParams.IsNull(2) ? -1 : hParams.Get(2);
 	int caller = hParams.IsNull(3) ? -1 : hParams.Get(3);	
@@ -8545,7 +6910,6 @@ void evtPlayerSpawned(Event event, const char[] name, bool dontBroadcast)
            	}
        	}
        	if (specials_frozen && IsFakeClient(client)) freeze_player(client,true,TEAM_INFECTED);
-       	//if (g_hAbilityNoCooldown.BoolValue) special_ability_post(client);
       }
 }
 
@@ -8718,9 +7082,9 @@ public void OnEntityDestroyed(int entity)
 	      int health = GetEntProp(entity,Prop_Data,"m_iHealth");
 	      bool refund = (health>=max_health);
 	      
-          char targetName[32];
+          static char targetName[32];
           GetEntPropString(entity, Prop_Data, "m_iName", targetName, sizeof(targetName));
-          char class[32];
+          static char class[32];
           GetEntityClassname(entity, class, sizeof(class));
           
           // Check only for: zm units, spotted zm units, and infected
@@ -8827,3 +7191,8 @@ public void OnEntityDestroyed(int entity)
     }
 	
 }
+
+
+
+
+    
