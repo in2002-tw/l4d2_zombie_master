@@ -65,9 +65,9 @@ public Plugin myinfo =
 // 25. Activity detection now sees chat messages.
 // 26. New models for uncommons.
 // 27. More things moved to /include
+// 28. Major spawner overhaul: GridLib implemented
 
 // TO DO LIST:
-// 4. Better easier to read zombie spawner visuals (done by zyiks, not implemented)
 // 5. Gas station tornado (done by zyiks, not implemented)
 // 15. Performance bottlenecks.
 // 16. Is there a way to prevent observers from being able to see the ZM info? Try SendProxy?
@@ -93,7 +93,7 @@ public Plugin myinfo =
 // Idle tank: 1. TankBehavior NOT STARTED  ( 0xAD39A30 ) 
 // Attacking Tank: 2. TankAttack STARTED  ( 0xD410FB0 ) 
 
-ConVar g_hCvarDebug, g_hCvarAllow, z_max_player_zombies, infectedbots_enable, jukebox_horde, shoot_alert_enable;
+ConVar g_hCvarDebug, g_hCvarAllow, z_max_player_zombies, infectedbots_enable, jukebox_horde, shoot_alert_enable, clown_world_enable;
 bool g_bCvarAllow;
 bool g_bSpawnWitchBride = false; // avoid crash
 bool l4dhooks_updated = false;
@@ -2110,14 +2110,10 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
 	GetClientAbsOrigin(zm_client,vPos);
 	GetClientEyePosition(zm_client,vOrigin);
 	GetClientEyeAngles(zm_client,vAngles);
-	vPos_spawner = vPos;
 	
     Handle trace = TR_TraceRayFilterEx(vOrigin,vAngles,MASK_SOLID,RayType_Infinite,FilterSpawner,zm_client);
-	if(TR_DidHit(trace))
-	{
-		TR_GetEndPosition(vPos,trace);
-		vPos_spawner = vPos;
-	}
+	if(TR_DidHit(trace)) TR_GetEndPosition(vPos,trace);
+	vPos_spawner = vPos;
 	delete trace;
     
     if (TR_PointOutsideWorld(vPos))
@@ -2185,6 +2181,7 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
                 spawner_state = SPAWNER_DISTANCE;
                 fail = true;
             }
+            if (min_distance>=0.0 && min_distance<100.0) num_cycle += 1; // less than 100.0 units -> targeting survivor, end early.
         }
         if (!fail)
         {
@@ -2207,30 +2204,33 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
             if (!obscured)
             {
                 fail = can_any_alive_survivor_see(vPos_spawner,false);
-                if (fail) spawner_state = SPAWNER_SIGHT;
+                if (fail)
+                {
+                    //fail = !L4D_FindRandomSpot(zm_spawner_navArea,vPos_spawner) || can_any_alive_survivor_see(vPos_spawner,false);
+                    spawner_state = SPAWNER_SIGHT;
+                }
             }
         }
         if (fail)
         {
             float vPos_gridlib[3];
-            if (num_cycle<=0 && FindNearbyValidSpawnCell(vPos_spawner,vPos_gridlib,check_dist))
+            if (num_cycle<=0 && FindNearbyValidSpawnCell(vPos_spawner,vPos_gridlib,check_dist) && L4D2_NavAreaTravelDistance(vPos_gridlib,vPos_spawner,false)<check_dist)
             {
                 vPos_spawner = vPos_gridlib;
                 num_cycle +=1;
                 continue;
             }
+            vPos_spawner = vPos;
             spawner_state_RGB = SPAWNER_RGB_BLOCKED;
             switch (spawner_state)
             {
                 case SPAWNER_DISTANCE:
                 {
-                    vPos_spawner = vPos;
                     if (hint) update_hint("%T %d", "Too close", zm_client, RoundFloat(min_distance));
                     spawner_state_RGB = SPAWNER_RGB_CONDITIONAL;
                 }
                 case SPAWNER_SIGHT:
                 {
-                    vPos_spawner = vPos;
                     if (hint) update_hint("%T", "Visible survivors", zm_client);
                     spawner_state_RGB = SPAWNER_RGB_CONDITIONAL;
                     if (hint && num_cycle>0 && zm_allow_spawns && !zm_flow_notify && IsValidClientZM())
@@ -2238,19 +2238,16 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
                 }
                 case SPAWNER_OTHER:
                 {
-                    vPos_spawner = vPos;
                     if (hint) update_hint("%T", "Obstacle", zm_client);
                     spawner_state_RGB = SPAWNER_RGB_CONDITIONAL;
                 }
                 case SPAWNER_INVALID:
                 {
-                    vPos_spawner = vPos;
                     if (hint) update_hint("%T", "Bad location", zm_client);
                     spawner_state = SPAWNER_INVALID;
                 }
                 default: // SPAWNER_NAV 
                 {
-                    vPos_spawner = vPos;
                     if (hint)
                     {
                         if (witch) update_hint("%T", "Witches illegal", zm_client);
@@ -2260,22 +2257,18 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
             }
             update_ZM_spawner(vPos,vPos_spawner,spawner_state_RGB);
             return spawner_state;
-            
         }
         num_cycle += 1;
-        if (num_cycle>1) break;
+        if (num_cycle>1) break; // give up
     }
-    
     if (!zm_allow_spawns)
 	{
     	if (hint) update_hint("%T", "Zombie spawns OFF", zm_client);
     	update_ZM_spawner(vPos,vPos_spawner,SPAWNER_RGB_CONDITIONAL);
     	return SPAWNER_OTHER;
 	}
-    
     update_ZM_spawner(vPos,vPos_spawner,SPAWNER_RGB_ALLOWED);
     return SPAWNER_OK;
-    
 }
 
 /**
@@ -2303,8 +2296,8 @@ bool FindNearbyValidSpawnCell(const float origin[3], float outPos[3], float radi
         return false;
     }
 
-    int cells[8];
-    int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 8);
+    int cells[16];
+    int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 16);
     LogMessage("[zm] FindNearbyValidSpawnCell: %d candidates found", count);
 
     for (int i = 0; i < count; i++)
@@ -3439,6 +3432,7 @@ Action zm_new_round(Handle timer = null)
     
     if (infectedbots_enable) SetConVarInt(infectedbots_enable, 0);
     if (shoot_alert_enable) SetConVarInt(shoot_alert_enable, 0);
+    if (clown_world_enable && strcmp(g_sZMGamemode,"zm_clowns",false)==0) SetConVarInt(clown_world_enable, 1);
     if (jukebox_horde) SetConVarInt(jukebox_horde, 0);
     
     safezone_navAreaId = -1;
@@ -4666,6 +4660,7 @@ void start_zm_round(bool play_sound = true)
      CountClients();
      update_EMS_HUD(true,0.0);
      if (shoot_alert_enable) ServerCommand("l4d2_shoot_alert_common_resetcvars");
+     //if (clown_world_enable) ServerCommand("clown_world_resetcvars");
  }
  zm_allow_spawns = true;
  set_zm_stage(ZM_STARTED);
@@ -5317,6 +5312,8 @@ public void OnAllPluginsLoaded()
 	if (jukebox_horde) SetConVarFlags(jukebox_horde, GetConVarFlags(jukebox_horde) & ~FCVAR_NOTIFY);
 	shoot_alert_enable = FindConVar("l4d2_shoot_alert_common_enable");
 	if (shoot_alert_enable) SetConVarFlags(shoot_alert_enable, GetConVarFlags(shoot_alert_enable) & ~FCVAR_NOTIFY);
+	clown_world_enable = FindConVar("clown_world_enable");
+	if (clown_world_enable) SetConVarFlags(clown_world_enable, GetConVarFlags(clown_world_enable) & ~FCVAR_NOTIFY);
 	SetCvarsZM();
 }
 
@@ -5554,7 +5551,8 @@ void load_zm_gamemode()
     }
     char command[PLATFORM_MAX_PATH];
     Format(command, sizeof(command), "exec sourcemod/l4d2_zombie_master/%s", g_sZMGamemode);
-    ServerCommand(command);  
+    ServerCommand(command);
+    if (clown_world_enable && strcmp(g_sZMGamemode,"zm_clowns",false)==0) SetConVarInt(clown_world_enable, 1);
 }
 
 void ConVarChanged_Cvars_Gamemode(ConVar convar, const char[] oldValue, const char[] newValue)
