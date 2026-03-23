@@ -16,6 +16,7 @@
 #define __zm_included
 ///////////////////////////////////////
 
+bool l4dhooks_updated = false;
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -67,7 +68,7 @@
 #define HULL_DZ_MIN_STRICT 26.0
 #define HULL_DZ_MAX_STRICT 46.0
 
-#define AREA_COMMON 1024.0 // how much area a Common Infected is going to take up; 32x32
+#define AREA_COMMON 1024.0 // how much surface area a Common Infected is going to take up; 32x32
 
 #define HULL_DX 20.0
 #define HULL_DZ 36.0
@@ -318,7 +319,8 @@ stock void get_zombieclass_name(int ZOMBIECLASS, char name[32])
 }
 
 // Allow witches to be spawned in weird places
-stock bool nav_can_spawn_zombies(int navAttributeFlags, int navSpawnAttributes, bool witch = false)
+// Optional: navCenter and navSize for rescue closet validation
+stock bool nav_can_spawn_zombies(int navAttributeFlags, int navSpawnAttributes, bool witch = false, float navCenter[3] = {0.0,0.0,0.0}, float navSize[3] = {0.0,0.0,0.0})
 {
     if (!witch)
     {
@@ -331,7 +333,20 @@ stock bool nav_can_spawn_zombies(int navAttributeFlags, int navSpawnAttributes, 
     if (navSpawnAttributes & NAV_SPAWN_BATTLEFIELD) return true;
     if (navSpawnAttributes & NAV_SPAWN_ESCAPE_ROUTE) return true;
     if (navSpawnAttributes & NAV_SPAWN_OBSCURED || navSpawnAttributes & NAV_SPAWN_IGNORE_VISIBILITY) return true;
-    if (navSpawnAttributes & NAV_SPAWN_RESCUE_CLOSET) return false;
+    if (navSpawnAttributes & NAV_SPAWN_RESCUE_CLOSET)
+    {
+        if (l4dhooks_updated && navSize[0]>0.0 && navSize[1]>0.0)
+        {
+            int entity = INVALID_ENT_REFERENCE;
+            float radius = (navSize[0]>navSize[1]) ? navSize[0] : navSize[1]; // should use 2d vector length of sizes/2 but sqrt is slow
+            while( (entity = L4D_FindEntityByClassnameWithin(entity,"info_survivor_rescue",navCenter,radius)) != INVALID_ENT_REFERENCE )
+            {
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }
     return true;
 }
 

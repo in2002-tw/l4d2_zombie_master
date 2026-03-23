@@ -10,7 +10,6 @@
 ConVar g_hCvarDebug, g_hCvarAllow, z_max_player_zombies, infectedbots_enable, jukebox_horde, shoot_alert_enable, clown_world_enable;
 bool g_bCvarAllow;
 bool g_bSpawnWitchBride = false; // avoid crash
-bool l4dhooks_updated = false;
 
 int zm_stage = ZM_END;
 void set_zm_stage(int stage, bool override = false)

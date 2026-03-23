@@ -18,16 +18,16 @@
 #include <adt_trie>
 #include <files>
 
-bool DEBUG = false;
+bool DEBUG = false; //
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.032 2026-03-22"
+#define PLUGIN_VERSION 			"0.9.033 2026-03-23"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
 #include <l4d2_zombie_master>
-#include <l4d2_grid_lib>
 #include <l4d2_zombie_master_globals>
+#include <l4d2_grid_lib>
 #include <l4d2_zombie_master_sdk>
 #include <l4d2_zombie_master_spawner>
 #include <l4d2_zombie_master_spawncommands>
@@ -1667,8 +1667,6 @@ void update_menus()
 }
 
 // Pre-computed navmeshes storage
-
-ArrayList g_hObscuredList;  // ArrayList of PreCalcNav structs
 ArrayList g_hStartAreaList; // ArrayList of PreCalcNav structs
 bool g_bNavReady = false;    // Is pre-computation complete?
 
@@ -6154,7 +6152,6 @@ public void OnMapStart()
     	if (IsValidClientZM()) QuitZM_Force(zm_client);
     	if (!g_bNavReady)
     	{
-        	g_hObscuredList = new ArrayList(sizeof(PreCalcNav));
         	g_hStartAreaList = new ArrayList(sizeof(PreCalcNav));
         	g_bNavReady = false;
         	CreateTimer(1.0, Timer_StartPrecomputeNav, _, TIMER_FLAG_NO_MAPCHANGE);
@@ -6284,12 +6281,7 @@ Action Timer_StartPrecomputeNav(Handle timer)
     		g_hStartAreaList.PushArray(cell);
     		total_stored_start += 1;
 		}
-		else if (valid_obscured)
-		{
-    		g_hObscuredList.PushArray(cell);
-    		total_stored_obscured += 1;
-		}
-		
+		else if (valid_obscured) total_stored_obscured += 1;
 	}
 
 	delete allAreas;
@@ -6388,11 +6380,6 @@ public void OnMapEnd()
 	update_EMS_HUD();
 	
 	// Clean up pre-computed data
-    if (g_hObscuredList != null)
-    {
-       	delete g_hObscuredList;
-       	g_hObscuredList = null;
-    }
     if (g_hStartAreaList != null)
     {
     	delete g_hStartAreaList;
@@ -6615,7 +6602,6 @@ void IsAllowed()
         
         if (!g_bNavReady)
     	{
-        	g_hObscuredList = new ArrayList(sizeof(PreCalcNav));
         	g_hStartAreaList = new ArrayList(sizeof(PreCalcNav));
         	g_bNavReady = false;
         	CreateTimer(1.0, Timer_StartPrecomputeNav, _, TIMER_FLAG_NO_MAPCHANGE);
@@ -6623,12 +6609,6 @@ void IsAllowed()
     	
     	HookUserMessage(GetUserMessageId("PZDmgMsg"), OnPZDmgMsg, true);
     	HookUserMessage(GetUserMessageId("Damage"), OnPZDmgMsg, true);
-    	
-    	if (!GridLib_IsReady())
-        {
-            GridLib_Initialize();
-            GridLib_StartPrecomputation();
-        }
 		
 	}
     
