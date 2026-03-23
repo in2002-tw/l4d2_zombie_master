@@ -40,12 +40,22 @@
 #define ZM_MENU_AUTOCOMMON 8
 #define ZM_MENU_CONTEXT 9
 
+// enum for spawner context state. to determine spawner RGB state:
+// 0 -> SPAWNER_RGB_ALLOWED
+// 1,2 -> SPAWNER_RGB_BLOCKED
+// else -> SPAWNER_RGB_CONDITIONAL
 #define SPAWNER_OK 0
 #define SPAWNER_INVALID 1
 #define SPAWNER_NAV 2
 #define SPAWNER_DISTANCE 3
 #define SPAWNER_SIGHT 4
 #define SPAWNER_OTHER 5
+
+// enum for spawner RGB state
+#define SPAWNER_RGB_BLOCKED 0 // can never spawn infected here
+#define SPAWNER_RGB_CONDITIONAL 1 // cannot spawn here temporarily - survivors too close, they can see, obstruction, etc.
+#define SPAWNER_RGB_ALLOWED 2 // can spawn infected here
+#define RGB_ZM 16777215 // white for outlines
 
 #define AUTOCOMMON_OFF 0
 #define AUTOCOMMON_PANIC 1
@@ -57,6 +67,8 @@
 #define HULL_DZ_MIN_STRICT 26.0
 #define HULL_DZ_MAX_STRICT 46.0
 
+#define AREA_COMMON 1024.0 // how much area a Common Infected is going to take up; 32x32
+
 #define HULL_DX 20.0
 #define HULL_DZ 36.0
 #define HULL_DDZ 72.0
@@ -65,13 +77,6 @@
 #define WITCH_MOVING 1
 
 #define IGNITE_TIME 3600.0
-
-
-// enum for spawner state
-#define SPAWNER_RGB_BLOCKED 0 // can never spawn infected here
-#define SPAWNER_RGB_CONDITIONAL 1 // cannot spawn here temporarily because survivors can see or are too close
-#define SPAWNER_RGB_ALLOWED 2 // can spawn infected here
-#define RGB_ZM 16777215 // white for outlines
 
 #define SOUND_BLOCKED "ui/beep_error01.wav"
 #define SOUND_CONDITIONAL "ui/menu_invalid.wav"
@@ -112,7 +117,7 @@
 #define MODEL_FALLEN2 "models/infected/common_male_parachutist.mdl"
 #define MODEL_FALLEN3 "models/infected/common_male_fallen_survivor_l4d1.mdl" // this one has 2 bodygroups as well
 
-void get_uncommon_model(char label[16], char model[64])
+stock void get_uncommon_model(char label[16], char model[64])
 {
     model = "";
     switch (label[0])
@@ -657,7 +662,7 @@ bool TraceFilter_Spawner(int entity, int contentsMask, int ignore_entity)
 	}
 	return true;
 }
-stock bool IsObstructed(float vecpos[3], int entity = -1, bool DEBUG=false)
+stock bool IsObstructed(float vecpos[3], int entity = -1, bool debug=false)
 {
     bool isObstructed = false;
 	Handle hullTrace = TR_TraceHullFilterEx(vecpos, vecpos, HULL_MINS, HULL_MAXS,
@@ -666,7 +671,7 @@ stock bool IsObstructed(float vecpos[3], int entity = -1, bool DEBUG=false)
 	if (TR_DidHit(hullTrace))
 	{
 		int hitEntity = TR_GetEntityIndex(hullTrace);
-		if (DEBUG && IsValidEntity(hitEntity))
+		if (debug && IsValidEntity(hitEntity))
 		{
 		     char classname[64];
              GetEntityClassname(hitEntity, classname, sizeof(classname));

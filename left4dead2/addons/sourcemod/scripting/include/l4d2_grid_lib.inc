@@ -97,7 +97,7 @@
 #define GRIDLIB_NAV_ATTR_OUTSIDE_WORLD       (1 << 14)  // 0x4000
 
 // Preset blocked spawn attributes for common use cases
-#define GRIDLIB_NAV_BLOCKED_ZOMBIES (GRIDLIB_NAV_SPAWN_PLAYER_START | GRIDLIB_NAV_SPAWN_CHECKPOINT | GRIDLIB_NAV_SPAWN_RESCUE_CLOSET | GRIDLIB_NAV_SPAWN_BATTLESTATION)
+#define GRIDLIB_NAV_BLOCKED_ZOMBIES (GRIDLIB_NAV_SPAWN_PLAYER_START | GRIDLIB_NAV_SPAWN_CHECKPOINT | GRIDLIB_NAV_SPAWN_BATTLESTATION)
 
 // Legacy aliases for backward compatibility
 #define GRIDLIB_NAV_CHECKPOINT GRIDLIB_NAV_SPAWN_CHECKPOINT
@@ -151,6 +151,7 @@ static bool g_IsPrecomputing = false;
 static float g_HeightOffset = 5.0;
 static bool g_CheckObstruction = true;
 static bool g_ExcludeObstructed = true;
+static StringMap g_NavAreaCells = null;  // navArea Address → ArrayList of cell indices
 
 // ============================================================================
 // Public API
@@ -167,6 +168,7 @@ stock void GridLib_Initialize()
 
 	g_GridCells = new ArrayList(sizeof(GridCell));
 	g_SpatialHash = new ArrayList();
+	g_NavAreaCells = new StringMap();
 	g_IsReady = false;
 	g_TotalCells = 0;
 	g_IsPrecomputing = false;
@@ -415,6 +417,229 @@ stock int GridLib_GetCellAttributeFlags(int cellIdx)
 }
 
 /**
+ * Get all cell indices belonging to a nav area
+ *
+ * @param navArea       Nav area address
+ * @param results       Output array of cell indices
+ * @param maxResults    Maximum number of results
+ * @return              Number of cells found, or 0 if nav area not in grid
+ */
+stock int GridLib_GetCellsForNavArea(Address navArea, int[] results, int maxResults)
+{
+	if (!g_IsReady || g_NavAreaCells == null)
+		return 0;
+
+	char navKey[20];
+	FormatEx(navKey, sizeof(navKey), "%x", navArea);
+
+	ArrayList cellList;
+	if (!g_NavAreaCells.GetValue(navKey, cellList))
+		return 0;
+
+	int count = cellList.Length;
+	if (count > maxResults)
+		count = maxResults;
+
+	for (int i = 0; i < count; i++)
+		results[i] = cellList.Get(i);
+
+	return count;
+}
+
+/**
+ * Find cells starting from the closest cell's nav area, expanding to adjacent areas if needed.
+ *
+ * Locates the nearest cell to the given position, then collects all cells in that cell's
+ * nav area. If fewer than desiredCount cells are found, performs a BFS over adjacent nav
+ * areas until enough cells are gathered or no more connected areas remain.
+ *
+ * @param position      World position to search from
+ * @param desiredCount  Number of cells desired
+ * @param results       Output array of cell indices (sorted by distance to position)
+ * @param maxResults    Maximum size of results array
+ * @return              Number of cells found
+ */
+stock int GridLib_FindCellsFromClosest(const float position[3],
+                                       int desiredCount,
+                                       int[] results,
+                                       int maxResults)
+{
+	LogMessage("[GridLib] FindCellsFromClosest: pos=(%.0f,%.0f,%.0f) desired=%d maxResults=%d",
+		position[0], position[1], position[2], desiredCount, maxResults);
+
+	if (!g_IsReady || g_GridCells == null || g_NavAreaCells == null)
+	{
+		LogMessage("[GridLib] FindCellsFromClosest: not ready (ready=%d cells=%d navmap=%d)",
+			g_IsReady, g_GridCells != null, g_NavAreaCells != null);
+		return 0;
+	}
+
+	// Find the single closest cell
+	int closestCell[1];
+	int found = GridLib_FindNearbyCells(position, GRIDLIB_SPATIAL_BUCKET_SIZE, 9999.0, closestCell, 1);
+	if (found == 0)
+	{
+		LogMessage("[GridLib] FindCellsFromClosest: no nearby cell found within bucket size %.0f", GRIDLIB_SPATIAL_BUCKET_SIZE);
+		return 0;
+	}
+
+	// Get nav area of closest cell
+	float cellPos[3], cellNormal[3];
+	Address startNavArea;
+	bool obstructed;
+	if (!GridLib_GetCellData(closestCell[0], cellPos, cellNormal, startNavArea, obstructed))
+	{
+		LogMessage("[GridLib] FindCellsFromClosest: failed to get cell data for closest cell %d", closestCell[0]);
+		return 0;
+	}
+
+	if (startNavArea == Address_Null)
+	{
+		LogMessage("[GridLib] FindCellsFromClosest: closest cell %d has null nav area", closestCell[0]);
+		return 0;
+	}
+
+	LogMessage("[GridLib] FindCellsFromClosest: closest cell %d at (%.0f,%.0f,%.0f) navArea=%x",
+		closestCell[0], cellPos[0], cellPos[1], cellPos[2], startNavArea);
+
+	int cap = desiredCount;
+	if (cap > maxResults)
+		cap = maxResults;
+	if (cap > 500)
+		cap = 500;
+
+	// BFS over nav areas to collect cells
+	float candidates[500][2]; // [distance, cellIndex]
+	int candidateCount = 0;
+
+	StringMap visited = new StringMap();
+	ArrayList queue = new ArrayList();
+	char navKey[20];
+
+	// Seed BFS with starting nav area
+	FormatEx(navKey, sizeof(navKey), "%x", startNavArea);
+	visited.SetValue(navKey, true);
+	queue.Push(startNavArea);
+
+	int queueIdx = 0;
+	int stopAfter = -1; // queue length snapshot when cap was reached
+	while (queueIdx < queue.Length && candidateCount < 500)
+	{
+		// Stop after processing one extra BFS ring beyond the cap
+		if (stopAfter >= 0 && queueIdx >= stopAfter)
+			break;
+
+		Address currentArea = queue.Get(queueIdx);
+		queueIdx++;
+
+		// Collect cells from this nav area
+		int areaCells[500];
+		int areaCellCount = GridLib_GetCellsForNavArea(currentArea, areaCells, 500);
+		LogMessage("[GridLib] FindCellsFromClosest: BFS[%d] navArea=%x cells=%d total=%d",
+			queueIdx - 1, currentArea, areaCellCount, candidateCount);
+
+		int skippedObstructed = 0;
+		int skippedNavBlocked = 0;
+		for (int i = 0; i < areaCellCount && candidateCount < 500; i++)
+		{
+			// Skip obstructed cells
+			GridCell cell;
+			g_GridCells.GetArray(areaCells[i], cell, sizeof(GridCell));
+			if (cell.isObstructed)
+			{
+				skippedObstructed++;
+				continue;
+			}
+
+			// Skip nav-blocked cells (saferooms, checkpoints, etc.)
+			if (cell.navArea != Address_Null)
+			{
+				int spawnAttrs = L4D_GetNavArea_SpawnAttributes(cell.navArea);
+				if (spawnAttrs & GRIDLIB_NAV_BLOCKED_ZOMBIES)
+				{
+					skippedNavBlocked++;
+					if (skippedNavBlocked == 1)
+						LogMessage("[GridLib] FindCellsFromClosest: BFS[%d] first nav-blocked cell spawnAttrs=0x%x (blocked mask=0x%x)",
+							queueIdx - 1, spawnAttrs, GRIDLIB_NAV_BLOCKED_ZOMBIES);
+					continue;
+				}
+			}
+
+			float dist = GetVectorDistance(position, cell.position);
+			candidates[candidateCount][0] = dist;
+			candidates[candidateCount][1] = float(areaCells[i]);
+			candidateCount++;
+		}
+		if (skippedObstructed > 0 || skippedNavBlocked > 0)
+			LogMessage("[GridLib] FindCellsFromClosest: BFS[%d] skipped %d obstructed, %d nav-blocked",
+				queueIdx - 1, skippedObstructed, skippedNavBlocked);
+
+		// Enqueue adjacent nav areas (all 4 directions)
+		for (int dir = 0; dir < 4; dir++)
+		{
+			ArrayList adjAreas = new ArrayList();
+			L4D_NavArea_GetAdjacentAreas(currentArea, dir, adjAreas);
+
+			for (int i = 0; i < adjAreas.Length; i++)
+			{
+				Address adjArea = adjAreas.Get(i);
+				FormatEx(navKey, sizeof(navKey), "%x", adjArea);
+
+				int dummy;
+				if (!visited.GetValue(navKey, dummy))
+				{
+					visited.SetValue(navKey, true);
+					queue.Push(adjArea);
+				}
+			}
+
+			delete adjAreas;
+		}
+
+		// Once we hit the desired count, snapshot the queue length
+		// so we process one more full ring of adjacent areas
+		if (stopAfter < 0 && candidateCount >= cap)
+			stopAfter = queue.Length;
+	}
+
+	LogMessage("[GridLib] FindCellsFromClosest: BFS done. navAreas=%d candidates=%d cap=%d stopAfter=%d",
+		queueIdx, candidateCount, cap, stopAfter);
+
+	delete visited;
+	delete queue;
+
+	// Sort by distance (selection sort)
+	int numToSelect = (candidateCount < cap) ? candidateCount : cap;
+
+	for (int i = 0; i < numToSelect; i++)
+	{
+		int minIdx = i;
+		for (int j = i + 1; j < candidateCount; j++)
+		{
+			if (candidates[j][0] < candidates[minIdx][0])
+				minIdx = j;
+		}
+
+		if (minIdx != i)
+		{
+			float temp[2];
+			temp = candidates[i];
+			candidates[i] = candidates[minIdx];
+			candidates[minIdx] = temp;
+		}
+
+		results[i] = RoundToFloor(candidates[i][1]);
+	}
+
+	LogMessage("[GridLib] FindCellsFromClosest: returning %d cells (closest dist=%.0f, farthest dist=%.0f)",
+		numToSelect,
+		numToSelect > 0 ? candidates[0][0] : 0.0,
+		numToSelect > 0 ? candidates[numToSelect - 1][0] : 0.0);
+
+	return numToSelect;
+}
+
+/**
  * Cleanup grid system
  * Call this in OnMapEnd()
  */
@@ -436,6 +661,22 @@ stock void GridLib_Cleanup()
 		}
 		delete g_SpatialHash;
 		g_SpatialHash = null;
+	}
+
+	if (g_NavAreaCells != null)
+	{
+		StringMapSnapshot snap = g_NavAreaCells.Snapshot();
+		char key[20];
+		for (int i = 0; i < snap.Length; i++)
+		{
+			snap.GetKey(i, key, sizeof(key));
+			ArrayList cellList;
+			if (g_NavAreaCells.GetValue(key, cellList) && cellList != null)
+				delete cellList;
+		}
+		delete snap;
+		delete g_NavAreaCells;
+		g_NavAreaCells = null;
 	}
 
 	g_IsReady = false;
@@ -574,6 +815,32 @@ static Action GridLib_Timer_Precompute(Handle timer)
 	LogMessage("[GridLib] Pre-computation complete!");
 	LogMessage("[GridLib]   Cells: %d | Areas: %d | Skipped: %d | Excluded (obstructed): %d | Duration: %.2fs",
 	          g_TotalCells, areasProcessed, areasSkipped, cellsExcluded, duration);
+
+	// Log nav area stats
+	if (g_NavAreaCells != null)
+	{
+		StringMapSnapshot navSnap = g_NavAreaCells.Snapshot();
+		int maxCells = 0;
+		int totalNavCells = 0;
+		char maxKey[20];
+		for (int s = 0; s < navSnap.Length; s++)
+		{
+			char sKey[20];
+			navSnap.GetKey(s, sKey, sizeof(sKey));
+			ArrayList sCellList;
+			g_NavAreaCells.GetValue(sKey, sCellList);
+			int sCount = sCellList.Length;
+			totalNavCells += sCount;
+			if (sCount > maxCells)
+			{
+				maxCells = sCount;
+				maxKey = sKey;
+			}
+		}
+		LogMessage("[GridLib] Nav area stats: %d areas, %d total cells, largest=%s with %d cells, avg=%.1f",
+			navSnap.Length, totalNavCells, maxKey, maxCells, float(totalNavCells) / float(navSnap.Length));
+		delete navSnap;
+	}
 
 	return Plugin_Stop;
 }
@@ -841,6 +1108,9 @@ static int GridLib_SubdivideNavArea(Address navArea, int &excludedCount)
 			// Add to spatial hash
 			GridLib_AddCellToHash(cellIndex, cellPos);
 
+			// Add to nav area reverse map
+			GridLib_AddCellToNavMap(cellIndex, navArea);
+
 			cellsCreated++;
 		}
 	}
@@ -863,6 +1133,20 @@ static void GridLib_AddCellToHash(int cellIndex, const float pos[3])
 
 	ArrayList bucket = g_SpatialHash.Get(bucketIndex);
 	bucket.Push(cellIndex);
+}
+
+static void GridLib_AddCellToNavMap(int cellIndex, Address navArea)
+{
+	char navKey[20];
+	FormatEx(navKey, sizeof(navKey), "%x", navArea);
+
+	ArrayList cellList;
+	if (!g_NavAreaCells.GetValue(navKey, cellList))
+	{
+		cellList = new ArrayList();
+		g_NavAreaCells.SetValue(navKey, cellList);
+	}
+	cellList.Push(cellIndex);
 }
 
 static bool GridLib_IsObstructed(const float pos[3])
