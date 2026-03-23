@@ -55,7 +55,7 @@
 
 #define GRIDLIB_VERSION "1.1.0"
 #define GRIDLIB_CELL_SIZE 32.0
-#define GRIDLIB_SPATIAL_BUCKET_SIZE 500.0
+#define GRIDLIB_SPATIAL_BUCKET_SIZE 150.0
 #define GRIDLIB_MAX_CELLS 500000
 
 // ============================================================================
@@ -1282,7 +1282,7 @@ static bool GridLib_IsObstructed(const float pos[3])
 		}
 		else
 		{
-			// Skip env_physics_blocker entirely - its blocktype is toggleable
+			// Skip env_physics_blocker entirely — its blocktype is toggleable
 			// at runtime, so it must be checked at spawn time, not precomputation
 			char className[32];
 			GetEntityClassname(hitEntity, className, sizeof(className));
