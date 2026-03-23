@@ -905,6 +905,234 @@ static void GridLib_InitializeSpatialHash()
 	          g_HashGridWidth, g_HashGridHeight, totalBuckets);
 }
 
+/**
+ * Compute the overall slope normal for a sloped nav area (stairs, ramps).
+ * Individual step treads are flat (0,0,1) but we want the overall slope angle.
+ */
+static void GridLib_ComputeSlopeNormal(const float navSize[3], float slopeNormal[3])
+{
+	bool slopeAlongX = (navSize[0] >= navSize[1]);
+	float slopeLen = slopeAlongX ? navSize[0] : navSize[1];
+	float dZ = navSize[2];
+
+	if (slopeAlongX)
+	{
+		slopeNormal[0] = -dZ;
+		slopeNormal[1] = 0.0;
+		slopeNormal[2] = slopeLen;
+	}
+	else
+	{
+		slopeNormal[0] = 0.0;
+		slopeNormal[1] = -dZ;
+		slopeNormal[2] = slopeLen;
+	}
+
+	float len = SquareRoot(slopeNormal[0]*slopeNormal[0] +
+	                       slopeNormal[1]*slopeNormal[1] +
+	                       slopeNormal[2]*slopeNormal[2]);
+	if (len > 0.001)
+	{
+		slopeNormal[0] /= len;
+		slopeNormal[1] /= len;
+		slopeNormal[2] /= len;
+	}
+
+	// Ensure normal points upward
+	if (slopeNormal[2] < 0.0)
+	{
+		slopeNormal[0] = -slopeNormal[0];
+		slopeNormal[1] = -slopeNormal[1];
+		slopeNormal[2] = -slopeNormal[2];
+	}
+}
+
+/**
+ * Compute how much to lift the hull check on slopes to clear adjacent step risers.
+ * Over half the hull width (16 units), the Z changes by |dZ/dHorizontal| * 16.
+ */
+static float GridLib_ComputeSlopeHullLift(const float navSize[3])
+{
+	bool slopeAlongX = (navSize[0] >= navSize[1]);
+	float slopeAxisLen = slopeAlongX ? navSize[0] : navSize[1];
+	if (slopeAxisLen > 0.0)
+		return FloatAbs(navSize[2]) / slopeAxisLen * 16.0;
+	return 0.0;
+}
+
+/**
+ * Find the ground Z at a cell's XY position using 4-band traces.
+ * Picks the hit closest to the expected Z (from slope interpolation)
+ * to avoid ceilings (too high) and lower steps visible through gaps (too low).
+ *
+ * @param cellPos        Cell XY position (Z is written on output)
+ * @param navPos         Nav area position
+ * @param navSize        Nav area size
+ * @param isSloped       Whether the nav area is sloped
+ * @param zTop           Top of trace range
+ * @param bandHeight     Height of each trace band
+ * @param zMin           Min Z of nav area
+ * @param zMax           Max Z of nav area
+ * @param navArea        Nav area address (for center Z fallback)
+ * @param surfaceNormal  Output: surface normal at hit point
+ */
+static void GridLib_FindGroundZ(float cellPos[3],
+                                 const float navPos[3],
+                                 const float navSize[3],
+                                 bool isSloped,
+                                 float zTop, float bandHeight,
+                                 float zMin, float zMax,
+                                 Address navArea,
+                                 float surfaceNormal[3])
+{
+	float bestHitZ = -999999.0;
+	float bestHitDist = 999999.0;
+	bool groundFound = false;
+
+	// Compute expected Z from slope interpolation
+	float expectedZ;
+	if (isSloped)
+	{
+		bool slopeAlongX = (navSize[0] >= navSize[1]);
+		float frac;
+		if (slopeAlongX)
+			frac = (cellPos[0] - navPos[0]) / navSize[0];
+		else
+			frac = (cellPos[1] - navPos[1]) / navSize[1];
+		if (frac < 0.0) frac = 0.0;
+		if (frac > 1.0) frac = 1.0;
+		expectedZ = navPos[2] + frac * navSize[2];
+	}
+	else
+	{
+		expectedZ = navPos[2] + navSize[2] * 0.5;
+	}
+
+	float trBandStart[3], trBandEnd[3];
+	trBandStart[0] = cellPos[0];
+	trBandStart[1] = cellPos[1];
+	trBandEnd[0] = cellPos[0];
+	trBandEnd[1] = cellPos[1];
+
+	for (int band = 0; band < 4; band++)
+	{
+		trBandStart[2] = zTop - float(band) * bandHeight;
+		trBandEnd[2]   = zTop - float(band + 1) * bandHeight;
+
+		Handle trace = TR_TraceRayFilterEx(trBandStart, trBandEnd, MASK_NPCSOLID,
+		                                   RayType_EndPoint, GridLib_TraceFilter_NoPlayers);
+
+		if (TR_DidHit(trace) && !TR_StartSolid(trace))
+		{
+			float hitPos[3];
+			TR_GetEndPosition(hitPos, trace);
+
+			if (hitPos[2] >= zMin - 30.0 && hitPos[2] <= zMax + 30.0)
+			{
+				float traceNormal[3];
+				TR_GetPlaneNormal(trace, traceNormal);
+				float normalLen = SquareRoot(traceNormal[0]*traceNormal[0] +
+				                             traceNormal[1]*traceNormal[1] +
+				                             traceNormal[2]*traceNormal[2]);
+
+				if (normalLen > 0.5 && traceNormal[2] > 0.3)
+				{
+					float dist = FloatAbs(hitPos[2] - expectedZ);
+					if (!groundFound || dist < bestHitDist)
+					{
+						bestHitZ = hitPos[2];
+						bestHitDist = dist;
+						groundFound = true;
+
+						surfaceNormal[0] = traceNormal[0];
+						surfaceNormal[1] = traceNormal[1];
+						surfaceNormal[2] = traceNormal[2];
+					}
+				}
+			}
+		}
+
+		delete trace;
+	}
+
+	if (groundFound)
+	{
+		float verticalOffset = g_HeightOffset;
+		if (surfaceNormal[2] > 0.1)
+		{
+			verticalOffset = g_HeightOffset / surfaceNormal[2];
+			if (verticalOffset > g_HeightOffset * 3.0)
+				verticalOffset = g_HeightOffset * 3.0;
+		}
+		cellPos[2] = bestHitZ + verticalOffset;
+	}
+	else
+	{
+		float centerPos[3];
+		L4D_GetNavAreaCenter(navArea, centerPos);
+		cellPos[2] = centerPos[2] + g_HeightOffset;
+	}
+}
+
+/**
+ * Clamp cell position, check obstruction, and store the cell.
+ *
+ * @return true if cell was stored, false if excluded by obstruction
+ */
+static bool GridLib_CheckAndStoreCell(float cellPos[3],
+                                       const float surfaceNormal[3],
+                                       const float navPos[3],
+                                       const float navSize[3],
+                                       float slopeHullLift,
+                                       Address navArea,
+                                       int &excludedCount)
+{
+	// Clamp to nav area bounds
+	if (cellPos[0] < navPos[0])
+		cellPos[0] = navPos[0] + 8.0;
+	if (cellPos[0] > navPos[0] + navSize[0])
+		cellPos[0] = navPos[0] + navSize[0] - 8.0;
+
+	if (cellPos[1] < navPos[1])
+		cellPos[1] = navPos[1] + 8.0;
+	if (cellPos[1] > navPos[1] + navSize[1])
+		cellPos[1] = navPos[1] + navSize[1] - 8.0;
+
+	// Hull trace for obstruction (on slopes, lift to clear step risers)
+	bool isObstructed = false;
+	if (g_CheckObstruction)
+	{
+		float obstructionPos[3];
+		obstructionPos[0] = cellPos[0];
+		obstructionPos[1] = cellPos[1];
+		obstructionPos[2] = cellPos[2] + slopeHullLift;
+		isObstructed = GridLib_IsObstructed(obstructionPos);
+	}
+
+	if (isObstructed && g_ExcludeObstructed)
+	{
+		excludedCount++;
+		return false;
+	}
+
+	// Store cell
+	GridCell cell;
+	cell.position[0] = cellPos[0];
+	cell.position[1] = cellPos[1];
+	cell.position[2] = cellPos[2];
+	cell.navArea = navArea;
+	cell.isObstructed = isObstructed;
+	cell.normal[0] = surfaceNormal[0];
+	cell.normal[1] = surfaceNormal[1];
+	cell.normal[2] = surfaceNormal[2];
+
+	int cellIndex = g_GridCells.PushArray(cell);
+	GridLib_AddCellToHash(cellIndex, cellPos);
+	GridLib_AddCellToNavMap(cellIndex, navArea);
+
+	return true;
+}
+
 static int GridLib_SubdivideNavArea(Address navArea, int &excludedCount)
 {
 	// Skip saferooms
@@ -916,87 +1144,30 @@ static int GridLib_SubdivideNavArea(Address navArea, int &excludedCount)
 	L4D_GetNavAreaPos(navArea, navPos);
 	L4D_GetNavAreaSize(navArea, navSize);
 
-	// Calculate grid dimensions
+	// Grid dimensions and spacing
 	int cellsX = RoundToFloor(navSize[0] / GRIDLIB_CELL_SIZE);
 	int cellsY = RoundToFloor(navSize[1] / GRIDLIB_CELL_SIZE);
-
-	// Minimum 1 cell per dimension
 	if (cellsX < 1) cellsX = 1;
 	if (cellsY < 1) cellsY = 1;
-
-	// Proportional spacing: distribute cells evenly across the full nav area extent.
-	// This avoids dead space at edges that fixed 32-unit intervals create.
 	float spacingX = navSize[0] / float(cellsX);
 	float spacingY = navSize[1] / float(cellsY);
 
-	// Pre-compute slope normal for sloped nav areas (stairs, ramps).
-	// Individual step treads are flat (0,0,1) but we want the overall slope angle.
-	float slopeNormal[3] = {0.0, 0.0, 1.0};
+	// Slope properties
 	bool isSloped = (FloatAbs(navSize[2]) > 8.0);
-	if (isSloped)
-	{
-		bool slopeAlongX = (navSize[0] >= navSize[1]);
-		float slopeLen = slopeAlongX ? navSize[0] : navSize[1];
-		float dZ = navSize[2];
-
-		if (slopeAlongX)
-		{
-			slopeNormal[0] = -dZ;
-			slopeNormal[1] = 0.0;
-			slopeNormal[2] = slopeLen;
-		}
-		else
-		{
-			slopeNormal[0] = 0.0;
-			slopeNormal[1] = -dZ;
-			slopeNormal[2] = slopeLen;
-		}
-
-		float len = SquareRoot(slopeNormal[0]*slopeNormal[0] +
-		                       slopeNormal[1]*slopeNormal[1] +
-		                       slopeNormal[2]*slopeNormal[2]);
-		if (len > 0.001)
-		{
-			slopeNormal[0] /= len;
-			slopeNormal[1] /= len;
-			slopeNormal[2] /= len;
-		}
-
-		// Ensure normal points upward
-		if (slopeNormal[2] < 0.0)
-		{
-			slopeNormal[0] = -slopeNormal[0];
-			slopeNormal[1] = -slopeNormal[1];
-			slopeNormal[2] = -slopeNormal[2];
-		}
-	}
-
-	// For sloped nav areas, compute how much to lift the hull check to clear step risers.
-	// Over half the hull width (16 units), the Z changes by |dZ/dHorizontal| * 16.
+	float slopeNormal[3] = {0.0, 0.0, 1.0};
 	float slopeHullLift = 0.0;
 	if (isSloped)
 	{
-		bool slopeAlongX_hull = (navSize[0] >= navSize[1]);
-		float slopeAxisLen = slopeAlongX_hull ? navSize[0] : navSize[1];
-		if (slopeAxisLen > 0.0)
-			slopeHullLift = FloatAbs(navSize[2]) / slopeAxisLen * 16.0;
+		GridLib_ComputeSlopeNormal(navSize, slopeNormal);
+		slopeHullLift = GridLib_ComputeSlopeHullLift(navSize);
 	}
 
-	// Pre-compute Z trace bands for ground detection.
-	// A single downward trace from above fails in enclosed stairwells (hits ceiling/upper floor).
-	// Splitting the Z range into 4 bands and taking the lowest valid hit ensures we find the
-	// actual step surface, not the floor above.
+	// Z trace band setup
 	float zMin = navPos[2];
 	float zMax = navPos[2] + navSize[2];
-	if (zMin > zMax)
-	{
-		float tmp = zMin;
-		zMin = zMax;
-		zMax = tmp;
-	}
+	if (zMin > zMax) { float tmp = zMin; zMin = zMax; zMax = tmp; }
 	float zTop = zMax + 20.0;
-	float zBot = zMin - 20.0;
-	float bandHeight = (zTop - zBot) / 4.0;
+	float bandHeight = (zTop - (zMin - 20.0)) / 4.0;
 
 	int cellsCreated = 0;
 	int cellsAttempted = 0;
@@ -1008,181 +1179,46 @@ static int GridLib_SubdivideNavArea(Address navArea, int &excludedCount)
 		{
 			cellsAttempted++;
 
-			// Calculate cell center position (proportional spacing)
 			float cellPos[3];
 			cellPos[0] = navPos[0] + (float(x) + 0.5) * spacingX;
 			cellPos[1] = navPos[1] + (float(y) + 0.5) * spacingY;
 
-			// Find ground using 4 band traces across the nav area's Z range.
-			// In enclosed stairwells a single top-down trace hits the ceiling/upper floor.
-			// By splitting into bands we find hits at different Z levels.
-			// We pick the hit closest to the expected Z (from slope interpolation)
-			// to avoid both ceilings (too high) and lower steps visible through gaps (too low).
+			// Find ground Z via 4-band traces
 			float surfaceNormal[3] = {0.0, 0.0, 1.0};
-			float bestHitZ = -999999.0;
-			float bestHitDist = 999999.0;
-			bool groundFound = false;
+			GridLib_FindGroundZ(cellPos, navPos, navSize, isSloped,
+			                    zTop, bandHeight, zMin, zMax,
+			                    navArea, surfaceNormal);
 
-			// Compute expected Z from slope interpolation
-			float expectedZ;
-			if (isSloped)
-			{
-				bool slopeAlongX = (navSize[0] >= navSize[1]);
-				float frac;
-				if (slopeAlongX)
-					frac = (cellPos[0] - navPos[0]) / navSize[0];
-				else
-					frac = (cellPos[1] - navPos[1]) / navSize[1];
-				if (frac < 0.0) frac = 0.0;
-				if (frac > 1.0) frac = 1.0;
-				expectedZ = navPos[2] + frac * navSize[2];
-			}
-			else
-			{
-				expectedZ = navPos[2] + navSize[2] * 0.5;
-			}
-
-			float trBandStart[3], trBandEnd[3];
-			trBandStart[0] = cellPos[0];
-			trBandStart[1] = cellPos[1];
-			trBandEnd[0] = cellPos[0];
-			trBandEnd[1] = cellPos[1];
-
-			for (int band = 0; band < 4; band++)
-			{
-				trBandStart[2] = zTop - float(band) * bandHeight;
-				trBandEnd[2]   = zTop - float(band + 1) * bandHeight;
-
-				Handle trace = TR_TraceRayFilterEx(trBandStart, trBandEnd, MASK_NPCSOLID,
-				                                   RayType_EndPoint, GridLib_TraceFilter_NoPlayers);
-
-				if (TR_DidHit(trace) && !TR_StartSolid(trace))
-				{
-					float hitPos[3];
-					TR_GetEndPosition(hitPos, trace);
-
-					// Accept hits within the nav area's Z range (small tolerance)
-					if (hitPos[2] >= zMin - 30.0 && hitPos[2] <= zMax + 30.0)
-					{
-						// Verify surface normal points upward (floor/tread, not wall/riser/ceiling-from-inside)
-						float traceNormal[3];
-						TR_GetPlaneNormal(trace, traceNormal);
-						float normalLen = SquareRoot(traceNormal[0]*traceNormal[0] +
-						                             traceNormal[1]*traceNormal[1] +
-						                             traceNormal[2]*traceNormal[2]);
-
-						if (normalLen > 0.5 && traceNormal[2] > 0.3)
-						{
-							// Keep the hit closest to expected Z
-							float dist = FloatAbs(hitPos[2] - expectedZ);
-							if (!groundFound || dist < bestHitDist)
-							{
-								bestHitZ = hitPos[2];
-								bestHitDist = dist;
-								groundFound = true;
-
-								surfaceNormal[0] = traceNormal[0];
-								surfaceNormal[1] = traceNormal[1];
-								surfaceNormal[2] = traceNormal[2];
-							}
-						}
-					}
-				}
-
-				delete trace;
-			}
-
-			if (groundFound)
-			{
-				// Apply height offset perpendicular to surface
-				float verticalOffset = g_HeightOffset;
-				if (surfaceNormal[2] > 0.1)
-				{
-					verticalOffset = g_HeightOffset / surfaceNormal[2];
-					if (verticalOffset > g_HeightOffset * 3.0)
-						verticalOffset = g_HeightOffset * 3.0;
-				}
-				cellPos[2] = bestHitZ + verticalOffset;
-			}
-			else
-			{
-				// No valid hit in any band - fall back to nav area center Z
-				float centerPos[3];
-				L4D_GetNavAreaCenter(navArea, centerPos);
-				cellPos[2] = centerPos[2] + g_HeightOffset;
-			}
-
-			// Override normal with slope normal for sloped nav areas
-			// (trace hits flat step treads, but we want the overall staircase slope)
-			if (isSloped)
+			// Use computed slope normal only if the trace returned a flat surface
+			// (e.g. stair treads). If the trace found an actual slope (ramp), keep it.
+			if (isSloped && surfaceNormal[2] > 0.95)
 			{
 				surfaceNormal[0] = slopeNormal[0];
 				surfaceNormal[1] = slopeNormal[1];
 				surfaceNormal[2] = slopeNormal[2];
 			}
 
-			// Clamp to nav area bounds
-			if (cellPos[0] < navPos[0])
-				cellPos[0] = navPos[0] + 8.0;
-			if (cellPos[0] > navPos[0] + navSize[0])
-				cellPos[0] = navPos[0] + navSize[0] - 8.0;
-
-			if (cellPos[1] < navPos[1])
-				cellPos[1] = navPos[1] + 8.0;
-			if (cellPos[1] > navPos[1] + navSize[1])
-				cellPos[1] = navPos[1] + navSize[1] - 8.0;
-
-			// Hull trace for obstruction
-			// On slopes, lift the hull to clear adjacent step risers
-			bool isObstructed = false;
-			if (g_CheckObstruction)
+			// Clamp, check obstruction, and store
+			if (GridLib_CheckAndStoreCell(cellPos, surfaceNormal, navPos, navSize,
+			                              slopeHullLift, navArea, excludedCount))
 			{
-				float obstructionPos[3];
-				obstructionPos[0] = cellPos[0];
-				obstructionPos[1] = cellPos[1];
-				obstructionPos[2] = cellPos[2] + slopeHullLift;
-			    isObstructed = GridLib_IsObstructed(obstructionPos);
+				cellsCreated++;
 			}
-
-			// Skip obstructed cells entirely if configured
-			if (isObstructed && g_ExcludeObstructed)
+			else
 			{
-				excludedCount++;
 				cellsSkippedObstruction++;
-				continue;
 			}
-
-			// Store cell
-			GridCell cell;
-			cell.position[0] = cellPos[0];
-			cell.position[1] = cellPos[1];
-			cell.position[2] = cellPos[2];
-			cell.navArea = navArea;
-			cell.isObstructed = isObstructed;
-			cell.normal[0] = surfaceNormal[0];
-			cell.normal[1] = surfaceNormal[1];
-			cell.normal[2] = surfaceNormal[2];
-
-			int cellIndex = g_GridCells.PushArray(cell);
-
-			// Add to spatial hash
-			GridLib_AddCellToHash(cellIndex, cellPos);
-
-			// Add to nav area reverse map
-			GridLib_AddCellToNavMap(cellIndex, navArea);
-
-			cellsCreated++;
 		}
 	}
 
-	//if (cellsAttempted != cellsCreated)
-	//{
-	//	LogMessage("[GridLib] NavArea %x: attempted=%d created=%d skippedObstruction=%d lost=%d (size=%.0fx%.0fx%.0f cellsXY=%dx%d checkObs=%d excludeObs=%d)",
-	//		navArea, cellsAttempted, cellsCreated, cellsSkippedObstruction,
-	//		cellsAttempted - cellsCreated - cellsSkippedObstruction,
-	//		navSize[0], navSize[1], navSize[2], cellsX, cellsY,
-	//		g_CheckObstruction, g_ExcludeObstructed);
-	//}
+	// if (cellsAttempted != cellsCreated)
+	// {
+	// 	LogMessage("[GridLib] NavArea %x: attempted=%d created=%d skippedObstruction=%d lost=%d (size=%.0fx%.0fx%.0f cellsXY=%dx%d checkObs=%d excludeObs=%d)",
+	// 		navArea, cellsAttempted, cellsCreated, cellsSkippedObstruction,
+	// 		cellsAttempted - cellsCreated - cellsSkippedObstruction,
+	// 		navSize[0], navSize[1], navSize[2], cellsX, cellsY,
+	// 		g_CheckObstruction, g_ExcludeObstructed);
+	// }
 
 	return cellsCreated;
 }
