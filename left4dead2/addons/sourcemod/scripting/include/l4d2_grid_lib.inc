@@ -262,16 +262,20 @@ stock int GridLib_FindNearbyCells(const float position[3],
 	if (!g_IsReady || g_GridCells == null)
 		return 0;
 
+	// Static candidate list - allocated once, reused across calls
+	// Each entry: [0] = distance, [1] = cellIndex (as float)
+	static ArrayList candidates = null;
+	if (candidates == null)
+		candidates = new ArrayList(2);
+	else
+		candidates.Clear();
+
 	// Calculate center bucket
 	int centerBucketX = RoundToFloor((position[0] - g_MapMin[0]) / GRIDLIB_SPATIAL_BUCKET_SIZE);
 	int centerBucketY = RoundToFloor((position[1] - g_MapMin[1]) / GRIDLIB_SPATIAL_BUCKET_SIZE);
 
 	// Search adjacent buckets
 	int bucketRadius = RoundToCeil(searchRadius / GRIDLIB_SPATIAL_BUCKET_SIZE);
-
-	// Temporary storage for candidates [distance, cellIndex]
-	float candidates[500][2];
-	int candidateCount = 0;
 
 	for (int dx = -bucketRadius; dx <= bucketRadius; dx++)
 	{
@@ -288,9 +292,6 @@ stock int GridLib_FindNearbyCells(const float position[3],
 
 			for (int i = 0; i < bucket.Length; i++)
 			{
-				if (candidateCount >= 500)
-					break;
-
 				int cellIdx = bucket.Get(i);
 				GridCell cell;
 				g_GridCells.GetArray(cellIdx, cell, sizeof(GridCell));
@@ -304,43 +305,44 @@ stock int GridLib_FindNearbyCells(const float position[3],
 				if (distXY > searchRadius) continue;
 				if (FloatAbs(dz) > maxZDiff) continue;
 
-				// Calculate distance
 				float distance = GetVectorDistance(position, cell.position);
 
-				candidates[candidateCount][0] = distance;
-				candidates[candidateCount][1] = float(cellIdx);
-				candidateCount++;
+				float entry[2];
+				entry[0] = distance;
+				entry[1] = float(cellIdx);
+				candidates.PushArray(entry);
 			}
-
-			if (candidateCount >= 500)
-				break;
 		}
-
-		if (candidateCount >= 500)
-			break;
 	}
 
-	// Sort by distance (selection sort - simple for small N)
+	int candidateCount = candidates.Length;
+
+	// Sort by distance (selection sort on the closest maxResults entries)
 	int numToSelect = (candidateCount < maxResults) ? candidateCount : maxResults;
 
 	for (int i = 0; i < numToSelect; i++)
 	{
 		int minIdx = i;
+		float minDist[2];
+		candidates.GetArray(i, minDist);
+
 		for (int j = i + 1; j < candidateCount; j++)
 		{
-			if (candidates[j][0] < candidates[minIdx][0])
+			float cmp[2];
+			candidates.GetArray(j, cmp);
+			if (cmp[0] < minDist[0])
+			{
 				minIdx = j;
+				minDist = cmp;
+			}
 		}
 
 		if (minIdx != i)
-		{
-			float temp[2];
-			temp = candidates[i];
-			candidates[i] = candidates[minIdx];
-			candidates[minIdx] = temp;
-		}
+			candidates.SwapAt(i, minIdx);
 
-		results[i] = RoundToFloor(candidates[i][1]);
+		float selected[2];
+		candidates.GetArray(i, selected);
+		results[i] = RoundToFloor(selected[1]);
 	}
 
 	return numToSelect;
