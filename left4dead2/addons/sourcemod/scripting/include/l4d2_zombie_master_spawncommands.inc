@@ -262,7 +262,7 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 
 	int tries = (count<=10) ? 5 : 3;
 	int spawned = 0;
-	float randomPos[3], randomPos_old[3], angle[3];
+	float randomPos[3], angle[3];
 	bool glow, random;
 	
 	char set_model[64] = "";
@@ -270,12 +270,12 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
     else if (g_bClownGlow && strcmp(type,"clown")==0) glow = true;
     
 	// Build survivor PVS data and eye positions for gridlib visibility filtering
-	char survivorPVS[4][PVS_BUFFER_SIZE];
-	float survivorEyePos[4][3];
+	char survivorPVS[32][PVS_BUFFER_SIZE];
+	float survivorEyePos[32][3];
 	int survivorPVSCount = 0;
 	if (use_gridlib && hCheckOriginInPVS != null)
 	{
-		for (int s = 1; s <= MaxClients && survivorPVSCount < 4; s++)
+		for (int s = 1; s <= MaxClients && survivorPVSCount < 32; s++)
 		{
 			if (!IsClientInGame(s) || GetClientTeam(s) != TEAM_SURVIVOR || !IsPlayerAlive(s))
 				continue;
@@ -290,9 +290,6 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 		LogMessage("[zm] ZM_Horde: built PVS for %d survivors", survivorPVSCount);
 	}
     
-    float travel;
-    int gridlib_fails = 0;
-    if (use_gridlib) randomPos_old = zm_spawner_pos;
 	for( int i = 0; i < count; i++  )
 	{
 		if (use_gridlib) // Gridlib smart zombie positions
@@ -323,7 +320,13 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 				{
 					if (!PVS_CheckOriginInPVS(randomPos, survivorPVS[s]))
 						continue;
-					// In PVS — confirm with a single ray trace
+
+					// In PVS, need to do some checks
+					// Skip survivors too far away (does this need fog adjustment?)
+					if (GetVectorDistance(cellEye, survivorEyePos[s]) > g_fSpawnMinDistance)
+						continue;
+
+					// Perform a single trace
 					Handle trace = TR_TraceRayFilterEx(cellEye, survivorEyePos[s],
 						MASK_VISIBLE, RayType_EndPoint, FilterSpawner, -1);
 					bool hit = TR_DidHit(trace);
@@ -340,17 +343,6 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 					continue;
 				}
 			}
-			
-			// check travel distance from old randompos to new randompos. as long as it's not too jumpy it's cool
-			travel = L4D2_NavAreaTravelDistance(randomPos,randomPos_old,false);
-			if (travel<0.0 || travel>500.0 || L4D2_NavAreaTravelDistance(randomPos_old,randomPos,false)<0.0)
-			{
-    			gridlib_fails += 1;
-    			if (gridlib_fails>=5) use_gridlib = false;
-    			LogMessage("gridlib fail %d travel %f, using random navmesh pos", gridlib_fails, travel);
-    			L4D_FindRandomSpot(zm_spawner_navArea,randomPos);
-			}
-			randomPos_old = randomPos;
 			
 			LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) spawning at (%.0f,%.0f,%.0f) dist=%.0f",
 				i, gridlib_cell_count, cellIdx, randomPos[0], randomPos[1], randomPos[2],
