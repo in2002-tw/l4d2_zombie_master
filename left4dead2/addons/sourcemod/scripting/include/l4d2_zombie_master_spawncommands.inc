@@ -272,12 +272,12 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
     else if (g_bClownGlow && strcmp(type,"clown")==0) glow = true;
     
 	// Build survivor PVS data and eye positions for gridlib visibility filtering
-	char survivorPVS[4][PVS_BUFFER_SIZE];
-	float survivorEyePos[4][3];
+	char survivorPVS[MAXPLAYERS+1][PVS_BUFFER_SIZE];
+	float survivorEyePos[MAXPLAYERS+1][3];
 	int survivorPVSCount = 0;
 	if (use_gridlib && hCheckOriginInPVS != null)
 	{
-		for (int s = 1; s <= MaxClients && survivorPVSCount < 4; s++)
+		for (int s = 1; s <= MaxClients; s++)
 		{
 			if (!IsClientInGame(s) || GetClientTeam(s) != TEAM_SURVIVOR || !IsPlayerAlive(s))
 				continue;
