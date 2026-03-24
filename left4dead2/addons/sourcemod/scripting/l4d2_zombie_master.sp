@@ -18,10 +18,10 @@
 #include <adt_trie>
 #include <files>
 
-bool DEBUG = false; //
+bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.033 2026-03-23"
+#define PLUGIN_VERSION 			"0.9.034 2026-03-24"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -70,7 +70,7 @@ public Plugin myinfo =
 // 24. New admin menu.
 // 25. Activity detection now sees chat messages.
 // 26. New models for uncommons.
-// 27. More things moved to /include
+// 27. More code moved to /include
 // 28. Major spawner overhaul: GridLib implemented
 
 // TO DO LIST:
@@ -92,7 +92,6 @@ public Plugin myinfo =
 // 60. Survivors still keep teleporting and falling to their death.
 // 62. Fun command: z_mute_infected no yelling or growling, allowing to stealth attack survivors.
 // 64. Crouched frozen specials should stay crouched.
-// 65. Enumerate within optimizations
 
 // SetEntPropFloat(witch, Prop_Send,"m_flModelScale", scale); 
 
@@ -705,6 +704,9 @@ public void OnPluginStart()
     
     g_hSpawnMinDistance = CreateConVar("zm_spawndistance", "400", "ZM minimum spawn distance.",FCVAR_PROTECTED, true, 0.0, true, 10000.0);
     g_hSpawnMinDistance.AddChangeHook(ConVarChanged_Cvars);
+    
+    g_hGrid = CreateConVar("zm_grid", "1", "Integrate GridLib into ZM spawner.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
+    g_hGrid.AddChangeHook(ConVarChanged_Cvars);
     
     g_hGridSearchRadius = CreateConVar("zm_grid_search_radius", "500", "Search radius (units) for GridLib fallback spawn when indicator is blue.",FCVAR_PROTECTED, true, 0.0, true, 5000.0);
     g_hGridSearchRadius.AddChangeHook(ConVarChanged_Cvars);
@@ -2691,7 +2693,7 @@ Action zm_new_round(Handle timer = null)
         return Plugin_Stop;
     }
     
-    if (!GridLib_IsReady())
+    if (g_bGrid && !GridLib_IsReady())
     {
         GridLib_Initialize();
         GridLib_StartPrecomputation();
@@ -5015,6 +5017,16 @@ void GetCvars()
     
     g_fPanicRateMultiplier = g_hPanicRateMultiplier.FloatValue;
     
+    if (g_hGrid.BoolValue!=g_bGrid)
+    {
+        g_bGrid = g_hGrid.BoolValue;
+        if (g_bGrid && L4D_HasMapStarted() && !GridLib_IsReady())
+        {
+            GridLib_Initialize();
+            GridLib_StartPrecomputation();
+        }
+    }
+    
 }
 
 void zm_fake_gamemode()
@@ -6157,7 +6169,7 @@ public void OnMapStart()
         	CreateTimer(1.0, Timer_StartPrecomputeNav, _, TIMER_FLAG_NO_MAPCHANGE);
     	}
     	zm_update();
-    	if (!GridLib_IsReady())
+    	if (g_bGrid && !GridLib_IsReady())
         {
             GridLib_Initialize();
             GridLib_StartPrecomputation();

@@ -42,9 +42,9 @@ bool l4dhooks_updated = false;
 #define ZM_MENU_CONTEXT 9
 
 // enum for spawner context state. to determine spawner RGB state:
-// 0 -> SPAWNER_RGB_ALLOWED
-// 1,2 -> SPAWNER_RGB_BLOCKED
-// else -> SPAWNER_RGB_CONDITIONAL
+// 0 -> GREEN
+// 1,2 -> RED
+// else -> BLUE
 #define SPAWNER_OK 0
 #define SPAWNER_INVALID 1
 #define SPAWNER_NAV 2
@@ -52,10 +52,6 @@ bool l4dhooks_updated = false;
 #define SPAWNER_SIGHT 4
 #define SPAWNER_OTHER 5
 
-// enum for spawner RGB state
-#define SPAWNER_RGB_BLOCKED 0 // can never spawn infected here
-#define SPAWNER_RGB_CONDITIONAL 1 // cannot spawn here temporarily - survivors too close, they can see, obstruction, etc.
-#define SPAWNER_RGB_ALLOWED 2 // can spawn infected here
 #define RGB_ZM 16777215 // white for outlines
 
 #define AUTOCOMMON_OFF 0
