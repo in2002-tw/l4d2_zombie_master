@@ -5,22 +5,6 @@
 #define _zm_spawner_included
 ///////////////////////////////////////
 
-int color_blocked[4] = {255,0,0,128};
-int color_conditional[4] = {0,0,255,128};
-int color_allowed[4] = {0,255,0,128};
-int color_unit_select[4] = {255,255,255,128};
-
-float zm_target_pos[3];
-float zm_spawner_pos[3];
-Address zm_spawner_navArea;
-int zm_spawner_navAttrFlags, zm_spawner_navSpawnAttrs;
-int zm_spawner_state;
-float t_last_spawner_update;
-float t_last_spawner_sound;
-
-int spawner_nearest_survivor = -1;
-float latest_distance = 0.0;
-
 /**
  * Draw the colored spawn indicator ring at the ZM's aim position and update spawner state.
  * Draws three stacked rings (red=blocked, blue=conditional, green=allowed) and plays
@@ -808,4 +792,56 @@ void mark_flow_survivor_and_zombie(int survivor=-1, int zombie=-1)
         TE_SetupBeamPoints(draw_start,draw_end,g_iLaser,g_iHalo,0,0,0.5,2.0,4.0,1,1.0,color_conditional,0);
         TE_SendToClient(zm_client);
     }
+}
+
+Action check_fog_distance(Handle timer = null)
+{
+    if (DEBUG) LogMessage("[zm] check_fog_distance");
+    float new_fog_distance = FOG_DISTANCE;
+	int fog_controller = -1;
+	while( (fog_controller = FindEntityByClassname(fog_controller, "env_fog_controller")) != INVALID_ENT_REFERENCE )
+	{
+		if (g_DHook_AcceptInput)
+     	{
+           	if (IsValidEntity(fog_controller))
+           	{
+           	   if (DEBUG) LogMessage("[zm] Hooking fog_controller g_DHook_AcceptInput");
+           	   DHookEntity(g_DHook_AcceptInput, true, fog_controller, INVALID_FUNCTION, DHook_Fog_AcceptInput);
+           	}
+     	}
+		bool enabled = GetEntProp(fog_controller, Prop_Data, "m_fog.enable") > 0;
+		if (enabled)
+		{
+        		float fog_end = GetEntPropFloat(fog_controller, Prop_Data, "m_fog.end");
+        		float fog_farz = GetEntPropFloat(fog_controller, Prop_Data, "m_fog.farz");
+        		float maxdensity = GetEntPropFloat(fog_controller, Prop_Data, "m_fog.maxdensity");
+        		if (DEBUG) LogMessage("[zm] Found env_fog_controller %d", fog_controller);
+        		if (DEBUG) LogMessage("[zm] end farz maxdensity: %f %f %f", fog_end, fog_farz, maxdensity);
+        		if (maxdensity>=1.0)
+        		{
+            		if (fog_farz<new_fog_distance && fog_farz>0.0) new_fog_distance = fog_farz;
+        		}
+    		
+		}
+	}
+	
+	if (new_fog_distance!=fog_distance)
+	{
+	    fog_distance = new_fog_distance;
+	    CreateTimer(10.0,check_fog_distance,TIMER_FLAG_NO_MAPCHANGE);
+	    CreateTimer(30.0,check_fog_distance,TIMER_FLAG_NO_MAPCHANGE);
+	    CreateTimer(45.0,check_fog_distance,TIMER_FLAG_NO_MAPCHANGE);
+	    CreateTimer(60.0,check_fog_distance,TIMER_FLAG_NO_MAPCHANGE);
+        LogMessage("[zm] ZM spawner fog distance: %f", fog_distance);
+	}
+	return Plugin_Stop;
+}
+
+MRESReturn DHook_Fog_AcceptInput(int pThis, DHookReturn hReturn, DHookParam hParams)
+{
+	if (DEBUG) LogMessage("[zm] DHook_Fog_AcceptInput");
+	if (!g_bCvarAllow) return MRES_Ignored;
+	check_fog_distance();
+	CreateTimer(2.0,check_fog_distance,TIMER_FLAG_NO_MAPCHANGE);
+	return MRES_Ignored;
 }
