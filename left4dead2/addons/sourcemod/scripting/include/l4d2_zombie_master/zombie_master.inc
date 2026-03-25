@@ -51,6 +51,8 @@
 #define SPAWNER_OTHER 5
 
 #define RGB_ZM 16777215 // white for outlines
+#define RGB_FLOW 16711680 // blue for flow target survivor
+//#define RGB_FLOW 16777215
 
 #define AUTOCOMMON_OFF 0
 #define AUTOCOMMON_PANIC 1

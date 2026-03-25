@@ -120,7 +120,25 @@ Action OnTransmitZM(int entity, int client)
     return Plugin_Handled;
 }
 
-void CreateZMGlow(int target, bool red = false)
+Action OnTransmitZM_FlowSurvivor(int entity, int client)
+{
+   	int parent = GetEntPropEnt(entity,Prop_Data,"m_pParent");
+   	bool valid = IsValidEntity(parent) && parent==spawner_nearest_survivor && zm_spawner_state!=SPAWNER_OK && zm_menu_state!=ZM_MENU_CLOSED;
+   	if (valid && IsValidClient(parent) && !IsPlayerAlive(parent)) valid = false;
+   	if (valid && client==zm_client) return Plugin_Continue;
+   	else if (!valid || zm_client<0)
+   	{
+       	if (DEBUG) LogMessage("[zm] OnTransmitZM_FlowSurvivor killing glow %d, parent %d", entity, parent); 
+       	if (parent>=0 && parent<MAXENTITIES) g_iGlowList[parent] = INVALID_ENT_REFERENCE;
+       	AcceptEntityInput(entity, "Kill");
+   	}
+    return Plugin_Handled;
+}
+
+// Red: last saferoom door
+// Flow: mark survivor blue
+// Otherwise white zombie glow
+void CreateZMGlow(int target, bool red = false, bool flow = false)
 {
 	if (!IsValidClientZM()) return;
 	if (!IsValidEntity(target) || target==zm_client) return;
@@ -157,6 +175,11 @@ void CreateZMGlow(int target, bool red = false)
 	SetEntProp(glow, Prop_Send, "m_nGlowRange", 999999);
 	SetEntProp(glow, Prop_Send, "m_iGlowType", 3);
 	if (red) SetEntProp(glow, Prop_Send, "m_glowColorOverride", 254);
+	else if (flow)
+	{
+    	SetEntProp(glow, Prop_Send, "m_glowColorOverride", RGB_FLOW);
+    	//SetEntProp(glow, Prop_Send, "m_bFlashing", 1);
+	}
 	else SetEntProp(glow, Prop_Send, "m_glowColorOverride", RGB_ZM);
 	AcceptEntityInput(glow, "StartGlowing");
 	SetEntityRenderMode(glow, RENDER_TRANSCOLOR);
@@ -166,9 +189,10 @@ void CreateZMGlow(int target, bool red = false)
 	SetVariantString("!activator");
 	AcceptEntityInput(glow, "SetAttached", target);
     g_iGlowList[target] = EntIndexToEntRef(glow);
-	SDKHook(glow, SDKHook_SetTransmit, OnTransmitZM);
+	if (flow) SDKHook(glow, SDKHook_SetTransmit, OnTransmitZM_FlowSurvivor);
+	else SDKHook(glow, SDKHook_SetTransmit, OnTransmitZM);
 	DispatchKeyValue(glow, "targetname", "zm_glow");
-	if (!red)
+	if (!red && !flow)
 	{
     	// clients will hook to player_hurt; witches need this hook.
     	if (!IsValidClient(target)) SDKHook(target, SDKHook_OnTakeDamage, OnTakeDamageWitch);

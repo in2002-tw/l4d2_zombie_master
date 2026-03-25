@@ -39,9 +39,9 @@ bool DEBUG = false;
 #include <l4d2_zombie_master/zombie_master>
 #include <l4d2_grid_lib>
 #include <l4d2_zombie_master/sdk>
+#include <l4d2_zombie_master/glow>
 #include <l4d2_zombie_master/spawner>
 #include <l4d2_zombie_master/spawncommands>
-#include <l4d2_zombie_master/glow>
 #include <l4d2_zombie_master/fair_queue>
 #include <l4d2_zombie_master/settings>
 #include <l4d2_zombie_master/hud>

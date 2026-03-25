@@ -52,12 +52,13 @@ void update_ZM_spawner(const float target_pos[3], const float spawner_pos[3], co
         if (state!=SPAWNER_OK) // Draw blue visor on target survivor indicating FLOW spawn available
         {
             int target = get_spawner_target_survivor(false,state);
-            if (target>0) // Draw blue visor on target survivor
+            if (target>0 && g_iGlowList[target]==INVALID_ENT_REFERENCE) // Draw survivor with CONDITIONAL color
             {
-                GetClientEyePosition(target,draw_pos);
-                draw_pos[2] += 10.0;
-                TE_SetupBeamRingPoint(draw_pos,HULL_DX+2.0,HULL_DX,g_iLaser,g_iHalo,0,0,g_fUpdateRate*2.0,2.5,0.0,color_conditional,0,0);
-                TE_SendToClient(zm_client);
+                //GetClientEyePosition(target,draw_pos);
+                //draw_pos[2] += 10.0;
+                //TE_SetupBeamRingPoint(draw_pos,HULL_DX+2.0,HULL_DX,g_iLaser,g_iHalo,0,0,g_fUpdateRate*2.0,2.5,0.0,color_conditional,0,0);
+                //TE_SendToClient(zm_client);
+                CreateZMGlow(target,false,true);
             }
         }
         
@@ -495,19 +496,21 @@ int can_ZM_spawn_pos(float vPos[3],bool witch = false,bool hint = true,bool draw
     if (!g_bGrid || !GridLib_IsReady()) skip_gridlib = true;
     
     //                                                  bools: anyz los checkground
-    zm_spawner_navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
+    Address navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
+    int navSpawnAttrs, navAttrFlags;
+    if (draw) zm_spawner_navArea = navArea; // update global navarea
     float navSize[3], navCenter[3];
-    if (zm_spawner_navArea)
+    if (navArea)
     {
-        zm_spawner_navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(zm_spawner_navArea);
-        zm_spawner_navAttrFlags = L4D_GetNavArea_AttributeFlags(zm_spawner_navArea);
-        L4D_GetNavAreaCenter(zm_spawner_navArea, navCenter);
-        L4D_GetNavAreaSize(zm_spawner_navArea, navSize);
+        navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
+        navAttrFlags = L4D_GetNavArea_AttributeFlags(navArea);
+        L4D_GetNavAreaCenter(navArea,navCenter);
+        L4D_GetNavAreaSize(navArea,navSize);
         
         if ( FloatAbs(vPos_spawner[0]-navCenter[0])>(navSize[0]/2.0) ||
              FloatAbs(vPos_spawner[1]-navCenter[1])>(navSize[1]/2.0) || IsObstructed(vPos_spawner) )
         {
-            if (IsObstructed(navCenter)) L4D_FindRandomSpot(zm_spawner_navArea,vPos_spawner);
+            if (IsObstructed(navCenter)) L4D_FindRandomSpot(navArea,vPos_spawner);
             else vPos_spawner = navCenter;
         }
         else
@@ -519,13 +522,17 @@ int can_ZM_spawn_pos(float vPos[3],bool witch = false,bool hint = true,bool draw
     else
     {
         vPos_spawner = vPos;
-        zm_spawner_navSpawnAttrs = 0;
-        zm_spawner_navAttrFlags = 0;
         if (!witch)
         {
             spawner_state = SPAWNER_INVALID;
             fail = true;
         }
+    }
+    
+    if (draw)
+    {
+        zm_spawner_navSpawnAttrs = navSpawnAttrs;
+        zm_spawner_navAttrFlags = navAttrFlags;
     }
     
     min_distance = min_distance_to_survivors(vPos_spawner,draw);
@@ -545,9 +552,9 @@ int can_ZM_spawn_pos(float vPos[3],bool witch = false,bool hint = true,bool draw
             fail = true;
         }
     }
-    if ( ( !fail || (draw && spawner_state>SPAWNER_NAV) ) && !witch && l4dhooks_updated) // run this if spawner is CONDITIONAL to make it RED
+    if ( navArea && ( !fail || (draw && spawner_state>SPAWNER_NAV) ) && !witch && l4dhooks_updated) // run this if spawner is CONDITIONAL to make it RED
     {
-        if (L4D_NavArea_IsBlocked(zm_spawner_navArea,TEAM_INFECTED,false))
+        if (L4D_NavArea_IsBlocked(navArea,TEAM_INFECTED,false))
         {
             spawner_state = SPAWNER_NAV;
             fail = true;
@@ -574,6 +581,15 @@ int can_ZM_spawn_pos(float vPos[3],bool witch = false,bool hint = true,bool draw
         {
             vPos_spawner = vPos_gridlib;
             fail = false;
+            if (draw)
+            {
+                zm_spawner_navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
+                if (zm_spawner_navArea)
+                {
+                    zm_spawner_navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(zm_spawner_navArea);
+                    zm_spawner_navAttrFlags = L4D_GetNavArea_AttributeFlags(zm_spawner_navArea);
+                }
+            }
         }
     }
     if (fail)
@@ -758,6 +774,7 @@ int get_spawner_target_survivor(bool flow = false, int spawner_state = SPAWNER_D
        	
    	}
 	if (!IsValidClient(target_client) || !IsPlayerAlive(target_client) || GetClientTeam(target_client)!=TEAM_SURVIVOR) return -1;
+	spawner_nearest_survivor = target_client;
 	return target_client;
 }
 
