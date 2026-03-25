@@ -19,6 +19,7 @@ static float  g_fBatchSurvivorPos[MAXPLAYERS+1][3];
 static float  g_SpawnerFilterOrigin[3];
 static float  g_SpawnerFilterRadius;
 
+
 /**
  * Draw the colored spawn indicator ring at the ZM's aim position and update spawner state.
  * Draws three stacked rings (red=blocked, blue=conditional, green=allowed) and plays
@@ -715,6 +716,12 @@ int SpawnerCellFilter(int cellIdx)
     if (obstructed)
         return GRIDLIB_FILTER_DISCARD;
 
+    if (can_any_alive_survivor_see_cheap(cellPos))
+    {
+        if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d visible to survivors", cellIdx);
+        return GRIDLIB_FILTER_DISCARD;
+    }
+
     float travel = L4D2_NavAreaTravelDistance(cellPos, g_SpawnerFilterOrigin, false);
     if (travel < 0.0 || travel > g_SpawnerFilterRadius)
     {
@@ -730,12 +737,6 @@ int SpawnerCellFilter(int cellIdx)
             if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d too close (%.0f)", cellIdx, minDist);
             return GRIDLIB_FILTER_DISCARD;
         }
-    }
-
-    if (can_any_alive_survivor_see_cheap(cellPos))
-    {
-        if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d visible to survivors", cellIdx);
-        return GRIDLIB_FILTER_DISCARD;
     }
 
     return GRIDLIB_FILTER_KEEP;
@@ -770,17 +771,21 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
         return false;
     }
 
+    float t_start = GetEngineTime();
+
     // Set up filter context and batch PVS
     g_SpawnerFilterOrigin = origin;
     g_SpawnerFilterRadius = radius;
     Spawner_BeginBatchPVS();
 
+    float t_gridlib = GetEngineTime();
     int cells[16];
     int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 16, SpawnerCellFilter);
+    float gridlib_ms = (GetEngineTime() - t_gridlib) * 1000.0;
 
     Spawner_EndBatchPVS();
 
-    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: %d pre-validated candidates", count);
+    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: %d pre-validated candidates (gridlib=%.2f ms)", count, gridlib_ms);
 
     // All returned cells passed nav/obstruction/travel/distance/visibility checks.
     // Only the expensive can_ZM_spawn_pos check remains.
@@ -796,16 +801,30 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
         {
             if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: cell %d can_ZM_spawn_pos fail", i);
             expensive_fails++;
-            if (expensive_fails >= 3) return false;
+            if (expensive_fails >= 3)
+            {
+                float total_ms = (GetEngineTime() - t_start) * 1000.0;
+                if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: aborted after 3 expensive fails (gridlib=%.2f ms, total=%.2f ms)", gridlib_ms, total_ms);
+                if (total_ms > 10.0)
+                    LogMessage("[zm] WARNING: FindNearbyValidSpawnCell took %.1f ms (gridlib=%.1f ms, %d results)", total_ms, gridlib_ms, count);
+                return false;
+            }
             continue;
         }
 
         if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: valid cell %d at (%.0f,%.0f,%.0f)", i, cellPos[0], cellPos[1], cellPos[2]);
         outPos = cellPos;
+        float total_ms = (GetEngineTime() - t_start) * 1000.0;
+        if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: done (gridlib=%.2f ms, total=%.2f ms)", gridlib_ms, total_ms);
+        if (total_ms > 10.0)
+            LogMessage("[zm] WARNING: FindNearbyValidSpawnCell took %.1f ms (gridlib=%.1f ms, %d results)", total_ms, gridlib_ms, count);
         return true;
     }
 
-    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: no valid cell found");
+    float total_ms = (GetEngineTime() - t_start) * 1000.0;
+    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: no valid cell found (gridlib=%.2f ms, total=%.2f ms)", gridlib_ms, total_ms);
+    if (total_ms > 10.0)
+        LogMessage("[zm] WARNING: FindNearbyValidSpawnCell took %.1f ms (gridlib=%.1f ms, %d results)", total_ms, gridlib_ms, count);
     return false;
 }
 
