@@ -7,6 +7,18 @@
 
 bool DEBUG_SPAWNER = false;
 
+// Batch PVS state for accelerated visibility checks in GridLib filter callbacks.
+// Call Spawner_BeginBatchPVS() before a batch and Spawner_EndBatchPVS() after.
+static bool   g_bBatchPVSActive = false;
+static int    g_iBatchSurvivorCount = 0;
+static char   g_BatchSurvivorPVS[MAXPLAYERS+1][PVS_BUFFER_SIZE];
+static int    g_iBatchSurvivorClients[MAXPLAYERS+1];
+static float  g_fBatchSurvivorPos[MAXPLAYERS+1][3];
+
+// Filter context for SpawnerCellFilter callback
+static float  g_SpawnerFilterOrigin[3];
+static float  g_SpawnerFilterRadius;
+
 /**
  * Draw the colored spawn indicator ring at the ZM's aim position and update spawner state.
  * Draws three stacked rings (red=blocked, blue=conditional, green=allowed) and plays
@@ -100,6 +112,45 @@ bool any_alive_survivors_in_radius(float vecPos[3], float radius)
         }
         return false;
     }
+}
+
+/**
+ * Pre-compute PVS data for all alive survivors. Call before a batch of
+ * can_any_alive_survivor_see_cheap() calls (e.g. inside a GridLib filter).
+ * PVS buffers are built once here and reused for every cell check.
+ */
+void Spawner_BeginBatchPVS()
+{
+	g_bBatchPVSActive = false;
+	g_iBatchSurvivorCount = 0;
+
+	if (hCheckOriginInPVS == null) return;
+
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsClientInGame(i) || GetClientTeam(i) != TEAM_SURVIVOR || !IsPlayerAlive(i))
+			continue;
+
+		GetClientAbsOrigin(i, g_fBatchSurvivorPos[g_iBatchSurvivorCount]);
+
+		float eyePos[3];
+		GetClientEyePosition(i, eyePos);
+		int cluster = PVS_GetClusterForOrigin(eyePos);
+		if (cluster < 0) continue;
+
+		PVS_GetForCluster(cluster, g_BatchSurvivorPVS[g_iBatchSurvivorCount]);
+		g_iBatchSurvivorClients[g_iBatchSurvivorCount] = i;
+		g_iBatchSurvivorCount++;
+	}
+
+	g_bBatchPVSActive = (g_iBatchSurvivorCount > 0);
+	if (DEBUG_SPAWNER) LogMessage("[zm] BeginBatchPVS: %d survivors, active=%d", g_iBatchSurvivorCount, g_bBatchPVSActive);
+}
+
+void Spawner_EndBatchPVS()
+{
+	g_bBatchPVSActive = false;
+	g_iBatchSurvivorCount = 0;
 }
 
 /**
@@ -251,7 +302,25 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3])
    AddVectors(vecPos, {0.0, 0.0, HULL_DZ}, testPoints[1]);
    AddVectors(vecPos, {0.0, 0.0, HULL_DDZ}, testPoints[2]);
 
-   // Distance pre-filter
+   if (g_bBatchPVSActive)
+   {
+       for (int s = 0; s < g_iBatchSurvivorCount; s++)
+       {
+           if (GetVectorDistance(g_fBatchSurvivorPos[s], vecPos) >= fog_distance)
+               continue;
+
+           // PVS pre-filter: if position is not in this survivor's PVS, skip raytraces
+           if (!PVS_CheckOriginInPVS(vecPos, g_BatchSurvivorPVS[s]))
+               continue;
+
+           int client = g_iBatchSurvivorClients[s];
+           if (L4D2_IsVisibleToPlayer(client, TEAM_SURVIVOR, 3, 0, testPoints[1])) return true;
+           if (L4D2_IsVisibleToPlayer(client, TEAM_SURVIVOR, 3, 0, testPoints[0])) return true;
+           if (L4D2_IsVisibleToPlayer(client, TEAM_SURVIVOR, 3, 0, testPoints[2])) return true;
+       }
+       return false;
+   }
+
    float pos[3];
    bool skipList[MAXPLAYERS+1] = {true, ...};
    bool skip = true;
@@ -626,18 +695,68 @@ int can_ZM_spawn_pos(float vPos[3],bool witch = false,bool hint = true,bool draw
 }
 
 /**
+ * GridLib filter callback for spawn cell validation.
+ * Returns GRIDLIB_FILTER_KEEP, GRIDLIB_FILTER_DISCARD, or GRIDLIB_FILTER_DISCARD_NAV.
+ * Nav-blocked areas use DISCARD_NAV to skip all cells on that nav area.
+ * Context (origin, radius) flows through g_SpawnerFilterOrigin / g_SpawnerFilterRadius.
+ */
+int SpawnerCellFilter(int cellIdx)
+{
+    // Nav-blocked attributes apply to the entire nav area
+    if (GridLib_GetCellSpawnAttributes(cellIdx) & GRIDLIB_NAV_BLOCKED_ZOMBIES)
+        return GRIDLIB_FILTER_DISCARD_NAV;
+
+    float cellPos[3], normal[3];
+    Address navArea;
+    bool obstructed;
+    if (!GridLib_GetCellData(cellIdx, cellPos, normal, navArea, obstructed))
+        return GRIDLIB_FILTER_DISCARD;
+
+    if (obstructed)
+        return GRIDLIB_FILTER_DISCARD;
+
+    float travel = L4D2_NavAreaTravelDistance(cellPos, g_SpawnerFilterOrigin, false);
+    if (travel < 0.0 || travel > g_SpawnerFilterRadius)
+    {
+        if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d travel fail %.0f", cellIdx, travel);
+        return GRIDLIB_FILTER_DISCARD;
+    }
+
+    if (g_fSpawnMinDistance > 0.0)
+    {
+        float minDist = min_distance_to_survivors(cellPos, _, g_fSpawnMinDistance);
+        if (minDist >= 0.0 && minDist < g_fSpawnMinDistance)
+        {
+            if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d too close (%.0f)", cellIdx, minDist);
+            return GRIDLIB_FILTER_DISCARD;
+        }
+    }
+
+    if (can_any_alive_survivor_see_cheap(cellPos))
+    {
+        if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d visible to survivors", cellIdx);
+        return GRIDLIB_FILTER_DISCARD;
+    }
+
+    return GRIDLIB_FILTER_KEEP;
+}
+
+/**
  * When the spawn indicator is blue (>SPAWNER_NAV), search nearby GridLib
  * cells for a valid spawn position that isn't visible to or too close to survivors.
+ * Uses GridLib's filter callback to reject cells during closest-first selection,
+ * so all returned cells have already passed cheap/medium checks.
  *
  * @param origin    The aimed spawn position to search around
  * @param outPos    Output: the valid nearby cell position, if found
  * @param radius    Search radius, defaults to g_fGridSearchRadius
+ * @param witch     If true, use relaxed validation for witch placement
  * @return          true if a valid cell was found, false otherwise
  */
 bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -1.0, bool witch = false)
 {
-    if (radius<=0.0) radius = g_fGridSearchRadius;
-    if (radius<=0.0)
+    if (radius <= 0.0) radius = g_fGridSearchRadius;
+    if (radius <= 0.0)
     {
         if (DEBUG_SPAWNER) LogMessage("[zm] radius %f skipped", radius);
         return false;
@@ -651,59 +770,33 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
         return false;
     }
 
+    // Set up filter context and batch PVS
+    g_SpawnerFilterOrigin = origin;
+    g_SpawnerFilterRadius = radius;
+    Spawner_BeginBatchPVS();
+
     int cells[16];
-    int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 16);
-    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: %d candidates found", count);
-    
+    int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 16, SpawnerCellFilter);
+
+    Spawner_EndBatchPVS();
+
+    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: %d pre-validated candidates", count);
+
+    // All returned cells passed nav/obstruction/travel/distance/visibility checks.
+    // Only the expensive can_ZM_spawn_pos check remains.
     int expensive_fails = 0;
-    //float old_dist = -1.0;
     for (int i = 0; i < count; i++)
     {
-        // Skip nav-blocked cells (saferooms, player start, etc.)
-        if (GridLib_GetCellSpawnAttributes(cells[i]) & GRIDLIB_NAV_BLOCKED_ZOMBIES)
-            continue;
-
         float cellPos[3], normal[3];
         Address navArea;
         bool obstructed;
-        if (!GridLib_GetCellData(cells[i], cellPos, normal, navArea, obstructed))
-            continue;
+        GridLib_GetCellData(cells[i], cellPos, normal, navArea, obstructed);
 
-        if (obstructed)
-            continue;
-        
-        float travel1 = L4D2_NavAreaTravelDistance(cellPos,origin,false);
-        if (travel1<0.0 || travel1>radius)
-        {
-            if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: cell %d travel fail %f", i, travel1);
-            continue;
-        }
-
-        // Distance check against all alive survivors
-        if (g_fSpawnMinDistance>0.0)
-        {
-            float minDist = min_distance_to_survivors(cellPos,_,g_fSpawnMinDistance);
-            if (minDist >= 0.0 && minDist < g_fSpawnMinDistance)
-            {
-                if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: cell %d too close (%.0f)", i, minDist);
-                continue;
-            }
-        }
-
-        // Visibility check (cheap variant for batch cell filtering)
-        if (can_any_alive_survivor_see_cheap(cellPos))
-        {
-            if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: cell %d visible to survivors", i);
-            continue;
-        }
-        
-        // Try: navmesh center, random position on navmesh
-        
-        if (can_ZM_spawn_pos(cellPos,witch,false,false,true)!=SPAWNER_OK)
+        if (can_ZM_spawn_pos(cellPos, witch, false, false, true) != SPAWNER_OK)
         {
             if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: cell %d can_ZM_spawn_pos fail", i);
-            expensive_fails += 1;
-            if (expensive_fails>=3) return false;
+            expensive_fails++;
+            if (expensive_fails >= 3) return false;
             continue;
         }
 
