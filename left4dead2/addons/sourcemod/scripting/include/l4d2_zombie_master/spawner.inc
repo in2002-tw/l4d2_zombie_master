@@ -5,6 +5,8 @@
 #define _zm_spawner_included
 ///////////////////////////////////////
 
+bool DEBUG_SPAWNER = false;
+
 /**
  * Draw the colored spawn indicator ring at the ZM's aim position and update spawner state.
  * Draws three stacked rings (red=blocked, blue=conditional, green=allowed) and plays
@@ -53,7 +55,7 @@ void update_ZM_spawner(const float target_pos[3], const float spawner_pos[3], co
             if (target>0) // Draw blue visor on target survivor
             {
                 GetClientEyePosition(target,draw_pos);
-                draw_pos[2] += 5.0;
+                draw_pos[2] += 10.0;
                 TE_SetupBeamRingPoint(draw_pos,HULL_DX+2.0,HULL_DX,g_iLaser,g_iHalo,0,0,g_fUpdateRate*2.0,2.5,0.0,color_conditional,0,0);
                 TE_SendToClient(zm_client);
             }
@@ -621,21 +623,21 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
     if (radius<=0.0) radius = g_fGridSearchRadius;
     if (radius<=0.0)
     {
-        LogMessage("[zm] radius %f skipped", radius);
+        if (DEBUG_SPAWNER) LogMessage("[zm] radius %f skipped", radius);
         return false;
     }
 
-    LogMessage("[zm] FindNearbyValidSpawnCell origin=(%.0f,%.0f,%.0f) radius=%.0f", origin[0], origin[1], origin[2], radius);
+    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell origin=(%.0f,%.0f,%.0f) radius=%.0f", origin[0], origin[1], origin[2], radius);
 
     if (!GridLib_IsReady())
     {
-        LogMessage("[zm] FindNearbyValidSpawnCell: GridLib not ready");
+        if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: GridLib not ready");
         return false;
     }
 
     int cells[16];
     int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 16);
-    LogMessage("[zm] FindNearbyValidSpawnCell: %d candidates found", count);
+    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: %d candidates found", count);
     
     int expensive_fails = 0;
     //float old_dist = -1.0;
@@ -657,7 +659,7 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
         float travel1 = L4D2_NavAreaTravelDistance(cellPos,origin,false);
         if (travel1<0.0 || travel1>radius)
         {
-            LogMessage("[zm] FindNearbyValidSpawnCell: cell %d travel fail %f", i, travel1);
+            if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: cell %d travel fail %f", i, travel1);
             continue;
         }
 
@@ -667,7 +669,7 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
             float minDist = min_distance_to_survivors(cellPos,_,g_fSpawnMinDistance);
             if (minDist >= 0.0 && minDist < g_fSpawnMinDistance)
             {
-                LogMessage("[zm] FindNearbyValidSpawnCell: cell %d too close (%.0f)", i, minDist);
+                if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: cell %d too close (%.0f)", i, minDist);
                 continue;
             }
         }
@@ -675,7 +677,7 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
         // Visibility check (cheap variant for batch cell filtering)
         if (can_any_alive_survivor_see_cheap(cellPos))
         {
-            LogMessage("[zm] FindNearbyValidSpawnCell: cell %d visible to survivors", i);
+            if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: cell %d visible to survivors", i);
             continue;
         }
         
@@ -683,18 +685,18 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
         
         if (can_ZM_spawn_pos(cellPos,witch,false,false,true)!=SPAWNER_OK)
         {
-            LogMessage("[zm] FindNearbyValidSpawnCell: cell %d can_ZM_spawn_pos fail", i);
+            if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: cell %d can_ZM_spawn_pos fail", i);
             expensive_fails += 1;
             if (expensive_fails>=3) return false;
             continue;
         }
 
-        LogMessage("[zm] FindNearbyValidSpawnCell: valid cell %d at (%.0f,%.0f,%.0f)", i, cellPos[0], cellPos[1], cellPos[2]);
+        if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: valid cell %d at (%.0f,%.0f,%.0f)", i, cellPos[0], cellPos[1], cellPos[2]);
         outPos = cellPos;
         return true;
     }
 
-    LogMessage("[zm] FindNearbyValidSpawnCell: no valid cell found");
+    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: no valid cell found");
     return false;
 }
 

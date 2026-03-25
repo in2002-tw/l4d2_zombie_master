@@ -210,6 +210,7 @@ Action perform_HUD_update(Handle timer = null)
     
 }
 
+// Try to optimize the size of the ZM info box.
 stock void CountStringRowsCols(const char[] str, int &rows, float &cols)
 {
     int i, count = 0;

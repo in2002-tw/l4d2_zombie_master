@@ -5,8 +5,6 @@
 #define _zm_glow_included
 ///////////////////////////////////////
 
-int g_iGlowList[MAXENTITIES+1] = {INVALID_ENT_REFERENCE, ...}; // track glow children of parent entities
-
 void remove_all_ZM_glows()
 {
     if (DEBUG) LogMessage("[zm] remove_all_ZM_glows");

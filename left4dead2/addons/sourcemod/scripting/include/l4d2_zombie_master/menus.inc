@@ -805,7 +805,6 @@ void DoVoteMenu()
  
 Action VoteZM(int client, int args)
 {
-        
     if (L4D_HasPlayerControlledZombies())
     {
         PrintToChat(client, "[zm] %t", "ZM restrict notify");
@@ -816,7 +815,6 @@ Action VoteZM(int client, int args)
     
     DoVoteMenu();
     return Plugin_Continue;
-	
 }
 
 Action ZM_Menu(int client, int args)

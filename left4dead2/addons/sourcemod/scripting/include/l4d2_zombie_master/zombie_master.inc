@@ -491,6 +491,111 @@ TopMenuObject obj_zmcommands, zm_enable, zm_gamemode_menu, zm_kick_topmenu, zm_r
 int zm_menu_state = ZM_MENU_CLOSED;
 Menu menu_main,menu_common,menu_uncommon,menu_special,menu_boss,menu_cleanup,menu_other,menu_autocommon = null;
 
+// Data structure for player stats
+enum struct zm_data
+{
+	int rounds;          // number of rounds played as ZM
+	int last_roundcount; // last internal roundcount value where they played as ZM
+	bool offered;        // track if offered at round start
+}
+
+// Navmesh struct
+enum struct PreCalcNav
+{
+	float position[3];     // World position
+	Address navArea;       // Nav area reference
+}
+
+int g_iGlowList[MAXENTITIES+1] = {INVALID_ENT_REFERENCE, ...}; // track glow children of parent entities
+
+void GetCvars()
+{
+    if (DEBUG) LogMessage("[zm] GetCvars");
+    g_fUpdateRate = g_hUpdateRate.FloatValue;
+    ResetTimer();
+    
+    DEBUG = g_hCvarDebug.BoolValue || DEBUG;
+    
+    g_fBankRateBase = g_hBankRateBase.FloatValue;
+    g_fBankRatePlayer = g_hBankRatePlayer.FloatValue;
+    g_iBankInitial = g_hBankInitial.IntValue;
+    g_iBankInitialPlayer = g_hBankInitialPlayer.IntValue;
+    max_zombie_arr[ZOMBIECLASS_COMMON] = g_hMaxCommons.IntValue;
+    g_fSpawnMinDistance = g_hSpawnMinDistance.FloatValue;
+    g_fGridSearchRadius = g_hGridSearchRadius.FloatValue;
+    g_fStopInactivity = g_hStopInactivity.FloatValue;
+    
+    costs_SI[ZOMBIECLASS_BOOMER] = g_hCostBoomer.IntValue;
+    costs_SI[ZOMBIECLASS_SPITTER] = g_hCostSpitter.IntValue;
+    costs_SI[ZOMBIECLASS_HUNTER] = g_hCostHunter.IntValue;
+    costs_SI[ZOMBIECLASS_SMOKER] = g_hCostSmoker.IntValue;
+    costs_SI[ZOMBIECLASS_JOCKEY] = g_hCostJockey.IntValue;
+    costs_SI[ZOMBIECLASS_CHARGER] = g_hCostCharger.IntValue;
+    costs_SI[ZOMBIECLASS_TANK] = g_hCostTank.IntValue;
+    g_iCostWitchStatic = g_hCostWitchStatic.IntValue;
+    g_iCostWitchMoving = g_hCostWitchMoving.IntValue;
+    g_iCostCommon = g_hCostCommon.IntValue;
+    g_iCostUncommon = g_hCostUncommon.IntValue;
+    g_iMaxWitches = g_hMaxWitches.IntValue;
+    g_iMaxSI = g_hMaxSI.IntValue;
+    g_iMaxUniqueSI = g_hMaxUniqueSI.IntValue;
+    
+    g_iBonusCarAlarm = g_hBonusCarAlarm.IntValue;
+    g_iBonusFinaleStage = g_hBonusFinaleStage.IntValue;
+    g_iBonusSurvival = g_hBonusSurvival.IntValue;
+    
+    g_iPanicCost = g_hPanicCost.IntValue;
+    g_fPanicDuration = g_hPanicDuration.FloatValue;
+    
+    g_bLockSaferoom = g_hLockSaferoom.BoolValue;
+    
+    g_fPrepTimeZM = g_hPrepTimeZM.FloatValue;
+    
+    g_fSpecialCooldown = g_hSpecialCooldown.FloatValue;
+    g_fTankCooldown = g_hTankCooldown.FloatValue;
+    g_fWitchCooldown = g_hWitchCooldown.FloatValue;
+    g_fCommonRate = g_hCommonRate.FloatValue;
+    
+    g_fMinFinaleStage = g_hMinFinaleStage.FloatValue;
+    
+    g_bFairQueue = g_hFairQueue.BoolValue;
+    if (!g_bFairQueue) fair_exhausted = true;
+    g_fFairQueueWait = g_hFairQueueWait.FloatValue;
+    g_fMenuTimeout = g_hMenuTimeout.FloatValue;
+    
+    g_bDiscountTank = g_hDiscountTank.BoolValue;
+    g_bMemes = g_hMemes.BoolValue;
+    g_bClownGlow = g_hClownGlow.BoolValue;
+    
+    g_hForceCommon.GetString(g_sForceCommon, sizeof(g_sForceCommon));
+    TrimString(g_sForceCommon);
+    
+    holdfinale = g_hHoldFinale.BoolValue;
+    
+    g_iVomitCommons = g_hVomitCommons.IntValue;
+    
+    g_bAllowFreeze = g_hAllowFreeze.BoolValue;
+    if (!g_bAllowFreeze) ZM_specials_frozen = false;
+    
+    if (g_iCostUncommon<0) autocommon_uncommons = false;
+    else if (g_iCostCommon<0) autocommon_uncommons = true;
+    if (autocommon_num>g_hMaxCommons.IntValue) autocommon_num = g_hMaxCommons.IntValue;
+    
+    g_fPanicRateMultiplier = g_hPanicRateMultiplier.FloatValue;
+    
+    if (g_hGrid.BoolValue!=g_bGrid)
+    {
+        g_bGrid = g_hGrid.BoolValue;
+        if (g_bGrid && L4D_HasMapStarted() && !GridLib_IsReady())
+        {
+            GridLib_Initialize();
+            GridLib_StartPrecomputation();
+        }
+    }
+    
+    g_fAbilityCooldown = g_hAbilityCooldown.FloatValue;
+}
+
 Action ZM_MOTD(int client, int args)
 { 
     if (!IsValidClient(client) || IsFakeClient(client)) return Plugin_Continue;
@@ -510,7 +615,7 @@ Action ZM_MOTD(int client, int args)
     PrintToConsole(client, "A spawner (3 circles) shows where you are pointing (or the nearest valid location). This is where zombies will spawn.");
     PrintToConsole(client, "The spawner can be in 1 of 4 states:");
     PrintToConsole(client, "1. GREEN -> Zombies can be spawned NOW!");
-    PrintToConsole(client, "2. BLUE -> Zombies can be spawned, but not now because survivors are too close or they can see.");
+    PrintToConsole(client, "2. BLUE -> Zombies can be spawned, but not now. Usually because survivors are too close or they can see.");
     PrintToConsole(client, "3. RED -> Zombies can NEVER be spawned here.");
     PrintToConsole(client, "4. FLOW (long vertical blue stripe) -> Zombie locations were picked automatically.");
     PrintToConsole(client, "To activate FLOW: look at a survivor OR the ground next to them OR spectate that survivor; then, spawn zombies.");
@@ -519,7 +624,7 @@ Action ZM_MOTD(int client, int args)
     PrintToConsole(client, "=== 2. Keyboard Shortcuts ===");
     PrintToConsole(client, "USE (default E) -> Control/Release Special Infected.");
     PrintToConsole(client, "FLASHLIGHT (default F) -> Flashlight.");
-    PrintToConsole(client, "RELOAD (default R) -> once to open main menu, twice to close menu completely and hide spawner.");
+    PrintToConsole(client, "RELOAD (default R) -> once to open main menu; twice to close menu and hide spawner.");
     
     PrintToConsole(client, "");
     PrintToConsole(client, "=== 3. Chat/Console Commands ===");
@@ -635,20 +740,6 @@ bool is_zm_spamming()
     }
     t_last_action = t_now;
     return false;
-}
-
-// Data structure for player stats
-enum struct zm_data
-{
-	int rounds;          // number of rounds played as ZM
-	int last_roundcount; // last internal roundcount value where they played as ZM
-	bool offered;        // track if offered at round start
-}
-
-enum struct PreCalcNav
-{
-	float position[3];     // World position
-	Address navArea;       // Nav area reference
 }
 
 stock void get_zombieclass_name(int ZOMBIECLASS, char name[32])
@@ -1035,7 +1126,6 @@ stock void process_horde_arg(int &count, char type[16], bool &angry, bool &flow,
             return;
         }
     }
-    
     if (!flow)
     {
         if (strcmp(arg,"flow")==0)
@@ -1044,7 +1134,6 @@ stock void process_horde_arg(int &count, char type[16], bool &angry, bool &flow,
             return;
         }
     }
-    
     if (!valid_uncommon(type))
     {
         if (valid_uncommon(arg))
@@ -1053,7 +1142,6 @@ stock void process_horde_arg(int &count, char type[16], bool &angry, bool &flow,
             return;
         }
     }
-    
     int arg_int = StringToInt(arg);
     if (arg_int!=0)
     {
@@ -1898,96 +1986,6 @@ Action zm_debug_player(int client, int args)
 {   
     DumpPlayerState(client,client);
     return Plugin_Continue;
-}
-
-void GetCvars()
-{
-    
-    if (DEBUG) LogMessage("[zm] GetCvars");
-    g_fUpdateRate = g_hUpdateRate.FloatValue;
-    ResetTimer();
-    
-    DEBUG = g_hCvarDebug.BoolValue || DEBUG;
-    
-    g_fBankRateBase = g_hBankRateBase.FloatValue;
-    g_fBankRatePlayer = g_hBankRatePlayer.FloatValue;
-    g_iBankInitial = g_hBankInitial.IntValue;
-    g_iBankInitialPlayer = g_hBankInitialPlayer.IntValue;
-    max_zombie_arr[ZOMBIECLASS_COMMON] = g_hMaxCommons.IntValue;
-    g_fSpawnMinDistance = g_hSpawnMinDistance.FloatValue;
-    g_fGridSearchRadius = g_hGridSearchRadius.FloatValue;
-    g_fStopInactivity = g_hStopInactivity.FloatValue;
-    
-    costs_SI[ZOMBIECLASS_BOOMER] = g_hCostBoomer.IntValue;
-    costs_SI[ZOMBIECLASS_SPITTER] = g_hCostSpitter.IntValue;
-    costs_SI[ZOMBIECLASS_HUNTER] = g_hCostHunter.IntValue;
-    costs_SI[ZOMBIECLASS_SMOKER] = g_hCostSmoker.IntValue;
-    costs_SI[ZOMBIECLASS_JOCKEY] = g_hCostJockey.IntValue;
-    costs_SI[ZOMBIECLASS_CHARGER] = g_hCostCharger.IntValue;
-    costs_SI[ZOMBIECLASS_TANK] = g_hCostTank.IntValue;
-    g_iCostWitchStatic = g_hCostWitchStatic.IntValue;
-    g_iCostWitchMoving = g_hCostWitchMoving.IntValue;
-    g_iCostCommon = g_hCostCommon.IntValue;
-    g_iCostUncommon = g_hCostUncommon.IntValue;
-    g_iMaxWitches = g_hMaxWitches.IntValue;
-    g_iMaxSI = g_hMaxSI.IntValue;
-    g_iMaxUniqueSI = g_hMaxUniqueSI.IntValue;
-    
-    g_iBonusCarAlarm = g_hBonusCarAlarm.IntValue;
-    g_iBonusFinaleStage = g_hBonusFinaleStage.IntValue;
-    g_iBonusSurvival = g_hBonusSurvival.IntValue;
-    
-    g_iPanicCost = g_hPanicCost.IntValue;
-    g_fPanicDuration = g_hPanicDuration.FloatValue;
-    
-    g_bLockSaferoom = g_hLockSaferoom.BoolValue;
-    
-    g_fPrepTimeZM = g_hPrepTimeZM.FloatValue;
-    
-    g_fSpecialCooldown = g_hSpecialCooldown.FloatValue;
-    g_fTankCooldown = g_hTankCooldown.FloatValue;
-    g_fWitchCooldown = g_hWitchCooldown.FloatValue;
-    g_fCommonRate = g_hCommonRate.FloatValue;
-    
-    g_fMinFinaleStage = g_hMinFinaleStage.FloatValue;
-    
-    g_bFairQueue = g_hFairQueue.BoolValue;
-    if (!g_bFairQueue) fair_exhausted = true;
-    g_fFairQueueWait = g_hFairQueueWait.FloatValue;
-    g_fMenuTimeout = g_hMenuTimeout.FloatValue;
-    
-    g_bDiscountTank = g_hDiscountTank.BoolValue;
-    g_bMemes = g_hMemes.BoolValue;
-    g_bClownGlow = g_hClownGlow.BoolValue;
-    
-    g_hForceCommon.GetString(g_sForceCommon, sizeof(g_sForceCommon));
-    TrimString(g_sForceCommon);
-    
-    holdfinale = g_hHoldFinale.BoolValue;
-    
-    g_iVomitCommons = g_hVomitCommons.IntValue;
-    
-    g_bAllowFreeze = g_hAllowFreeze.BoolValue;
-    if (!g_bAllowFreeze) ZM_specials_frozen = false;
-    
-    if (g_iCostUncommon<0) autocommon_uncommons = false;
-    else if (g_iCostCommon<0) autocommon_uncommons = true;
-    if (autocommon_num>g_hMaxCommons.IntValue) autocommon_num = g_hMaxCommons.IntValue;
-    
-    g_fPanicRateMultiplier = g_hPanicRateMultiplier.FloatValue;
-    
-    if (g_hGrid.BoolValue!=g_bGrid)
-    {
-        g_bGrid = g_hGrid.BoolValue;
-        if (g_bGrid && L4D_HasMapStarted() && !GridLib_IsReady())
-        {
-            GridLib_Initialize();
-            GridLib_StartPrecomputation();
-        }
-    }
-    
-    g_fAbilityCooldown = g_hAbilityCooldown.FloatValue;
-    
 }
 
 void zm_fake_gamemode()

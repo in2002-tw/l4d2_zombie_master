@@ -1,3 +1,14 @@
+//This program is free software: you can redistribute it and/or modify
+//it under the terms of the GNU General Public License as published by
+//the Free Software Foundation, either version 3 of the License, or
+//(at your option) any later version.
+//This program is distributed in the hope that it will be useful,
+//but WITHOUT ANY WARRANTY; without even the implied warranty of
+//MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//GNU General Public License for more details.
+//You should have received a copy of the GNU General Public License
+//along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 // Made for the Knockout.chat community
 // Plugin authors: gvazdas, zyiks
 // HUGE THANKS TO TESTERS: Hatsune Miku Fan, Raykeno, IronBar, ngh, Lil Ole Fella, ShaunOfTheLive, zyiks
@@ -21,50 +32,26 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.035 2026-03-24"
+#define PLUGIN_VERSION 			"0.9.036 2026-03-24"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
 #include <l4d2_zombie_master/zombie_master>
-
-
 #include <l4d2_grid_lib>
-
-
 #include <l4d2_zombie_master/sdk>
-
-
 #include <l4d2_zombie_master/spawner>
-
-
 #include <l4d2_zombie_master/spawncommands>
-
-
 #include <l4d2_zombie_master/glow>
-
-
 #include <l4d2_zombie_master/fair_queue>
-
-
 #include <l4d2_zombie_master/settings>
-
-
 #include <l4d2_zombie_master/hud>
-
-
 #include <l4d2_zombie_master/saferoom>
-
-
 #include <l4d2_zombie_master/unitmanager>
-
-
 #include <l4d2_zombie_master/panic>
-
 
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 #include <l4d2_zombie_master/menus>
-
 
 public Plugin myinfo =
 {
@@ -384,23 +371,18 @@ void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
 	char sGameMode[32];
 	g_hCvarMPGameMode.GetString(sGameMode, sizeof(sGameMode));
 	if(strcmp(g_sCvarMPGameMode, sGameMode, false) == 0) return;
-	
-	if (strcmp(g_sCvarMPGameMode,"zm_clowns",false)==0 && clown_world_enable) ServerCommand("clown_world_resetcvars");
-	
 	g_sCvarMPGameMode = sGameMode;
-    
     if (DEBUG) LogMessage("[zm] Gamemode: %s", g_sCvarMPGameMode);
-    
     l4d2_specials = true;
     if (strcmp(g_sCvarMPGameMode,"l4d1coop")==0 || strcmp(g_sCvarMPGameMode,"l4d1survival")==0)
         l4d2_specials = false;
-    
 	IsAllowed();
 }
 
 void ConVarChanged_Cvars_Gamemode(ConVar convar, const char[] oldValue, const char[] newValue)
 {
     if (strcmp(oldValue,newValue)==0) return;
+    if (strcmp(oldValue,"zm_clowns",false)==0 && clown_world_enable) ServerCommand("clown_world_resetcvars");
     load_zm_gamemode();
     on_changed_rules();
     create_menu_gamemode();

@@ -5,6 +5,8 @@
 #define _zm_spawn_commands_included
 ///////////////////////////////////////
 
+bool DEBUG_SPAWNCOMMANDS = false;
+
 /**
  * Timer callback that spawns free angry common infected up to a target count.
  * Tops up commons to reach `count` by spawning near the highest-flow survivor.
@@ -289,7 +291,7 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 				survivorPVSCount++;
 			}
 		}
-		LogMessage("[zm] ZM_Horde: built PVS for %d survivors", survivorPVSCount);
+		if (DEBUG_SPAWNCOMMANDS) LogMessage("[zm] ZM_Horde: built PVS for %d survivors", survivorPVSCount);
 	}
     
     int gridlib_fails = 0;
@@ -307,12 +309,12 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 			bool cellObstructed;
 			if (!GridLib_GetCellData(cellIdx, randomPos, cellNormal, cellNavArea, cellObstructed))
 			{
-				LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) invalid data, skipping", i, gridlib_cell_count, cellIdx);
+				if (DEBUG_SPAWNCOMMANDS) LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) invalid data, skipping", i, gridlib_cell_count, cellIdx);
 				continue;
 			}
 			if (cellObstructed || IsObstructed(randomPos))
 			{
-				LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) obstructed at (%.0f,%.0f,%.0f), skipping", i, gridlib_cell_count, cellIdx, randomPos[0], randomPos[1], randomPos[2]);
+				if (DEBUG_SPAWNCOMMANDS) LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) obstructed at (%.0f,%.0f,%.0f), skipping", i, gridlib_cell_count, cellIdx, randomPos[0], randomPos[1], randomPos[2]);
 				continue;
 			}
 			// PVS + single ray trace visibility check
@@ -340,7 +342,7 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 				}
 				if (actuallyVisible)
 				{
-					LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) visible to survivor, skipping", i, gridlib_cell_count, cellIdx);
+					if (DEBUG_SPAWNCOMMANDS) LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) visible to survivor, skipping", i, gridlib_cell_count, cellIdx);
 					continue;
 				}
 			}
@@ -364,7 +366,7 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
         			float travel2 = L4D2_NavAreaTravelDistance(randomPos,randomPos_old,false);
         			if (travel2<0.0 || travel2>distance_tol) gridlib_fail = true;
         		}
-        		if (gridlib_fail) LogMessage("gridlib fail %d travel", gridlib_fails+1);
+        		if (gridlib_fail && DEBUG_SPAWNCOMMANDS) LogMessage("gridlib fail %d travel", gridlib_fails+1);
 			}
 			if (!gridlib_fail) // check if navmesh rules are being violated
 			{
@@ -375,7 +377,7 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
                  L4D_GetNavAreaSize(cellNavArea, navSize);
                  if (!nav_can_spawn_zombies(navAttrFlags,navSpawnAttrs,false,navCenter,navSize))
                  {
-                     LogMessage("gridlib fail %d navmesh attributes", gridlib_fails+1);
+                     if (DEBUG_SPAWNCOMMANDS) LogMessage("gridlib fail %d navmesh attributes", gridlib_fails+1);
                      gridlib_fail = true;
                  }
 			}
@@ -386,9 +388,12 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
     			fallback_original_navmesh = true;
 			}
 			randomPos_old = randomPos;
+			if (DEBUG_SPAWNCOMMANDS)
+			{
 			LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) spawning at (%.0f,%.0f,%.0f) dist=%.0f",
 				i, gridlib_cell_count, cellIdx, randomPos[0], randomPos[1], randomPos[2],
 				GetVectorDistance(zm_spawner_pos, randomPos));
+			}
 		}
 		else if (use_randompz) // Valve zombie positions
 		{
