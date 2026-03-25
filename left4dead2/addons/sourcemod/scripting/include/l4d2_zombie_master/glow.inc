@@ -178,7 +178,7 @@ void CreateZMGlow(int target, bool red = false, bool flow = false)
 	else if (flow)
 	{
     	SetEntProp(glow, Prop_Send, "m_glowColorOverride", RGB_FLOW);
-    	//SetEntProp(glow, Prop_Send, "m_bFlashing", 1);
+    	if (L4D_IsPlayerOnThirdStrike(target)) SetEntProp(glow, Prop_Send, "m_bFlashing", 1);
 	}
 	else SetEntProp(glow, Prop_Send, "m_glowColorOverride", RGB_ZM);
 	AcceptEntityInput(glow, "StartGlowing");
