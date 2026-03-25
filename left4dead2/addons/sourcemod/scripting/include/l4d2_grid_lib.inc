@@ -54,7 +54,7 @@
 // ============================================================================
 
 #define GRIDLIB_VERSION "1.1.0"
-// #define GRIDLIB_DEBUG
+#define GRIDLIB_DEBUG
 #if defined GRIDLIB_DEBUG
 stock void GridLibLog(const char[] fmt, any ...)
 {
@@ -146,6 +146,32 @@ enum struct GridCell
 	Address navArea;       // Nav area reference
 	bool isObstructed;     // Hull trace result (pre-computed)
 	float normal[3];       // Surface normal
+}
+
+/**
+ * Filter result for GridLib_FindNearbyCells callbacks.
+ */
+#define GRIDLIB_FILTER_KEEP         0  // Accept this cell
+#define GRIDLIB_FILTER_DISCARD      1  // Reject this cell only
+#define GRIDLIB_FILTER_DISCARD_NAV  2  // Reject this cell and all cells on the same nav area
+
+/**
+ * Filter callback for GridLib_FindNearbyCells.
+ * The filter can call GridLib_GetCellData / GridLib_GetCellSpawnAttributes
+ * to inspect cell properties. Context should flow through caller-side statics.
+ *
+ * @param cellIdx    Cell index to evaluate
+ * @return           GRIDLIB_FILTER_KEEP, GRIDLIB_FILTER_DISCARD, or GRIDLIB_FILTER_DISCARD_NAV
+ */
+typedef GridLibCellFilter = function int(int cellIdx);
+
+static stock int GridLib_CallFilter(GridLibCellFilter filter, int cellIdx)
+{
+	int result;
+	Call_StartFunction(null, filter);
+	Call_PushCell(cellIdx);
+	Call_Finish(result);
+	return result;
 }
 
 // ============================================================================
@@ -264,13 +290,17 @@ stock void GridLib_SetExcludeObstructed(bool enable)
  * @param maxZDiff      Maximum Z-height difference
  * @param results       Output array of cell indices
  * @param maxResults    Maximum number of results to return
+ * @param filter        Optional filter callback. When provided, cells are tested
+ *                      closest-first during selection. Rejected cells are skipped
+ *                      and the search continues to find the next closest passing cell.
  * @return              Number of cells found (sorted by distance, closest first)
  */
 stock int GridLib_FindNearbyCells(const float position[3],
                                    float searchRadius,
                                    float maxZDiff,
                                    int[] results,
-                                   int maxResults)
+                                   int maxResults,
+                                   GridLibCellFilter filter = INVALID_FUNCTION)
 {
 	if (!g_IsReady || g_GridCells == null)
 		return 0;
@@ -329,11 +359,25 @@ stock int GridLib_FindNearbyCells(const float position[3],
 	}
 
 	int candidateCount = candidates.Length;
+	GridLibLog("[GridLib] FindNearbyCells: %d candidates in radius %.0f, maxResults=%d, filter=%s",
+		candidateCount, searchRadius, maxResults, filter != INVALID_FUNCTION ? "yes" : "no");
 
-	// Sort by distance (selection sort on the closest maxResults entries)
-	int numToSelect = (candidateCount < maxResults) ? candidateCount : maxResults;
+	// Selection sort closest-first, applying filter during selection.
+	// Rejected cells are skipped; the search continues to fill maxResults.
+	// DISCARD_NAV blacklists an entire nav area (O(1) lookup via StringMap).
+	static StringMap blacklistedNavAreas = null;
+	char navKey[16];
+	if (filter != INVALID_FUNCTION)
+	{
+		if (blacklistedNavAreas == null)
+			blacklistedNavAreas = new StringMap();
+		else
+			blacklistedNavAreas.Clear();
+	}
 
-	for (int i = 0; i < numToSelect; i++)
+	int resultCount = 0;
+	int scanned = 0;
+	for (int i = 0; i < candidateCount && resultCount < maxResults; i++, scanned++)
 	{
 		int minIdx = i;
 		float minDist[2];
@@ -355,10 +399,50 @@ stock int GridLib_FindNearbyCells(const float position[3],
 
 		float selected[2];
 		candidates.GetArray(i, selected);
-		results[i] = RoundToFloor(selected[1]);
+		int cellIdx = RoundToFloor(selected[1]);
+
+		if (filter != INVALID_FUNCTION)
+		{
+			GridCell cell;
+			g_GridCells.GetArray(cellIdx, cell, sizeof(GridCell));
+
+			// Check nav area blacklist (O(1) StringMap lookup)
+			if (cell.navArea != Address_Null)
+			{
+				FormatEx(navKey, sizeof(navKey), "%x", cell.navArea);
+				int dummy;
+				if (blacklistedNavAreas.GetValue(navKey, dummy))
+				{
+					GridLibLog("[GridLib] FindNearbyCells: cell %d nav %s blacklisted, skipping", cellIdx, navKey);
+					continue;
+				}
+			}
+
+			int filterResult = GridLib_CallFilter(filter, cellIdx);
+			if (filterResult == GRIDLIB_FILTER_DISCARD_NAV)
+			{
+				GridLibLog("[GridLib] FindNearbyCells: cell %d DISCARD_NAV (nav=%x)", cellIdx, cell.navArea);
+				if (cell.navArea != Address_Null)
+				{
+					FormatEx(navKey, sizeof(navKey), "%x", cell.navArea);
+					blacklistedNavAreas.SetValue(navKey, 1);
+				}
+				continue;
+			}
+			if (filterResult != GRIDLIB_FILTER_KEEP)
+			{
+				GridLibLog("[GridLib] FindNearbyCells: cell %d DISCARD", cellIdx);
+				continue;
+			}
+			GridLibLog("[GridLib] FindNearbyCells: cell %d KEEP (dist=%.0f)", cellIdx, selected[0]);
+		}
+
+		results[resultCount++] = cellIdx;
 	}
 
-	return numToSelect;
+	GridLibLog("[GridLib] FindNearbyCells: returning %d/%d candidates (scanned %d)", resultCount, candidateCount, scanned);
+
+	return resultCount;
 }
 
 /**
