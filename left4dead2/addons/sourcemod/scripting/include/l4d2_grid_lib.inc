@@ -174,6 +174,17 @@ static stock int GridLib_CallFilter(GridLibCellFilter filter, int cellIdx)
 	return result;
 }
 
+static stock int GridLib_SortByDistance(int index1, int index2, Handle array, Handle hndl)
+{
+	ArrayList list = view_as<ArrayList>(array);
+	float a[2], b[2];
+	list.GetArray(index1, a);
+	list.GetArray(index2, b);
+	if (a[0] < b[0]) return -1;
+	if (a[0] > b[0]) return 1;
+	return 0;
+}
+
 // ============================================================================
 // Private State (do not access directly)
 // ============================================================================
@@ -367,36 +378,25 @@ stock int GridLib_FindNearbyCells(const float position[3],
 	// DISCARD_NAV blacklists an entire nav area (O(1) lookup via StringMap).
 	static StringMap blacklistedNavAreas = null;
 	char navKey[16];
+	float filterT0 = 0.0;
 	if (filter != INVALID_FUNCTION)
 	{
 		if (blacklistedNavAreas == null)
 			blacklistedNavAreas = new StringMap();
 		else
 			blacklistedNavAreas.Clear();
+		filterT0 = GetEngineTime();
 	}
+
+	float tSortStart = GetEngineTime();
+	SortADTArrayCustom(candidates, GridLib_SortByDistance);
+	float sortMs = (GetEngineTime() - tSortStart) * 1000.0;
 
 	int resultCount = 0;
 	int scanned = 0;
+	float filterCallTimeAccum = 0.0;
 	for (int i = 0; i < candidateCount && resultCount < maxResults; i++, scanned++)
 	{
-		int minIdx = i;
-		float minDist[2];
-		candidates.GetArray(i, minDist);
-
-		for (int j = i + 1; j < candidateCount; j++)
-		{
-			float cmp[2];
-			candidates.GetArray(j, cmp);
-			if (cmp[0] < minDist[0])
-			{
-				minIdx = j;
-				minDist = cmp;
-			}
-		}
-
-		if (minIdx != i)
-			candidates.SwapAt(i, minIdx);
-
 		float selected[2];
 		candidates.GetArray(i, selected);
 		int cellIdx = RoundToFloor(selected[1]);
@@ -418,7 +418,9 @@ stock int GridLib_FindNearbyCells(const float position[3],
 				}
 			}
 
+			float tFilter = GetEngineTime();
 			int filterResult = GridLib_CallFilter(filter, cellIdx);
+			filterCallTimeAccum += GetEngineTime() - tFilter;
 			if (filterResult == GRIDLIB_FILTER_DISCARD_NAV)
 			{
 				GridLibLog("[GridLib] FindNearbyCells: cell %d DISCARD_NAV (nav=%x)", cellIdx, cell.navArea);
@@ -440,7 +442,13 @@ stock int GridLib_FindNearbyCells(const float position[3],
 		results[resultCount++] = cellIdx;
 	}
 
-	GridLibLog("[GridLib] FindNearbyCells: returning %d/%d candidates (scanned %d)", resultCount, candidateCount, scanned);
+	float filterMs = (filter != INVALID_FUNCTION) ? (GetEngineTime() - filterT0) * 1000.0 : 0.0;
+	float filterCallMs = filterCallTimeAccum * 1000.0;
+	GridLibLog("[GridLib] FindNearbyCells: returning %d/%d candidates (scanned %d, %.2f ms, sort=%.2f ms, filter=%.2f ms)",
+		resultCount, candidateCount, scanned, filterMs, sortMs, filterCallMs);
+	if (filterMs > 5.0)
+		LogMessage("[GridLib] WARNING: filter took %.1f ms (scanned %d/%d, returned %d, sort=%.1f ms, filtercb=%.1f ms, overhead=%.1f ms)",
+			filterMs, scanned, candidateCount, resultCount, sortMs, filterCallMs, filterMs - sortMs - filterCallMs);
 
 	return resultCount;
 }
