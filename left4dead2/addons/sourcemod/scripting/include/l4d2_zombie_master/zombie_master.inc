@@ -49,6 +49,7 @@
 #define SPAWNER_DISTANCE 3
 #define SPAWNER_SIGHT 4
 #define SPAWNER_OTHER 5
+#define SPAWNER_FLOW 6 // ZM is looking at a survivor with intent -> request flow spawn.
 
 #define RGB_ZM 16777215 // white for outlines
 #define RGB_FLOW 16711680 // blue for flow target survivor
@@ -58,15 +59,18 @@
 #define AUTOCOMMON_PANIC 1
 #define AUTOCOMMON_ALWAYS 2
 
-#define HULL_DX_STRICT 15.0
-#define HULL_DZ_MIN_STRICT 26.0
-#define HULL_DZ_MAX_STRICT 46.0
+#define HULL_DX_STRICT 16.0
+#define HULL_DZ_MIN_STRICT 20.0
+#define HULL_DZ_MAX_STRICT 50.0
+static float HULL_MINS[3] = {-HULL_DX_STRICT,-HULL_DX_STRICT,HULL_DZ_MIN_STRICT};
+static float HULL_MAXS[3] = {HULL_DX_STRICT,HULL_DX_STRICT,HULL_DZ_MAX_STRICT};
+
 
 #define AREA_COMMON 1024.0 // how much surface area a Common Infected is going to take up; 32x32
 
 #define HULL_DX 20.0
-#define HULL_DZ 36.0
-#define HULL_DDZ 72.0
+#define HULL_DZ 40.0
+#define HULL_DDZ 80.0
 
 #define WITCH_STATIC 0
 #define WITCH_MOVING 1
@@ -476,10 +480,10 @@ int color_conditional[4] = {0,0,255,128};
 int color_allowed[4] = {0,255,0,128};
 int color_unit_select[4] = {255,255,255,128};
 
-float zm_target_pos[3];
-float zm_spawner_pos[3];
+float zm_target_pos[3], zm_spawner_pos[3];
 Address zm_spawner_navArea;
-int zm_spawner_navAttrFlags, zm_spawner_navSpawnAttrs;
+//float zm_spawner_navSize[3];
+//float zm_spawner_navCenter[3]; // for future use in ZM_Horde
 int zm_spawner_state;
 float t_last_spawner_update;
 float t_last_spawner_sound;
@@ -761,30 +765,49 @@ stock void get_zombieclass_name(int ZOMBIECLASS, char name[32])
     }
 }
 
-// Allow witches to be spawned in weird places
-// Optional: navCenter and navSize for rescue closet validation
-stock bool nav_can_spawn_zombies(int navAttributeFlags, int navSpawnAttributes, bool witch = false, float navCenter[3] = {0.0,0.0,0.0}, float navSize[3] = {0.0,0.0,0.0})
+// Check if navArea is legal for zombies. Allow witches to be spawned in weird places
+// You may provide all attributes or automatically get them from navArea.
+stock bool nav_can_spawn_zombies(const bool witch = false,
+                                 Address navArea = Address_Null,
+                                 int &navAttributeFlags = -1, int &navSpawnAttributes = -1,
+                                 float navCenter[3] = {0.0,0.0,0.0}, float navSize[3] = {0.0,0.0,0.0})
 {
+    if (navArea!=Address_Null && l4dhooks_updated && L4D_NavArea_IsBlocked(navArea,TEAM_INFECTED,false)) return false;
+    if (navAttributeFlags<0) navAttributeFlags = L4D_GetNavArea_AttributeFlags(navArea);
+    if (navSpawnAttributes<0) navSpawnAttributes = L4D_GetNavArea_SpawnAttributes(navArea);
     if (!witch)
     {
         if (navAttributeFlags & NAV_BASE_OUTSIDE_WORLD) return false;
         if (navSpawnAttributes & NAV_SPAWN_BATTLESTATION) return false;
     }
-    // some Valve maps have messed up navmeshes where rescue closet is bleeding out
+    // some Valve maps have messed up navmeshes: rescue closets in crazy places, survivor player start in finale areas...
+    if (navSpawnAttributes & NAV_SPAWN_BATTLEFIELD) return true;
+    if (navSpawnAttributes & NAV_SPAWN_FINALE) return true;
+    if (navAttributeFlags & NAV_BASE_MOB_ONLY) return true;
+    if (navAttributeFlags & NAV_BASE_TANK_ONLY) return true;
     if (navSpawnAttributes & NAV_SPAWN_PLAYER_START) return false;
     if (navSpawnAttributes & NAV_SPAWN_CHECKPOINT) return false;
-    if (navSpawnAttributes & NAV_SPAWN_BATTLEFIELD) return true;
     if (navSpawnAttributes & NAV_SPAWN_ESCAPE_ROUTE) return true;
     if (navSpawnAttributes & NAV_SPAWN_OBSCURED || navSpawnAttributes & NAV_SPAWN_IGNORE_VISIBILITY) return true;
     if (navSpawnAttributes & NAV_SPAWN_RESCUE_CLOSET)
     {
-        if (l4dhooks_updated && navSize[0]>0.0 && navSize[1]>0.0)
+        if (l4dhooks_updated) // Verify info_survivor_rescue
         {
-            int entity = INVALID_ENT_REFERENCE;
-            float radius = (navSize[0]>navSize[1]) ? navSize[0] : navSize[1]; // should use 2d vector length of sizes/2 but sqrt is slow
-            while( (entity = L4D_FindEntityByClassnameWithin(entity,"info_survivor_rescue",navCenter,radius)) != INVALID_ENT_REFERENCE )
+            if (navSize[0]==0.0 && navSize[1]==0.0)
             {
-                return false;
+                L4D_GetNavAreaCenter(navArea,navCenter);
+                L4D_GetNavAreaSize(navArea,navSize);
+            }
+            float abs_x = FloatAbs(navSize[0]);
+            float abs_y = FloatAbs(navSize[1]);
+            if (abs_x>0.0 || abs_y>0.0)
+            {
+                int entity = INVALID_ENT_REFERENCE; // should use 2d vector length of sizes/2 but sqrt is slow
+                float radius = (abs_y>abs_x) ? abs_y : abs_x;
+                while( (entity = L4D_FindEntityByClassnameWithin(entity,"info_survivor_rescue",navCenter,radius)) != INVALID_ENT_REFERENCE )
+                {
+                    return false;
+                }
             }
             return true;
         }
@@ -1166,6 +1189,7 @@ bool TraceFilter_Looktarget(int entity, int contentsMask)
 	return false;
 }
 
+// TraceFilter for ZM Spawner: GREEN only in empty space WITHOUT specials and WITHOUT witches.
 bool TraceFilter_Spawner(int entity, int contentsMask, int ignore_entity)
 {
 	if (entity==ignore_entity) return false;
@@ -1189,36 +1213,132 @@ bool TraceFilter_Spawner(int entity, int contentsMask, int ignore_entity)
 	return true;
 }
 
-static float HULL_MINS[3] = {-HULL_DX_STRICT,-HULL_DX_STRICT,HULL_DZ_MIN_STRICT};
-static float HULL_MAXS[3] = {HULL_DX_STRICT,HULL_DX_STRICT,HULL_DZ_MAX_STRICT};
-stock bool IsObstructed(float vecpos[3], int entity = -1, bool debug=false)
+// TraceFilter for predicting if an infected entity might be stuck: ignore infected, witches and special infected
+bool TraceFilter_Stuck_IgnoreZombies(int entity, int contentsMask, int ignore_entity)
+{
+	if (entity==ignore_entity) return false;
+	if (entity==0) return true;
+	if (IsValidClient(entity))
+	{
+	 if (IsValidClient(ignore_entity) && GetClientTeam(entity)==TEAM_SURVIVOR && GetClientTeam(ignore_entity)==TEAM_SURVIVOR)
+    	 return false; // survivors wont get stuck in other survivors.
+     if (GetClientTeam(entity)==TEAM_INFECTED) return false; // ignore all clients on infected team
+     if (!IsPlayerAlive(entity)) return false;
+	}
+	else if (IsValidEntity(entity))
+	{
+    	static char class[32];
+        GetEntityClassname(entity, class, sizeof(class));
+	    switch (class[0])
+        {
+            case 'e':
+            {
+                if (strcmp(class,"env_player_blocker")==0) return false;
+                if (strcmp(class,"env_physics_blocker")==0) return false;
+            }
+            case 'i':
+            {
+                if (strcmp(class,"infected")==0) return false;
+            }
+            case 'w':
+            {
+                if (strcmp(class,"witch")==0) return false;
+            }
+        }
+	}
+	return true;
+}
+
+// IsObstructed checks for ZM spawner (ignore_zombies=false) or to determine if a zombie will be stuck in that position (ignore_zombies=true)
+stock bool IsObstructed(float pos[3], int entity = -1, bool debug=false, bool ignore_zombies = false)
 {
     bool isObstructed = false;
-	Handle hullTrace = TR_TraceHullFilterEx(vecpos, vecpos, HULL_MINS, HULL_MAXS,
-								        MASK_NPCSOLID,
-								        TraceFilter_Spawner, entity);
+    Handle hullTrace;
+    if (ignore_zombies) hullTrace = TR_TraceHullFilterEx(pos,pos,HULL_MINS,HULL_MAXS,MASK_NPCSOLID,TraceFilter_Stuck_IgnoreZombies,entity);
+    else hullTrace = TR_TraceHullFilterEx(pos,pos,HULL_MINS,HULL_MAXS,MASK_NPCSOLID,TraceFilter_Spawner,entity);
 	if (TR_DidHit(hullTrace))
 	{
 		int hitEntity = TR_GetEntityIndex(hullTrace);
-		if (debug && IsValidEntity(hitEntity))
+		if (hitEntity == 0) // Hit world
 		{
-		     char classname[64];
-             GetEntityClassname(hitEntity, classname, sizeof(classname));
-             LogMessage("[zm] IsObstructed hit %d %s", hitEntity, classname);
-		}
-		int hullSurfaceFlags = TR_GetSurfaceFlags(hullTrace);
-		if (hitEntity == 0)
-		{
-			// Hit world
+			int hullSurfaceFlags = TR_GetSurfaceFlags(hullTrace);
 			if (!(hullSurfaceFlags & 0x0080) && !(hullSurfaceFlags & 0x0100) && !(hullSurfaceFlags & 0x0200))
         			isObstructed = true;
 		}
-		else isObstructed = true;
+		else if (IsValidEntity(hitEntity))
+		{
+		     if (debug)
+		     {
+    		     static char classname[64];
+                 GetEntityClassname(hitEntity, classname, sizeof(classname));
+                 LogMessage("[zm] IsObstructed hit %d %s", hitEntity, classname);
+             }
+             isObstructed = true;
+		}
 	}
 	delete hullTrace;
 	return isObstructed;
 }
 
+// for known obstructed pos, try adjusting position slightly
+// optional: navArea and center for try_center, try_random
+// true on success, false on failure
+// future: make this more useful
+stock bool try_adjusting_obstructed_pos(float pos[3],
+                                        Address navArea=Address_Null, float center[3]={0.0,0.0,0.0},
+                                        bool try_up = true,
+                                        bool try_center = true, bool try_center_up = true,
+                                        bool try_random = true, bool try_random_up = true)
+{
+    static float new_pos[3];
+    if (try_up)
+    {
+        new_pos = pos; new_pos[2] += HULL_DZ_MIN_STRICT;
+        if (!IsObstructed(new_pos))
+        {
+            pos = new_pos;
+            return true;
+        }
+    }
+    
+    if (try_center && center[0]!=0.0 && center[1]!=0.0)
+    {
+        if (!IsObstructed(center))
+        {
+            pos = center;
+            return true;
+        }
+        else if (try_center_up)
+        {
+            new_pos = center; new_pos[2] += HULL_DZ_MIN_STRICT;
+            if (!IsObstructed(new_pos))
+            {
+                pos = new_pos;
+                return true;
+            }
+        }
+    }
+    
+    if (try_random && navArea!=Address_Null)
+    {
+        L4D_FindRandomSpot(navArea,new_pos);
+        if (!IsObstructed(new_pos))
+        {
+            pos = new_pos;
+            return true;
+        }
+        else if (try_random_up)
+        {
+            new_pos[2] += HULL_DZ_MIN_STRICT;
+            if (!IsObstructed(new_pos))
+            {
+                pos = new_pos;
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 //// ty zyiks
 stock void DumpPlayerState(int client, int target = -1)
@@ -1678,7 +1798,7 @@ Action ZMControlSI(int client, int args)
          
          if (zClass==ZOMBIECLASS_TANK)
          {
-             if (IsObstructed(vOrigin,entity)) vOrigin[2] += 25.0;
+             if (IsObstructed(vOrigin,entity,_,true)) try_adjusting_obstructed_pos(vOrigin,_,_,true,false,false,false,false);
              L4D_ReplaceTank(entity,zm_client);
          }
          else L4D_TakeOverZombieBot(zm_client,entity);
@@ -1903,7 +2023,11 @@ void update_ZM_looktarget(bool draw = true)
    GetEntityClassname(target, class, sizeof(class));
    if (class[0]=='i' || class[0]=='w' || class[0]=='p')
    {
-       if ( strcmp(class,"infected")==0 || strcmp(class,"witch")==0 || (strcmp(class,"player")==0 && GetClientTeam(target)==TEAM_INFECTED && IsFakeClient(target)) )
+       if (IsValidClient(target) && GetClientTeam(target)==TEAM_SURVIVOR && IsPlayerAlive(target))
+       {
+           if (!IsValidEntRef(g_iGlowList[target])) CreateZMGlow(target,false,true);
+       }
+       else if ( strcmp(class,"infected")==0 || strcmp(class,"witch")==0 || (IsValidClient(target) && GetClientTeam(target)==TEAM_INFECTED && IsFakeClient(target)) )
        {
       	 int entref_temp = EntIndexToEntRef(target);
       	 if (draw && entref_temp!=entref_delete)
@@ -1917,7 +2041,6 @@ void update_ZM_looktarget(bool draw = true)
       	 if (strcmp(class,"player")==0 && !L4D_IsPlayerIncapacitated(target)) update_entref_control(entref_temp,draw);
        }
    }
-   
 }
 
 void update_director_script_scopes(bool warn = true)

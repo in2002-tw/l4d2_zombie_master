@@ -19,6 +19,44 @@ static float  g_fBatchSurvivorPos[MAXPLAYERS+1][3];
 static float  g_SpawnerFilterOrigin[3];
 static float  g_SpawnerFilterRadius;
 
+/**
+ * Pre-compute PVS data for all alive survivors. Call before a batch of
+ * can_any_alive_survivor_see_cheap() calls (e.g. inside a GridLib filter).
+ * PVS buffers are built once here and reused for every cell check.
+ */
+void Spawner_BeginBatchPVS()
+{
+	g_bBatchPVSActive = false;
+	g_iBatchSurvivorCount = 0;
+
+	if (hCheckOriginInPVS == null) return;
+
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsClientInGame(i) || GetClientTeam(i) != TEAM_SURVIVOR || !IsPlayerAlive(i))
+			continue;
+
+		GetClientAbsOrigin(i, g_fBatchSurvivorPos[g_iBatchSurvivorCount]);
+
+		float eyePos[3];
+		GetClientEyePosition(i, eyePos);
+		int cluster = PVS_GetClusterForOrigin(eyePos);
+		if (cluster < 0) continue;
+
+		PVS_GetForCluster(cluster, g_BatchSurvivorPVS[g_iBatchSurvivorCount]);
+		g_iBatchSurvivorClients[g_iBatchSurvivorCount] = i;
+		g_iBatchSurvivorCount++;
+	}
+
+	g_bBatchPVSActive = (g_iBatchSurvivorCount > 0);
+	if (DEBUG_SPAWNER) LogMessage("[zm] BeginBatchPVS: %d survivors, active=%d", g_iBatchSurvivorCount, g_bBatchPVSActive);
+}
+
+void Spawner_EndBatchPVS()
+{
+	g_bBatchPVSActive = false;
+	g_iBatchSurvivorCount = 0;
+}
 
 /**
  * Draw the colored spawn indicator ring at the ZM's aim position and update spawner state.
@@ -62,18 +100,16 @@ void update_ZM_spawner(const float target_pos[3], const float spawner_pos[3], co
         }
         t_last_spawner_update = t_now;
         
-        if (state!=SPAWNER_OK) // Draw blue visor on target survivor indicating FLOW spawn available
+        int target = get_spawner_target_survivor(false,state);
+        if (target>0 && g_iGlowList[target]==INVALID_ENT_REFERENCE) // Draw survivor with CONDITIONAL color
         {
-            int target = get_spawner_target_survivor(false,state);
-            if (target>0 && g_iGlowList[target]==INVALID_ENT_REFERENCE) // Draw survivor with CONDITIONAL color
-            {
-                //GetClientEyePosition(target,draw_pos);
-                //draw_pos[2] += 10.0;
-                //TE_SetupBeamRingPoint(draw_pos,HULL_DX+2.0,HULL_DX,g_iLaser,g_iHalo,0,0,g_fUpdateRate*2.0,2.5,0.0,color_conditional,0,0);
-                //TE_SendToClient(zm_client);
-                CreateZMGlow(target,false,true);
-            }
+            //GetClientEyePosition(target,draw_pos);
+            //draw_pos[2] += 10.0;
+            //TE_SetupBeamRingPoint(draw_pos,HULL_DX+2.0,HULL_DX,g_iLaser,g_iHalo,0,0,g_fUpdateRate*2.0,2.5,0.0,color_conditional,0,0);
+            //TE_SendToClient(zm_client);
+            CreateZMGlow(target,false,true);
         }
+        
         
     }
     zm_target_pos = target_pos;
@@ -113,45 +149,6 @@ bool any_alive_survivors_in_radius(float vecPos[3], float radius)
         }
         return false;
     }
-}
-
-/**
- * Pre-compute PVS data for all alive survivors. Call before a batch of
- * can_any_alive_survivor_see_cheap() calls (e.g. inside a GridLib filter).
- * PVS buffers are built once here and reused for every cell check.
- */
-void Spawner_BeginBatchPVS()
-{
-	g_bBatchPVSActive = false;
-	g_iBatchSurvivorCount = 0;
-
-	if (hCheckOriginInPVS == null) return;
-
-	for (int i = 1; i <= MaxClients; i++)
-	{
-		if (!IsClientInGame(i) || GetClientTeam(i) != TEAM_SURVIVOR || !IsPlayerAlive(i))
-			continue;
-
-		GetClientAbsOrigin(i, g_fBatchSurvivorPos[g_iBatchSurvivorCount]);
-
-		float eyePos[3];
-		GetClientEyePosition(i, eyePos);
-		int cluster = PVS_GetClusterForOrigin(eyePos);
-		if (cluster < 0) continue;
-
-		PVS_GetForCluster(cluster, g_BatchSurvivorPVS[g_iBatchSurvivorCount]);
-		g_iBatchSurvivorClients[g_iBatchSurvivorCount] = i;
-		g_iBatchSurvivorCount++;
-	}
-
-	g_bBatchPVSActive = (g_iBatchSurvivorCount > 0);
-	if (DEBUG_SPAWNER) LogMessage("[zm] BeginBatchPVS: %d survivors, active=%d", g_iBatchSurvivorCount, g_bBatchPVSActive);
-}
-
-void Spawner_EndBatchPVS()
-{
-	g_bBatchPVSActive = false;
-	g_iBatchSurvivorCount = 0;
 }
 
 /**
@@ -359,7 +356,8 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3])
  * to saferoom doors. Returns -1.0 if no valid path or survivor exists.
  *
  * @param pos           The world position to measure from
- * @param store_client  If true, store the nearest survivor client index in spawner_nearest_survivor
+ * @param store_client  If true, store the nearest survivor client index in spawner_nearest_survivor. For flow spawns.
+ * @param min_distance  Safe distance to spawn. Feeds to fast any_alive_survivors_in_radius() call which can exit early returning min_distance.
  * @return              Minimum distance to survivors, or -1.0 if no valid measurement
  */
 float min_distance_to_survivors(float pos[3], bool store_client=false, float min_distance = -1.0)
@@ -375,7 +373,6 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float min
    if (store_client) spawner_nearest_survivor = -1;
    
    // Is there at least one survivor close enough? If not, end early.
-   int i = INVALID_ENT_REFERENCE;
    bool hit = true;
    if (min_distance<0.0) min_distance = (g_fSpawnMinDistance<150.0) ? 150.0 : g_fSpawnMinDistance; // 150.0 for "survivor being targeted" detection
    if (l4dhooks_updated) hit = any_alive_survivors_in_radius(pos,min_distance); // replace with L4D_FindEntityByClassnameNearest. exit early
@@ -409,6 +406,7 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float min
          if (d_nav_temp>=0.0 && (d_nav<0.0 || d_nav_temp<d_nav)) d_nav = d_nav_temp;
     }
    
+   int i = INVALID_ENT_REFERENCE;
    for(i = 1; i <= MaxClients; i++)
    {
         if (!IsClientInGame(i) || !IsPlayerAlive(i) || GetClientTeam(i)!=TEAM_SURVIVOR) continue;
@@ -468,6 +466,13 @@ stock bool FilterSpawner_HitSurvivors(int entity, int mask, int self)
 	return true;
 }
 
+// Test if pos xy values are out of bounds for given navmesh center and size
+stock bool nav_xy_OOB(float pos[3], float center[3], float size[3])
+{
+    if (FloatAbs(pos[0]-center[0])>FloatAbs(size[0]/2.0)) return true;
+    if (FloatAbs(pos[1]-center[1])>FloatAbs(size[1]/2.0)) return true;
+    return false;
+}
 
 /**
  * Main spawn validation orchestrator - from ZM client.
@@ -481,13 +486,22 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
 {
     if (DEBUG) LogMessage("[zm] can_ZM_spawn");
 	if (!IsValidClientZM()) return SPAWNER_INVALID;
-	if (zm_stage>=ZM_END) return SPAWNER_INVALID;
+	if (zm_stage>=ZM_END) return SPAWNER_INVALID;	
 	int observermode = GetEntProp(zm_client, Prop_Send, "m_iObserverMode");
     if ( (observermode==4 || observermode==5) && get_spawner_target_survivor(false,SPAWNER_DISTANCE)>0 )
     {
         // exit early, draw only visor on target survivor.
-        update_ZM_spawner({0.0,0.0,0.0},{0.0,0.0,0.0},SPAWNER_DISTANCE,true);
-        return SPAWNER_DISTANCE;
+        update_ZM_spawner({0.0,0.0,0.0},{0.0,0.0,0.0},SPAWNER_FLOW,true);
+        return SPAWNER_FLOW;
+    }
+    if (IsValidEntRef(entref_lastlook))
+    {
+        int lastlook = EntRefToEntIndex(entref_lastlook);
+        if (IsValidClient(lastlook) && GetClientTeam(lastlook)==TEAM_SURVIVOR && IsPlayerAlive(lastlook))
+        {
+            update_ZM_spawner({0.0,0.0,0.0},{0.0,0.0,0.0},SPAWNER_FLOW,true);
+            return SPAWNER_FLOW;
+        }
     }
 	float vAngles[3],vOrigin[3],vPos[3];
 	GetClientEyePosition(zm_client,vOrigin);
@@ -505,7 +519,7 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
         	latest_distance = 0.0;
         	spawner_nearest_survivor = entity;
         	delete trace;
-        	return SPAWNER_DISTANCE;
+        	return SPAWNER_FLOW;
     	}
 	}
 	else GetClientAbsOrigin(zm_client,vPos);
@@ -530,7 +544,7 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
  * @param witch  If true, use relaxed nav validation rules for witch placement
  * @param witch  If true, use relaxed nav validation rules for witch placement
  * @param hint   If true, show HUD hints explaining why spawning is blocked
- * @param draw   Run update_ZM_spawner() which will update zm_spawner globals + draw GREEN/BLUE/RED for ZM to see.
+ * @param draw   Run update_ZM_spawner() which will update zm_spawner globals + draw GREEN/BLUE/RED for ZM to see. Set draw=false for internal calculations, i.e. to check spawn rules.
  * @param skip_gridlib If true, skip gridlib fallback and immediately throw out a failed spawner state.
  * @return       SPAWNER_OK, -> GREEN
  *               SPAWNER_INVALID, SPAWNER_NAV -> RED
@@ -546,7 +560,7 @@ int can_ZM_spawn_pos(float vPos[3],bool witch = false,bool hint = true,bool draw
     	draw = false;
     }
     
-    if (TR_PointOutsideWorld(vPos))
+    if (TR_PointOutsideWorld(vPos)) // Straight up bad location? Don't waste time.
     {
         if (hint) update_hint("%T", "Bad location", zm_client);
         if (draw) update_ZM_spawner(vPos,vPos,SPAWNER_INVALID,draw);
@@ -572,22 +586,39 @@ int can_ZM_spawn_pos(float vPos[3],bool witch = false,bool hint = true,bool draw
     float navSize[3], navCenter[3];
     if (navArea)
     {
-        navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
         navAttrFlags = L4D_GetNavArea_AttributeFlags(navArea);
+        navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
         L4D_GetNavAreaCenter(navArea,navCenter);
         L4D_GetNavAreaSize(navArea,navSize);
+        //float z_min = navCenter[2] - FloatAbs(navSize[2])/2.0;
+        float z_min = navCenter[2] - FloatAbs(navSize[2]); // fix only egregious out of bounds
         
-        if ( FloatAbs(vPos_spawner[0]-navCenter[0])>(navSize[0]/2.0) ||
-             FloatAbs(vPos_spawner[1]-navCenter[1])>(navSize[1]/2.0) || IsObstructed(vPos_spawner) )
+        bool OOB = nav_xy_OOB(vPos_spawner,navCenter,navSize);
+        bool obstruction_checked = false;
+        bool tried_center = false;
+        if (OOB) // If navmesh is outside expected xy: try center,center-up,random,random-up
         {
-            if (IsObstructed(navCenter)) L4D_FindRandomSpot(navArea,vPos_spawner);
-            else vPos_spawner = navCenter;
+            fail = !try_adjusting_obstructed_pos(vPos_spawner,navArea,navCenter,
+                                         false,        true,true,         true,true);
+            tried_center = true;
+            obstruction_checked = true;
         }
-        else
+        if (!fail && !obstruction_checked && IsObstructed(vPos_spawner)) // Navmesh xy is good, but we are obstructed. Try moving up.
         {
-            float z_min = navCenter[2] - FloatAbs(navSize[2])/2.0;
-            if (vPos_spawner[2]<z_min) vPos_spawner[2] = navCenter[2] + FloatAbs(navSize[2])/2.0 + 1.0;
+            fail = !try_adjusting_obstructed_pos(vPos_spawner,navArea,navCenter,
+                                         true,!tried_center,!tried_center,!tried_center,!tried_center);
+            
         }
+        if (!fail && vPos_spawner[2]<z_min)
+        {
+            static float new_vPos[3];
+            new_vPos = vPos_spawner;
+            new_vPos[2] = navCenter[2] + FloatAbs(navSize[2])/2.0 + 1.0;
+            if (!IsObstructed(new_vPos)) vPos_spawner = new_vPos;
+            else fail = true;
+        }
+        if (fail) spawner_state = SPAWNER_OTHER;
+         
     }
     else
     {
@@ -599,67 +630,61 @@ int can_ZM_spawn_pos(float vPos[3],bool witch = false,bool hint = true,bool draw
         }
     }
     
-    if (draw)
+    if ( !fail || (draw && spawner_state>SPAWNER_NAV) ) // check navmesh properties for no-no. run this if spawner is CONDITIONAL to make it RED
     {
-        zm_spawner_navSpawnAttrs = navSpawnAttrs;
-        zm_spawner_navAttrFlags = navAttrFlags;
-    }
-    
-    min_distance = min_distance_to_survivors(vPos_spawner,draw);
-    if (min_distance>=0.0 && draw) latest_distance = min_distance;
-    if (zm_stage<ZM_STARTED && spawner_nearest_survivor>0) min_distance *= 2.0;
-    if (min_distance>=0.0 && g_fSpawnMinDistance>0.0 && min_distance<g_fSpawnMinDistance)
-    {
-        spawner_state = SPAWNER_DISTANCE;
-        fail = true;
-    }
-    
-    if ( !fail || (draw && spawner_state>SPAWNER_NAV) ) // run this if spawner is CONDITIONAL to make it RED
-    {
-        if (!nav_can_spawn_zombies(zm_spawner_navAttrFlags,zm_spawner_navSpawnAttrs,witch,navCenter,navSize))
+        if (navArea && !nav_can_spawn_zombies(witch, navArea,
+                                   navAttrFlags,navSpawnAttrs,
+                                   navCenter,navSize))
         {
             spawner_state = SPAWNER_NAV;
             fail = true;
         }
     }
-    if ( navArea && ( !fail || (draw && spawner_state>SPAWNER_NAV) ) && !witch && l4dhooks_updated) // run this if spawner is CONDITIONAL to make it RED
+    if (!fail || draw) // nav area travel distance is expensive, skip if not needed
     {
-        if (L4D_NavArea_IsBlocked(navArea,TEAM_INFECTED,false))
+        min_distance = min_distance_to_survivors(vPos_spawner,draw);
+        if (min_distance>=0.0 && draw) latest_distance = min_distance;
+        if (zm_stage<ZM_STARTED && spawner_nearest_survivor>0) min_distance *= 2.0;
+        if (min_distance>=0.0 && g_fSpawnMinDistance>0.0 && min_distance<g_fSpawnMinDistance)
         {
-            spawner_state = SPAWNER_NAV;
+            spawner_state = SPAWNER_DISTANCE;
             fail = true;
         }
     }
-    if (!fail)
+    if (!fail) // check if obstructed
     {
         fail = IsObstructed(vPos_spawner);
         if (fail) spawner_state = SPAWNER_OTHER;
     }
-    if (!fail)
+    if (!fail) // check if survivors can see
     {
-        bool obscured = ( (zm_spawner_navSpawnAttrs & NAV_SPAWN_OBSCURED) || (zm_spawner_navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
+        bool obscured = ( (navSpawnAttrs & NAV_SPAWN_OBSCURED) || (navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
         if (!obscured)
         {
             fail = can_any_alive_survivor_see(vPos_spawner,false);
             if (fail) spawner_state = SPAWNER_SIGHT;
         }
     }
-    if (fail && !skip_gridlib && spawner_state>SPAWNER_NAV) 
+    if (fail && draw && spawner_state>SPAWNER_NAV && zm_spawner_state==SPAWNER_OK && GetVectorDistance(vPos_spawner,zm_spawner_pos)<500.0) // see if there's a good nearby position in memory
     {
-        float vPos_gridlib[3];
-        if (FindNearbyValidSpawnCell(vPos_spawner,vPos_gridlib,check_dist,witch))
+        if (can_ZM_see(zm_spawner_pos) && can_ZM_spawn_pos(zm_spawner_pos,witch,false,false,true)==SPAWNER_OK)
+        {
+            vPos_spawner = zm_spawner_pos;
+            fail = false;
+            spawner_state = SPAWNER_OK;
+            if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
+            if (DEBUG_SPAWNER) LogMessage("Valid old position");
+        }
+    }
+    if (fail && draw && !skip_gridlib && spawner_state>SPAWNER_NAV) // ask gridlib for a better position
+    {
+        static float vPos_gridlib[3];
+        if (FindNearbyValidSpawnCell(vPos_spawner,vPos_gridlib,check_dist))
         {
             vPos_spawner = vPos_gridlib;
             fail = false;
-            if (draw)
-            {
-                zm_spawner_navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
-                if (zm_spawner_navArea)
-                {
-                    zm_spawner_navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(zm_spawner_navArea);
-                    zm_spawner_navAttrFlags = L4D_GetNavArea_AttributeFlags(zm_spawner_navArea);
-                }
-            }
+            spawner_state = SPAWNER_OK;
+            if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
         }
     }
     if (fail)
@@ -695,6 +720,20 @@ int can_ZM_spawn_pos(float vPos[3],bool witch = false,bool hint = true,bool draw
     return SPAWNER_OK;
 }
 
+bool can_ZM_see(float vPos[3])
+{
+    if (!IsValidClientZM()) return false;
+    bool can_see = true;
+    static float vEye[3], vPos2[3];
+    vPos2 = vPos; vPos2[2] += 32.0;
+    GetClientEyePosition(zm_client,vEye);
+    Handle trace = TR_TraceRayFilterEx(vEye,vPos2,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,zm_client,TRACE_WORLD_ONLY);
+    if(TR_DidHit(trace)) can_see = false;
+    delete trace;
+    //LogMessage("can_ZM_see %d", can_see);
+    return can_see;
+}
+
 /**
  * GridLib filter callback for spawn cell validation.
  * Returns GRIDLIB_FILTER_KEEP, GRIDLIB_FILTER_DISCARD, or GRIDLIB_FILTER_DISCARD_NAV.
@@ -715,7 +754,19 @@ int SpawnerCellFilter(int cellIdx)
 
     if (obstructed)
         return GRIDLIB_FILTER_DISCARD;
-
+    
+    if (!nav_can_spawn_zombies(false,navArea))
+    {
+        if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d failed nav attrs", cellIdx);
+        return GRIDLIB_FILTER_DISCARD_NAV;
+    }
+    
+    if (IsObstructed(cellPos)) // my obstruction check is more restrictive
+        return GRIDLIB_FILTER_DISCARD;
+    
+    if (IsValidClientZM() && !can_ZM_see(cellPos)) // Check if ZM can actually see that location.
+        return GRIDLIB_FILTER_DISCARD;
+    
     if (can_any_alive_survivor_see_cheap(cellPos))
     {
         if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d visible to survivors", cellIdx);
@@ -751,10 +802,9 @@ int SpawnerCellFilter(int cellIdx)
  * @param origin    The aimed spawn position to search around
  * @param outPos    Output: the valid nearby cell position, if found
  * @param radius    Search radius, defaults to g_fGridSearchRadius
- * @param witch     If true, use relaxed validation for witch placement
  * @return          true if a valid cell was found, false otherwise
  */
-bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -1.0, bool witch = false)
+bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -1.0)
 {
     if (radius <= 0.0) radius = g_fGridSearchRadius;
     if (radius <= 0.0)
@@ -779,7 +829,7 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
     Spawner_BeginBatchPVS();
 
     float t_gridlib = GetEngineTime();
-    int cells[16];
+    static int cells[16];
     int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 16, SpawnerCellFilter);
     float gridlib_ms = (GetEngineTime() - t_gridlib) * 1000.0;
 
@@ -789,28 +839,44 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
 
     // All returned cells passed nav/obstruction/travel/distance/visibility checks.
     // Only the expensive can_ZM_spawn_pos check remains.
-    int expensive_fails = 0;
+    //int expensive_fails = 0;
     for (int i = 0; i < count; i++)
     {
         float cellPos[3], normal[3];
         Address navArea;
         bool obstructed;
         GridLib_GetCellData(cells[i], cellPos, normal, navArea, obstructed);
-
-        if (can_ZM_spawn_pos(cellPos, witch, false, false, true) != SPAWNER_OK)
-        {
-            if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: cell %d can_ZM_spawn_pos fail", i);
-            expensive_fails++;
-            if (expensive_fails >= 3)
-            {
-                float total_ms = (GetEngineTime() - t_start) * 1000.0;
-                if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: aborted after 3 expensive fails (gridlib=%.2f ms, total=%.2f ms)", gridlib_ms, total_ms);
-                if (total_ms > 10.0)
-                    LogMessage("[zm] WARNING: FindNearbyValidSpawnCell took %.1f ms (gridlib=%.1f ms, %d results)", total_ms, gridlib_ms, count);
-                return false;
-            }
-            continue;
-        }
+        //if (can_ZM_spawn_pos(cellPos, witch, false, false, true) != SPAWNER_OK)
+        //{
+        //    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: cell %d can_ZM_spawn_pos fail", i);
+        //    expensive_fails++;
+        //    if (expensive_fails >= 3)
+        //    {
+        //        float total_ms = (GetEngineTime() - t_start) * 1000.0;
+        //        if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: aborted after 3 expensive fails (gridlib=%.2f ms, total=%.2f ms)", gridlib_ms, total_ms);
+        //        if (total_ms > 10.0)
+        //            LogMessage("[zm] WARNING: FindNearbyValidSpawnCell took %.1f ms (gridlib=%.1f ms, %d results)", total_ms, gridlib_ms, count);
+        //        return false;
+        //    }
+        //    continue;
+        //}
+        
+        //if (IsValidClientZM())
+        //{
+        //    static float cellPos2[3];
+        //    cellPos2 = cellPos; cellPos2[2] += 32.0;
+        //    if (!L4D2_IsVisibleToPlayer(zm_client,TEAM_INFECTED,3,0,cellPos2))
+        //    {
+        //        LogMessage("[zm] FindNearbyValidSpawnCell: cell %d zm_client LOS", i);
+        //        continue;
+        //    }
+        //}
+        
+        //if (IsValidClientZM() && !can_ZM_see(cellPos))
+        //{
+        //    LogMessage("[zm] FindNearbyValidSpawnCell: cell %d zm_client LOS", i);
+        //    continue;
+        //}
 
         if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: valid cell %d at (%.0f,%.0f,%.0f)", i, cellPos[0], cellPos[1], cellPos[2]);
         outPos = cellPos;

@@ -233,7 +233,7 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
         bool try_gridlib = true;
         if (zm_spawner_navArea) // check navmesh size. is it roughly the right size for the desired count? if so, use cheap random positions on navmesh.
         {
-            float navSize[3];
+            static float navSize[3];
             L4D_GetNavAreaSize(zm_spawner_navArea,navSize);
             if (navSize[0]<32.0) navSize[0] = 32.0; // if it's super thin but not obstructed, a whole zombie will fit.
             if (navSize[1]<32.0) navSize[1] = 32.0; // if it's super thin but not obstructed, a whole zombie will fit.
@@ -266,7 +266,8 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 
 	int tries = (count<=10) ? 5 : 3;
 	int spawned = 0;
-	float randomPos[3], randomPos_old[3], angle[3];
+	float randomPos[3], angle[3];
+	//float randomPos_old[3];
 	bool glow, random;
 	
 	char set_model[64] = "";
@@ -294,10 +295,10 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 		if (DEBUG_SPAWNCOMMANDS) LogMessage("[zm] ZM_Horde: built PVS for %d survivors", survivorPVSCount);
 	}
     
-    int gridlib_fails = 0;
-    if (use_gridlib) randomPos_old = zm_spawner_pos;
-    bool first_spawned = false;
-    float distance_tol = 500.0;
+    //int gridlib_fails = 0;
+    //if (use_gridlib) randomPos_old = zm_spawner_pos;
+    //bool first_spawned = false;
+    //float distance_tol = 500.0;
 	for( int i = 0; i < count; i++  )
 	{
 		bool fallback_original_navmesh = false;
@@ -347,7 +348,7 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 				}
 			}
 			
-			bool gridlib_fail = false;
+			//bool gridlib_fail = false;
     		//if ( can_any_alive_survivor_see(randomPos,false) ) // check if spawning zombies in LOS
     		//{
         	//	L4D_FindRandomSpot(cellNavArea,randomPos);
@@ -357,37 +358,37 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
             //		gridlib_fail = true;
         	//	}
     		//}
-			if (!gridlib_fail) // check if zombies are being spawned too far away or unreachable either direction
-			{
-    			float travel1 = L4D2_NavAreaTravelDistance(zm_spawner_pos,randomPos,false);
-    			if (travel1<0.0 || (!first_spawned && travel1>distance_tol)) gridlib_fail = true;
-    			if (!gridlib_fail && first_spawned)
-    			{
-        			float travel2 = L4D2_NavAreaTravelDistance(randomPos,randomPos_old,false);
-        			if (travel2<0.0 || travel2>distance_tol) gridlib_fail = true;
-        		}
-        		if (gridlib_fail && DEBUG_SPAWNCOMMANDS) LogMessage("gridlib fail %d travel", gridlib_fails+1);
-			}
-			if (!gridlib_fail) // check if navmesh rules are being violated
-			{
- 			     int navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(cellNavArea);
-                 int navAttrFlags = L4D_GetNavArea_AttributeFlags(cellNavArea);
-                 float navCenter[3], navSize[3];
-                 L4D_GetNavAreaCenter(cellNavArea, navCenter);
-                 L4D_GetNavAreaSize(cellNavArea, navSize);
-                 if (!nav_can_spawn_zombies(navAttrFlags,navSpawnAttrs,false,navCenter,navSize))
-                 {
-                     if (DEBUG_SPAWNCOMMANDS) LogMessage("gridlib fail %d navmesh attributes", gridlib_fails+1);
-                     gridlib_fail = true;
-                 }
-			}
-			if (gridlib_fail) // do something if it fails too often
-			{
-    			gridlib_fails += 1;
-    			if (gridlib_fails>=5) use_gridlib = false;
-    			fallback_original_navmesh = true;
-			}
-			randomPos_old = randomPos;
+			//if (!gridlib_fail) // check if zombies are being spawned too far away or unreachable either direction
+			//{
+    		//	float travel1 = L4D2_NavAreaTravelDistance(zm_spawner_pos,randomPos,false);
+    		//	if (travel1<0.0 || (!first_spawned && travel1>distance_tol)) gridlib_fail = true;
+    		//	if (!gridlib_fail && first_spawned)
+    		//	{
+        	//		float travel2 = L4D2_NavAreaTravelDistance(randomPos,randomPos_old,false);
+        	//		if (travel2<0.0 || travel2>distance_tol) gridlib_fail = true;
+        	//	}
+        	//	if (gridlib_fail && DEBUG_SPAWNCOMMANDS) LogMessage("gridlib fail %d travel", gridlib_fails+1);
+			//}
+			//if (!gridlib_fail) // check if navmesh rules are being violated
+			//{
+ 			//     int navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(cellNavArea);
+            //     int navAttrFlags = L4D_GetNavArea_AttributeFlags(cellNavArea);
+            //     float navCenter[3], navSize[3];
+            //     L4D_GetNavAreaCenter(cellNavArea, navCenter);
+            //     L4D_GetNavAreaSize(cellNavArea, navSize);
+            //     if (!nav_can_spawn_zombies(navAttrFlags,navSpawnAttrs,false,navCenter,navSize))
+            //     {
+            //         if (DEBUG_SPAWNCOMMANDS) LogMessage("gridlib fail %d navmesh attributes", gridlib_fails+1);
+            //         gridlib_fail = true;
+            //     }
+			//}
+			//if (gridlib_fail) // do something if it fails too often
+			//{
+    		//	gridlib_fails += 1;
+    		//	if (gridlib_fails>=5) use_gridlib = false;
+    		//	fallback_original_navmesh = true;
+			//}
+			//randomPos_old = randomPos;
 			if (DEBUG_SPAWNCOMMANDS)
 			{
 			LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) spawning at (%.0f,%.0f,%.0f) dist=%.0f",
@@ -471,8 +472,8 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
            if (use_randompz && hint) mark_flow_survivor_and_zombie(-1,zombie);
            //SetEntProp(zombie,Prop_Send,"m_nSkin",GetRandomInt(0, 10));
            //SetEntityRenderColor(zombie,GetRandomInt(0,255),GetRandomInt(0,255),GetRandomInt(0,255),255);
-           first_spawned = true;
-           if (use_gridlib) distance_tol += 32.0;
+           //first_spawned = true;
+           //if (use_gridlib) distance_tol += 32.0;
         }
     }
 		

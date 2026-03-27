@@ -15,6 +15,12 @@ void remove_all_ZM_glows()
 	}
 }
 
+void NextFrame_Remove(int entref)
+{
+    if (!IsValidEntRef(entref)) return;
+    RemoveEntity(entref);
+}
+
 // remove glow of parent entity
 void remove_ZM_glow(int entity)
 {
@@ -27,14 +33,14 @@ void remove_ZM_glow(int entity)
     }
     int entref_glow = g_iGlowList[entity];
     hp_timers[entity] = INVALID_HANDLE;
-    if (entref_glow==INVALID_ENT_REFERENCE) return;
     if ( IsValidEntRef(entref_glow) && HasEntProp(entref_glow, Prop_Send, "m_CollisionGroup") )
     {
        char class[32];
        GetEntityClassname(entref_glow, class, sizeof(class));
        if (strcmp(class,"prop_dynamic_ornament")==0)
        {
-   	       AcceptEntityInput(entref_glow, "Kill");
+   	       AcceptEntityInput(entref_glow, "StopGlowing");
+   	       NextFrame_Remove(entref_glow);
    	       if (DEBUG) LogMessage("[zm] remove_ZM_glow %d killed prop_dynamic_ornament %d", entity, entref_glow);
    	       return;
        }
@@ -90,6 +96,7 @@ Action Check_Dominated(Handle timer, int victim)
 // Infected unit glow -- white
 Action CreateZMGlow_white(Handle timer, int targetRef)
 {
+    if (!IsValidEntRef(targetRef)) return Plugin_Stop;
     int target = EntRefToEntIndex(targetRef);
     CreateZMGlow(target);
     return Plugin_Stop;
@@ -98,6 +105,7 @@ Action CreateZMGlow_white(Handle timer, int targetRef)
 // Saferoom door glow -- red
 Action CreateZMGlow_red(Handle timer, int targetRef)
 {
+    if (!IsValidEntRef(targetRef)) return Plugin_Stop;
     int target = EntRefToEntIndex(targetRef);
     CreateZMGlow(target,true);
     return Plugin_Stop;
@@ -110,30 +118,46 @@ Action OnTransmitZM(int entity, int client)
    	int parent = GetEntPropEnt(entity,Prop_Data,"m_pParent");
    	bool valid = IsValidEntity(parent);
    	if (valid && IsValidClient(parent) && !IsPlayerAlive(parent)) valid = false;
-   	if (valid && client==zm_client) return Plugin_Continue;
-   	else if (!valid || zm_client<0)
+   	if (!valid || zm_client<0)
    	{
        	if (DEBUG) LogMessage("[zm] OnTransmitZM killing glow %d, parent %d", entity, parent); 
        	if (parent>=0 && parent<MAXENTITIES) g_iGlowList[parent] = INVALID_ENT_REFERENCE;
-       	AcceptEntityInput(entity, "Kill");
+       	AcceptEntityInput(entity, "StopGlowing");
+        NextFrame_Remove(EntIndexToEntRef(entity));
    	}
+   	if (client==zm_client) return Plugin_Continue;
     return Plugin_Handled;
 }
 
 Action OnTransmitZM_FlowSurvivor(int entity, int client)
 {
    	int parent = GetEntPropEnt(entity,Prop_Data,"m_pParent");
-   	bool valid = IsValidEntity(parent) && parent==spawner_nearest_survivor && zm_spawner_state!=SPAWNER_OK && zm_menu_state!=ZM_MENU_CLOSED;
-   	if (valid && IsValidClient(parent) && !IsPlayerAlive(parent)) valid = false;
-   	if (valid && client==zm_client) return Plugin_Continue;
-   	else if (!valid || zm_client<0)
+   	bool valid = IsValidClient(parent) && IsPlayerAlive(parent) && zm_menu_state!=ZM_MENU_CLOSED;
+   	if (valid) valid = get_spawner_target_survivor()==parent;
+   	if (!valid || zm_client<0)
    	{
        	if (DEBUG) LogMessage("[zm] OnTransmitZM_FlowSurvivor killing glow %d, parent %d", entity, parent); 
        	if (parent>=0 && parent<MAXENTITIES) g_iGlowList[parent] = INVALID_ENT_REFERENCE;
-       	AcceptEntityInput(entity, "Kill");
+       	AcceptEntityInput(entity, "StopGlowing");
+        NextFrame_Remove(EntIndexToEntRef(entity));
    	}
+   	if (client==zm_client) return Plugin_Continue;
     return Plugin_Handled;
 }
+
+//void NextFrame_ActivateGlow(int entref)
+//{
+//    if (entref==INVALID_ENT_REFERENCE) return;
+//    //SetEntProp(entref, Prop_Send, "m_nGlowRange", 999999);
+//    AcceptEntityInput(entref, "StartGlowing");
+//}
+
+//Action Timer_ActivateGlow(int entref)
+//{
+//    if (!IsValidEntRef(entref)) return Plugin_Stop;
+//    AcceptEntityInput(entref, "StartGlowing");
+//    return Plugin_Stop;
+//}
 
 // Red: last saferoom door
 // Flow: mark survivor blue
@@ -153,7 +177,8 @@ void CreateZMGlow(int target, bool red = false, bool flow = false)
 	{
 	    int parent = GetEntPropEnt(glowref,Prop_Data,"m_pParent");
 	    if (parent==target) return;
-	    AcceptEntityInput(glowref,"Kill");
+       	AcceptEntityInput(glowref, "StopGlowing");
+        NextFrame_Remove(glowref);
 	}
 	
 	if (DEBUG) LogMessage("[zm] CreateZMGlow");
@@ -173,6 +198,7 @@ void CreateZMGlow(int target, bool red = false, bool flow = false)
 	SetEntProp(glow, Prop_Send, "m_nSolidType", 0);
 	SetEntProp(glow, Prop_Send, "m_nGlowRangeMin", 0);
 	SetEntProp(glow, Prop_Send, "m_nGlowRange", 999999);
+	//RequestFrame(NextFrame_ActivateGlow,EntIndexToEntRef(glow));
 	SetEntProp(glow, Prop_Send, "m_iGlowType", 3);
 	if (red) SetEntProp(glow, Prop_Send, "m_glowColorOverride", 254);
 	else if (flow)
@@ -199,6 +225,7 @@ void CreateZMGlow(int target, bool red = false, bool flow = false)
         request_update_glow(target,true,0.0);
 	}
 	if (DEBUG) LogMessage("[zm] CreateZMGlow %d %d %d", target, glow, g_iGlowList[target]);
+	//CreateTimer(0.1,Timer_ActivateGlow,g_iGlowList[target],TIMER_FLAG_NO_MAPCHANGE);
 }
 
 void request_update_glow(int i, bool force = false, float delay=0.1)
@@ -266,7 +293,9 @@ void update_zm_glow(int parent)
 	if (health<=0 || parent==zm_client || !IsValidClientZM())
 	{
     	if (parent>=0 && parent<MAXENTITIES) g_iGlowList[parent] = INVALID_ENT_REFERENCE;
-    	AcceptEntityInput(entref_glow, "Kill");
+       	AcceptEntityInput(entref_glow, "StopGlowing");
+        NextFrame_Remove(entref_glow);
+    	
 	}
 	else
 	{

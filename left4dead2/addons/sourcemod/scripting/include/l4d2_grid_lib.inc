@@ -54,7 +54,7 @@
 // ============================================================================
 
 #define GRIDLIB_VERSION "1.1.0"
-#define GRIDLIB_DEBUG
+//#define GRIDLIB_DEBUG
 #if defined GRIDLIB_DEBUG
 stock void GridLibLog(const char[] fmt, any ...)
 {
