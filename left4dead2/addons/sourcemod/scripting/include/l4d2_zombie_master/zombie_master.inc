@@ -404,7 +404,7 @@ ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer,
        g_hCostCharger, g_hCostTank, g_hCostWitchStatic, g_hCostWitchMoving, g_hCostCommon, g_hCostUncommon, g_hLockSaferoom,
        g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait, g_hPanicRateMultiplier,
        g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons, g_hAllowFreeze,
-       g_hGridSearchRadius, g_hGrid;
+       g_hGridSearchRadius, g_hGrid, g_hSpawnerMode;
 
 float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fStopInactivity,g_fSpecialCooldown, g_fPanicRateMultiplier,
 g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout,
@@ -427,6 +427,7 @@ int g_iCostCommon, g_iCostUncommon, g_iCostWitchStatic, g_iCostWitchMoving, g_iB
 g_iBonusFinaleStage, g_iBonusSurvival, g_iMaxWitches, g_iMaxSI, g_iMaxUniqueSI;
 
 bool g_bLockSaferoom, g_bGrid;
+int g_iSpawnerMode;
 
 int info_director = -1;
 
@@ -601,6 +602,8 @@ void GetCvars()
     }
     
     g_fAbilityCooldown = g_hAbilityCooldown.FloatValue;
+
+    g_iSpawnerMode = g_hSpawnerMode.IntValue;
 }
 
 Action ZM_MOTD(int client, int args)
