@@ -40,8 +40,10 @@ bool DEBUG = false;
 #include <l4d2_grid_lib>
 #include <l4d2_zombie_master/sdk>
 #include <l4d2_zombie_master/glow>
+#include <l4d2_zombie_master/grid/l4d2_grid_renderer>
 #include <l4d2_zombie_master/spawner_validate>
 #include <l4d2_zombie_master/spawner_analog>
+#include <l4d2_zombie_master/grid/spawner_grid>
 #include <l4d2_zombie_master/spawner>
 #include <l4d2_zombie_master/spawncommands>
 #include <l4d2_zombie_master/fair_queue>
@@ -211,7 +213,7 @@ public void OnPluginStart()
     g_hGridSearchRadius = CreateConVar("zm_grid_search_radius", "500", "Search radius (units) for GridLib fallback spawn when indicator is blue.",FCVAR_PROTECTED, true, 0.0, true, 5000.0);
     g_hGridSearchRadius.AddChangeHook(ConVarChanged_Cvars);
 
-    g_hSpawnerMode = CreateConVar("zm_spawner_mode", "0", "Spawner display mode. 0 = analog (ring indicator).",FCVAR_PROTECTED, true, 0.0, true, 0.0);
+    g_hSpawnerMode = CreateConVar("zm_spawner_mode", "0", "Spawner display mode. 0 = analog (ring indicator), 1 = grid (colored cells).",FCVAR_PROTECTED, true, 0.0, true, 1.0);
     g_hSpawnerMode.AddChangeHook(ConVarChanged_Cvars);
 
     g_hCostBoomer = CreateConVar("zm_cost_boomer", "150", "ZM boomer cost. -1 to prevent spawns.",FCVAR_PROTECTED, true, -1.0, true, 10000.0);
@@ -860,6 +862,7 @@ Action zm_update(Handle timer = null)
              PrintToChatAll("[zm] %t", "No ZM");
          update_t_zm_activity(t_now);
       }
+      Spawner_OnDisabled(zm_client);
       zm_client = -1;
       zm_client_userid = -1;
    }
@@ -890,7 +893,8 @@ Action zm_new_round(Handle timer = null)
         GridLib_Initialize();
         GridLib_StartPrecomputation();
     }
-    
+    Spawner_Init();
+
     if (g_hRandomizer.IntValue==2) random_gamemode();
     
     spawner_last_valid = false;
@@ -970,8 +974,9 @@ Action zm_new_round(Handle timer = null)
 	}
 	
 	zm_client_userid = -1;
+    Spawner_OnDisabled(zm_client);
     zm_client = -1;
-    
+
     CountClients();
     CountWitches(false);
     CreateTimer(1.0,CountCommons,false,TIMER_FLAG_NO_MAPCHANGE);
@@ -1670,6 +1675,7 @@ public void OnMapStart()
 public void OnMapEnd()
 {
 	if (DEBUG) LogMessage("[zm] OnMapEnd");
+	Spawner_Cleanup();
 	if (GridLib_IsReady()) GridLib_Cleanup();
 	if (!g_bCvarAllow) return;
 	g_iLockedDoor = INVALID_ENT_REFERENCE; // we don't know if there's gonna be a door next map
@@ -1946,6 +1952,7 @@ public void OnPluginEnd()
 {
     if (DEBUG) LogMessage("[zm] OnPluginEnd");
     if (IsValidClientZM()) ChangeClientTeam(zm_client,TEAM_SURVIVOR);
+    Spawner_OnDisabled(zm_client);
     zm_client = -1;
     if (saferoom_locked) saferoom_lock(false);
     ResetTimer();

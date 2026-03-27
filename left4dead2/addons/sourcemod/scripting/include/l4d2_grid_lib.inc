@@ -154,6 +154,7 @@ enum struct GridCell
 #define GRIDLIB_FILTER_KEEP         0  // Accept this cell
 #define GRIDLIB_FILTER_DISCARD      1  // Reject this cell only
 #define GRIDLIB_FILTER_DISCARD_NAV  2  // Reject this cell and all cells on the same nav area
+#define GRIDLIB_FILTER_DISCARD_ALL  3  // Stop searching, reject all remaining cells
 
 /**
  * Filter callback for GridLib_FindNearbyCells.
@@ -161,7 +162,7 @@ enum struct GridCell
  * to inspect cell properties. Context should flow through caller-side statics.
  *
  * @param cellIdx    Cell index to evaluate
- * @return           GRIDLIB_FILTER_KEEP, GRIDLIB_FILTER_DISCARD, or GRIDLIB_FILTER_DISCARD_NAV
+ * @return           GRIDLIB_FILTER_KEEP, GRIDLIB_FILTER_DISCARD, GRIDLIB_FILTER_DISCARD_NAV, or GRIDLIB_FILTER_DISCARD_ALL
  */
 typedef GridLibCellFilter = function int(int cellIdx);
 
@@ -421,6 +422,11 @@ stock int GridLib_FindNearbyCells(const float position[3],
 			float tFilter = GetEngineTime();
 			int filterResult = GridLib_CallFilter(filter, cellIdx);
 			filterCallTimeAccum += GetEngineTime() - tFilter;
+			if (filterResult == GRIDLIB_FILTER_DISCARD_ALL)
+			{
+				GridLibLog("[GridLib] FindNearbyCells: cell %d DISCARD_ALL - stopping search", cellIdx);
+				break;
+			}
 			if (filterResult == GRIDLIB_FILTER_DISCARD_NAV)
 			{
 				GridLibLog("[GridLib] FindNearbyCells: cell %d DISCARD_NAV (nav=%x)", cellIdx, cell.navArea);

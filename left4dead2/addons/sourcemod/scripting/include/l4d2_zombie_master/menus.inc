@@ -630,16 +630,17 @@ void create_other_menu()
     }
     else AddMenuItem(menu_other, "0", "-");
     
-    AddMenuItem(menu_other, "1", "-");
-    
+    Format(buffer, sizeof(buffer), "Display: %s", g_iSpawnerMode == 0 ? "Analog" : "Grid");
+    AddMenuItem(menu_other, "1", buffer);
+
     Format(buffer, sizeof(buffer), "%T", "Teleport", zm_language);
     AddMenuItem(menu_other, "2", buffer);
-    
+
     AddMenuItem(menu_other, "3", "-");
-    
+
     Format(buffer, sizeof(buffer), "%T", "Give Up", zm_language);
     AddMenuItem(menu_other, "4", buffer);
-    
+
     AddMenuItem(menu_other, "5", "-");
     AddMenuItem(menu_other, "6", "<-- (R)");
 
@@ -669,6 +670,15 @@ int other_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
                         	else zm_menu_state=ZM_MENU_SPECIAL;
                     	}
                 	}
+            	}
+            	case 1:
+            	{
+            	    // Toggle spawner display mode
+            	    int newMode = (g_iSpawnerMode + 1) % 2;
+            	    Spawner_OnDisabled(zm_client);
+            	    g_iSpawnerMode = newMode;
+            	    Spawner_OnEnabled(zm_client);
+            	    create_other_menu();
             	}
             	case 2: ZMTeleport(zm_client,0);
             	case 4: {QuitZM(zm_client); return 0;}

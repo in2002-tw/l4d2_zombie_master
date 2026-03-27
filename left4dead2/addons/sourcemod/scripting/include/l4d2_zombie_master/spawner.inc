@@ -8,7 +8,7 @@
 /**
  * Spawner dispatcher.
  * Routes spawner calls to the active provider based on zm_spawner_mode.
- * Providers: 0 = analog (ring indicator).
+ * Providers: 0 = analog (ring indicator), 1 = grid (colored cells).
  */
 
 // --- Visual feedback ---
@@ -18,6 +18,7 @@ int Spawner_Update()
 {
     switch (g_iSpawnerMode)
     {
+        case 1: return Grid_Update();
         default: return Analog_CanSpawn(false, false);
     }
 }
@@ -30,6 +31,8 @@ int Spawner_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
 {
     switch (g_iSpawnerMode)
     {
+        case 1: return Grid_ResolveCommonPositions(count, flow, angry, hint,
+            outPositions, maxOut);
         default: return Analog_ResolveCommonPositions(count, flow, angry, hint,
             outPositions, maxOut);
     }
@@ -40,6 +43,7 @@ bool Spawner_ResolveWitchPosition(bool flow, float outPos[3])
 {
     switch (g_iSpawnerMode)
     {
+        case 1: return Grid_ResolveWitchPosition(flow, outPos);
         default: return Analog_ResolveWitchPosition(flow, outPos);
     }
 }
@@ -49,6 +53,7 @@ bool Spawner_ResolveSpecialPosition(int zombieclass, bool flow, float outPos[3])
 {
     switch (g_iSpawnerMode)
     {
+        case 1: return Grid_ResolveSpecialPosition(zombieclass, flow, outPos);
         default: return Analog_ResolveSpecialPosition(zombieclass, flow, outPos);
     }
 }
@@ -60,6 +65,7 @@ void Spawner_NotifySpawned(int entity)
 {
     switch (g_iSpawnerMode)
     {
+        case 1: Grid_NotifySpawned(entity);
         default: Analog_NotifySpawned(entity);
     }
 }
@@ -69,44 +75,42 @@ void Spawner_EndSpawn()
 {
     switch (g_iSpawnerMode)
     {
+        case 1: Grid_EndSpawn();
         default: Analog_EndSpawn();
     }
 }
 
-// --- Lifecycle stubs (wired up when providers need them) ---
+// --- Lifecycle ---
 
 /** Provider setup when ZM role is activated. */
-stock void Spawner_OnEnabled(int client)
+void Spawner_OnEnabled(int client)
 {
-    #pragma unused client
     switch (g_iSpawnerMode)
     {
-        // future: case 1: Grid_OnEnabled(client);
+        case 1: Grid_OnEnabled(client);
     }
 }
 
 /** Provider teardown when ZM role ends or provider switches. */
-stock void Spawner_OnDisabled(int client)
+void Spawner_OnDisabled(int client)
 {
-    #pragma unused client
+    if (client <= 0 || client > MaxClients) return;
     switch (g_iSpawnerMode)
     {
-        // future: case 1: Grid_OnDisabled(client);
+        case 1: Grid_OnDisabled(client);
     }
 }
 
 /** Called on map start after GridLib precomputation. */
-stock void Spawner_Init()
+void Spawner_Init()
 {
-    switch (g_iSpawnerMode)
-    {
-        // future: case 1: Grid_Init();
-    }
+    // Always init grid infrastructure so mid-round switching works
+    Grid_Init();
 }
 
 /** Called on map end / plugin end. */
-stock void Spawner_Cleanup()
+void Spawner_Cleanup()
 {
     // Always clean up all providers to avoid leaked entities
-    // future: Grid_Cleanup();
+    Grid_Cleanup();
 }
