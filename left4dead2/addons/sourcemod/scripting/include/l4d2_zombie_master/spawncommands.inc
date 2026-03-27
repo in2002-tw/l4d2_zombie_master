@@ -5,8 +5,6 @@
 #define _zm_spawn_commands_included
 ///////////////////////////////////////
 
-bool DEBUG_SPAWNCOMMANDS = false;
-
 /**
  * Timer callback that spawns free angry common infected up to a target count.
  * Tops up commons to reach `count` by spawning near the highest-flow survivor.
@@ -212,228 +210,27 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
        	return;
 	}
 
-	int target_client = -1;
-	bool use_randompz = false;
-	int spawner_state;
-	static int gridlib_cells[500]; // creating a brand new array of 500 ints every time we call ZM_Horde is probably not good. added static
-	int gridlib_cell_count = 0;
-	bool use_gridlib = false;
-    if (flow) spawner_state = SPAWNER_DISTANCE;
-    else spawner_state = can_ZM_spawn(false,hint); // gridlib has already run here. if gridlib found a valid pos this will return SPAWNER_OK
-    //LogMessage("[zm] ZM_Horde: spawner_state=%d count=%d flow=%d gridlib_ready=%d pos=(%.0f,%.0f,%.0f)",
-    //    spawner_state, count, flow, GridLib_IsReady(), zm_spawner_pos[0], zm_spawner_pos[1], zm_spawner_pos[2]);
-    if (flow || spawner_state!=SPAWNER_OK)
-    {
-        use_randompz = true;
-        target_client = get_spawner_target_survivor(flow,spawner_state);
-        if (target_client<0) return;
-    }
-    else if (count>1 && g_bGrid && GridLib_IsReady())
-    {
-        bool try_gridlib = true;
-        if (zm_spawner_navArea) // check navmesh size. is it roughly the right size for the desired count? if so, use cheap random positions on navmesh.
-        {
-            static float navSize[3];
-            L4D_GetNavAreaSize(zm_spawner_navArea,navSize);
-            if (navSize[0]<32.0) navSize[0] = 32.0; // if it's super thin but not obstructed, a whole zombie will fit.
-            if (navSize[1]<32.0) navSize[1] = 32.0; // if it's super thin but not obstructed, a whole zombie will fit.
-            float count_navmesh = (navSize[0]*navSize[1])/AREA_COMMON + 1.0;
-            //LogMessage("count %d navmesh count %f", count, count_navmesh);
-            // future: for navmeshes that are too large, shrink size manually and sample random positions in reduced area
-            try_gridlib = count_navmesh<count || count_navmesh>(4.0*count);
-        }
-        if (try_gridlib)
-        {
-            gridlib_cell_count = GridLib_FindCellsFromClosest(zm_spawner_pos,count,gridlib_cells,500);
-            if (gridlib_cell_count > 0)
-            {
-                //LogMessage("[zm] ZM_Horde: using GridLib with %d cells", gridlib_cell_count);
-                use_gridlib = true;
-            }
-        }
-    }
-
 	angry = angry || panic;
-	bool expected_angry = angry || panic || ZM_finale_announced || L4D_IsSurvivalMode();
 
-	float flow_survivor;
-	float flow_survivor_fraction;
-    if (use_randompz && !angry)
-    {
-        flow_survivor = L4D2Direct_GetFlowDistance(target_client);
-        flow_survivor_fraction = get_survivor_flow_fraction(target_client);
-	}
+	// Resolve spawn positions via provider
+	static float resolvedPositions[1500]; // 500 * 3 flat
+	int posCount = Spawner_ResolveCommonPositions(count, flow, angry, hint, resolvedPositions, 500);
+	if (posCount < count) count = posCount;
 
-	int tries = (count<=10) ? 5 : 3;
 	int spawned = 0;
 	float randomPos[3], angle[3];
-	//float randomPos_old[3];
 	bool glow, random;
-	
+
 	char set_model[64] = "";
 	if (strcmp(type,"random")==0) random = true;
     else if (g_bClownGlow && strcmp(type,"clown")==0) glow = true;
-    
-	// Build survivor PVS data and eye positions for gridlib visibility filtering
-	char survivorPVS[MAXPLAYERS+1][PVS_BUFFER_SIZE];
-	float survivorEyePos[MAXPLAYERS+1][3];
-	int survivorPVSCount = 0;
-	if (use_gridlib && hCheckOriginInPVS != null)
-	{
-		for (int s = 1; s <= MaxClients; s++)
-		{
-			if (!IsClientInGame(s) || GetClientTeam(s) != TEAM_SURVIVOR || !IsPlayerAlive(s))
-				continue;
-			GetClientEyePosition(s, survivorEyePos[survivorPVSCount]);
-			int cluster = PVS_GetClusterForOrigin(survivorEyePos[survivorPVSCount]);
-			if (cluster >= 0)
-			{
-				PVS_GetForCluster(cluster, survivorPVS[survivorPVSCount]);
-				survivorPVSCount++;
-			}
-		}
-		if (DEBUG_SPAWNCOMMANDS) LogMessage("[zm] ZM_Horde: built PVS for %d survivors", survivorPVSCount);
-	}
-    
-    //int gridlib_fails = 0;
-    //if (use_gridlib) randomPos_old = zm_spawner_pos;
-    //bool first_spawned = false;
-    //float distance_tol = 500.0;
+
 	for( int i = 0; i < count; i++  )
 	{
-		bool fallback_original_navmesh = false;
-		if (use_gridlib) // Gridlib smart zombie positions
-		{
-			int cellIdx = gridlib_cells[i % gridlib_cell_count];
-			float cellNormal[3];
-			Address cellNavArea;
-			bool cellObstructed;
-			if (!GridLib_GetCellData(cellIdx, randomPos, cellNormal, cellNavArea, cellObstructed))
-			{
-				if (DEBUG_SPAWNCOMMANDS) LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) invalid data, skipping", i, gridlib_cell_count, cellIdx);
-				continue;
-			}
-			if (cellObstructed || IsObstructed(randomPos))
-			{
-				if (DEBUG_SPAWNCOMMANDS) LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) obstructed at (%.0f,%.0f,%.0f), skipping", i, gridlib_cell_count, cellIdx, randomPos[0], randomPos[1], randomPos[2]);
-				continue;
-			}
-			// PVS + single ray trace visibility check
-			if (survivorPVSCount > 0)
-			{
-				bool actuallyVisible = false;
-				float cellEye[3];
-				cellEye[0] = randomPos[0];
-				cellEye[1] = randomPos[1];
-				cellEye[2] = randomPos[2] + 36.0; // mid-height
-				for (int s = 0; s < survivorPVSCount; s++)
-				{
-					if (!PVS_CheckOriginInPVS(randomPos, survivorPVS[s]))
-						continue;
-					// In PVS — confirm with a single ray trace
-					Handle trace = TR_TraceRayFilterEx(cellEye, survivorEyePos[s],
-						MASK_VISIBLE, RayType_EndPoint, FilterSpawner, -1);
-					bool hit = TR_DidHit(trace);
-					delete trace;
-					if (!hit)
-					{
-						actuallyVisible = true;
-						break;
-					}
-				}
-				if (actuallyVisible)
-				{
-					if (DEBUG_SPAWNCOMMANDS) LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) visible to survivor, skipping", i, gridlib_cell_count, cellIdx);
-					continue;
-				}
-			}
-			
-			//bool gridlib_fail = false;
-    		//if ( can_any_alive_survivor_see(randomPos,false) ) // check if spawning zombies in LOS
-    		//{
-        	//	L4D_FindRandomSpot(cellNavArea,randomPos);
-        	//	if ( can_any_alive_survivor_see(randomPos,false) || IsObstructed(randomPos) )
-        	//	{
-            //		LogMessage("gridlib fail %d LOS", gridlib_fails+1, gridlib_fails);
-            //		gridlib_fail = true;
-        	//	}
-    		//}
-			//if (!gridlib_fail) // check if zombies are being spawned too far away or unreachable either direction
-			//{
-    		//	float travel1 = L4D2_NavAreaTravelDistance(zm_spawner_pos,randomPos,false);
-    		//	if (travel1<0.0 || (!first_spawned && travel1>distance_tol)) gridlib_fail = true;
-    		//	if (!gridlib_fail && first_spawned)
-    		//	{
-        	//		float travel2 = L4D2_NavAreaTravelDistance(randomPos,randomPos_old,false);
-        	//		if (travel2<0.0 || travel2>distance_tol) gridlib_fail = true;
-        	//	}
-        	//	if (gridlib_fail && DEBUG_SPAWNCOMMANDS) LogMessage("gridlib fail %d travel", gridlib_fails+1);
-			//}
-			//if (!gridlib_fail) // check if navmesh rules are being violated
-			//{
- 			//     int navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(cellNavArea);
-            //     int navAttrFlags = L4D_GetNavArea_AttributeFlags(cellNavArea);
-            //     float navCenter[3], navSize[3];
-            //     L4D_GetNavAreaCenter(cellNavArea, navCenter);
-            //     L4D_GetNavAreaSize(cellNavArea, navSize);
-            //     if (!nav_can_spawn_zombies(navAttrFlags,navSpawnAttrs,false,navCenter,navSize))
-            //     {
-            //         if (DEBUG_SPAWNCOMMANDS) LogMessage("gridlib fail %d navmesh attributes", gridlib_fails+1);
-            //         gridlib_fail = true;
-            //     }
-			//}
-			//if (gridlib_fail) // do something if it fails too often
-			//{
-    		//	gridlib_fails += 1;
-    		//	if (gridlib_fails>=5) use_gridlib = false;
-    		//	fallback_original_navmesh = true;
-			//}
-			//randomPos_old = randomPos;
-			if (DEBUG_SPAWNCOMMANDS)
-			{
-			LogMessage("[zm] ZM_Horde: gridlib cell %d/%d (idx=%d) spawning at (%.0f,%.0f,%.0f) dist=%.0f",
-				i, gridlib_cell_count, cellIdx, randomPos[0], randomPos[1], randomPos[2],
-				GetVectorDistance(zm_spawner_pos, randomPos));
-			}
-		}
-		else if (use_randompz) // Valve zombie positions
-		{
-      		if (!IsValidClient(target_client) || !IsPlayerAlive(target_client))
-          		break;
-      		if(!L4D_GetRandomPZSpawnPosition(target_client,ZOMBIECLASS_COMMON,tries,randomPos))
-          		continue;
-          	if (zm_stage<ZM_STARTED && can_any_alive_survivor_see(randomPos,false))
-              	continue;
-
-          	if (!expected_angry)
-          	{
-
-              	// If not angry, check that the spawn is strictly ahead of the survivor's flow.
-              	// Prevents useless zombies spawns where the survivors are unlikely to go.
-              	if (flow_survivor_fraction<=0.91 && L4D_GetFlowFromPoint(randomPos)<flow_survivor)
-                  	continue;
-
-                // Check that we are on NAV_SPAWN_ESCAPE_ROUTE -- sucks because escape route is very narrow on some maps.
-                //Address temp_navArea = L4D_GetNearestNavArea(randomPos,500.0,true,true,true,TEAM_INFECTED);
-                //if (!temp_navArea) continue;
-                //if (L4D_GetNavArea_SpawnAttributes(temp_navArea) & ~NAV_SPAWN_ESCAPE_ROUTE)
-                //    continue;
-
-            }
-
-            //if (IsObstructed(randomPos)) continue;
-		}
-		else fallback_original_navmesh = true;
-		
-		if (fallback_original_navmesh) // Random original navmesh position
-		{
-			if (zm_spawner_navArea && count>1)
-      		{
-          		L4D_FindRandomSpot(zm_spawner_navArea,randomPos);
-          		if ( can_any_alive_survivor_see(randomPos,false) || IsObstructed(randomPos) ) randomPos=zm_spawner_pos;
-      		}
-      		else randomPos=zm_spawner_pos;
-		}
+		int idx = (i % posCount) * 3;
+		randomPos[0] = resolvedPositions[idx];
+		randomPos[1] = resolvedPositions[idx+1];
+		randomPos[2] = resolvedPositions[idx+2];
 
         if (!angry) get_random_xy_orientation(angle);
 		int zombie = -1;
@@ -469,14 +266,11 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
            
            if (type[0]!=0 || price_angry) DispatchKeyValue(zombie, "targetname", "zm_unit_uncommon");
            else DispatchKeyValue(zombie, "targetname", "zm_unit_common");
-           if (use_randompz && hint) mark_flow_survivor_and_zombie(-1,zombie);
-           //SetEntProp(zombie,Prop_Send,"m_nSkin",GetRandomInt(0, 10));
-           //SetEntityRenderColor(zombie,GetRandomInt(0,255),GetRandomInt(0,255),GetRandomInt(0,255),255);
-           //first_spawned = true;
-           //if (use_gridlib) distance_tol += 32.0;
+           Spawner_NotifySpawned(zombie);
         }
     }
-		
+    Spawner_EndSpawn();
+
 	if (spawned<=0)
 	{
     	if (hint) update_hint("%T", "Spawn failed", zm_client);
@@ -484,7 +278,6 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 	}
 	else
 	{
-	    if (use_randompz && hint) mark_flow_survivor_and_zombie(target_client,-1);
         
 	    if (hint)
 	    {
@@ -558,33 +351,11 @@ void ZM_Witch(int client,int witch_type, bool free = false, bool flow = false)
 
 	if (IsValidClientZM()) update_t_zm_activity();
 
-	bool use_randompz = false;
 	float spawn_pos[3];
-
-	int spawner_state;
-	int target_client = -1;
-    if (flow) spawner_state = SPAWNER_DISTANCE;
-    else spawner_state = can_ZM_spawn(true); // gridlib has already run here, zm_spawner_pos may be the fallback position.
-    spawn_pos = zm_spawner_pos;
-	if (spawner_state!=SPAWNER_OK)
+	if (!Spawner_ResolveWitchPosition(flow, spawn_pos))
 	{
-        use_randompz = true;
-        target_client = get_spawner_target_survivor(flow,spawner_state);
-        if (target_client<0) return;
-        bool fail = false;
-        if(!L4D_GetRandomPZSpawnPosition(target_client,ZOMBIECLASS_WITCH,10,spawn_pos)) fail = true;
-        if (!fail && zm_stage<ZM_STARTED && can_any_alive_survivor_see(spawn_pos,false)) fail = true;
-        if (!fail)
-        {
-            float flow_survivor_fraction = get_survivor_flow_fraction(target_client); // prevent negative flow spawns
-            if (flow_survivor_fraction<=0.91 && L4D_GetFlowFromPoint(spawn_pos)<L4D2Direct_GetFlowDistance(target_client)) fail = true;
-            if (!fail && IsObstructed(spawn_pos)) fail = true;
-        }
-        if (fail)
-        {
-            update_hint("%T", "Spawn failed", zm_client);
-            return;
-        }
+	    update_hint("%T", "Spawn failed", zm_client);
+	    return;
 	}
 
 	if (witch_type==WITCH_STATIC) SetConVarInt(FindConVar("sv_force_time_of_day"),0);
@@ -610,7 +381,7 @@ void ZM_Witch(int client,int witch_type, bool free = false, bool flow = false)
    	    Format(label, sizeof(label), "%T", "Witch", zm_client);
    	    update_hint("%T", "Spawned X Y", zm_client, 1, label);
        	DispatchKeyValue(witch, "targetname", "zm_unit");
-       	if (use_randompz) mark_flow_survivor_and_zombie(target_client,witch);
+       	Spawner_NotifySpawned(witch);
        	if (!playcount_increased && zm_stage>=ZM_STARTED) increase_playcount(zm_client);
 	}
 	else update_hint("%T", "Spawn failed", zm_client);
@@ -907,9 +678,7 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
     	}
 	}
 
-	int target_client = -1;
 	float spawn_pos[3];
-	bool use_randompz = false;
 
 	if (!setpos)
 	{
@@ -925,25 +694,10 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
            	return -1;
         }
 
-        int spawner_state;
-        if (flow) spawner_state = SPAWNER_DISTANCE;
-        else spawner_state = can_ZM_spawn(); // gridlib has already run here, zm_spawner_pos may be the fallback position.
-        spawn_pos = zm_spawner_pos;
-        if (spawner_state!=SPAWNER_OK)
+        if (!Spawner_ResolveSpecialPosition(ZOMBIECLASS, flow, spawn_pos))
         {
-            use_randompz = true;
-            target_client = get_spawner_target_survivor(flow,spawner_state);
-            if (target_client<0) return -1;
-            if(!L4D_GetRandomPZSpawnPosition(target_client,ZOMBIECLASS,10,spawn_pos) || IsObstructed(spawn_pos))
-            {
-               update_hint("%T", "Spawn failed", zm_client);
-               return -1;
-            }
-            if (zm_stage<ZM_STARTED && can_any_alive_survivor_see(spawn_pos,false))
-            {
-                 update_hint("%T", "Spawn failed", zm_client);
-                 return -1;
-            }
+            update_hint("%T", "Spawn failed", zm_client);
+            return -1;
         }
     }
     else spawn_pos = pos;
@@ -1025,7 +779,7 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
                 }
             }
 
-            if (use_randompz) mark_flow_survivor_and_zombie(target_client,bot);
+            Spawner_NotifySpawned(bot);
             if (!playcount_increased && zm_stage>=ZM_STARTED) increase_playcount(zm_client);
         }
         else update_EMS_HUD();

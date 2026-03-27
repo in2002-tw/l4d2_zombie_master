@@ -40,6 +40,7 @@ bool DEBUG = false;
 #include <l4d2_grid_lib>
 #include <l4d2_zombie_master/sdk>
 #include <l4d2_zombie_master/glow>
+#include <l4d2_zombie_master/spawner_analog>
 #include <l4d2_zombie_master/spawner>
 #include <l4d2_zombie_master/spawncommands>
 #include <l4d2_zombie_master/fair_queue>
@@ -208,7 +209,10 @@ public void OnPluginStart()
     
     g_hGridSearchRadius = CreateConVar("zm_grid_search_radius", "500", "Search radius (units) for GridLib fallback spawn when indicator is blue.",FCVAR_PROTECTED, true, 0.0, true, 5000.0);
     g_hGridSearchRadius.AddChangeHook(ConVarChanged_Cvars);
-    
+
+    g_hSpawnerMode = CreateConVar("zm_spawner_mode", "0", "Spawner display mode. 0 = analog (ring indicator).",FCVAR_PROTECTED, true, 0.0, true, 0.0);
+    g_hSpawnerMode.AddChangeHook(ConVarChanged_Cvars);
+
     g_hCostBoomer = CreateConVar("zm_cost_boomer", "150", "ZM boomer cost. -1 to prevent spawns.",FCVAR_PROTECTED, true, -1.0, true, 10000.0);
     g_hCostBoomer.AddChangeHook(ConVarChanged_Cvars_ZMenu);
     
@@ -837,7 +841,7 @@ Action zm_update(Handle timer = null)
       }
       
       // Draw spawner visuals for ZM
-      if (zm_menu_state>ZM_MENU_CLOSED && (t_now-t_last_spawner_update)>=g_fUpdateRate) can_ZM_spawn(false,false);
+      if (zm_menu_state>ZM_MENU_CLOSED && (t_now-t_last_spawner_update)>=g_fUpdateRate) Spawner_Update();
       
    }
    else
