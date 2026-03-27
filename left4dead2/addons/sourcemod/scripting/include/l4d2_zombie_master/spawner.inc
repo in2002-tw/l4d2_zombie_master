@@ -682,16 +682,17 @@ int can_ZM_spawn_pos(float vPos[3],bool witch = false,bool hint = true,bool draw
             if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
             if (DEBUG_SPAWNER) LogMessage("Valid old position");
         }
-    }
-    if (fail && draw && !skip_gridlib && spawner_state>SPAWNER_NAV) // ask gridlib for a better position
-    {
-        static float vPos_gridlib[3];
-        if (FindNearbyValidSpawnCell(vPos_spawner,vPos_gridlib,check_dist))
+    
+        if (fail && !skip_gridlib) // ask gridlib for a better position
         {
-            vPos_spawner = vPos_gridlib;
-            fail = false;
-            spawner_state = SPAWNER_OK;
-            if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
+            static float vPos_gridlib[3];
+            if (FindNearbyValidSpawnCell(vPos_spawner,vPos_gridlib,check_dist))
+            {
+                vPos_spawner = vPos_gridlib;
+                fail = false;
+                spawner_state = SPAWNER_OK;
+                if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
+            }
         }
     }
     if (fail)
