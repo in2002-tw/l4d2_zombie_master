@@ -2198,7 +2198,8 @@ Action JoinZM(int client, int args)
     if (!g_bAllowFreeze) ZM_specials_frozen = false;
     zm_client = client;
     zm_client_userid = GetClientUserId(zm_client);
-    
+    Spawner_OnEnabled(client);
+
     update_menus();
     
     // Prevent InputKill - thanks Shadowsyn
