@@ -888,6 +888,8 @@ Action zm_new_round(Handle timer = null)
     
     if (g_hRandomizer.IntValue==2) random_gamemode();
     
+    spawner_last_valid = false;
+    
     set_zm_stage(ZM_NEWROUND,true);
     autocommon_setting = AUTOCOMMON_OFF;
     autocommon_uncommons = false;

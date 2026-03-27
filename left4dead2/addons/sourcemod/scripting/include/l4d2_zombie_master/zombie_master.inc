@@ -2206,6 +2206,7 @@ Action JoinZM(int client, int args)
   	//SetVariantString("function InputKill() {return plugin_shouldKill}");
    	//AcceptEntityInput(client, "RunScriptCode");
     
+    spawner_last_valid = false;
     char name[MAX_NAME_LENGTH]; 
     GetClientName(client,name,sizeof(name));
     int playcount = get_rounds(client);
