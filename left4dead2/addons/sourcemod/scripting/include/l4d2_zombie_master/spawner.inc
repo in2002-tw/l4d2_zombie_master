@@ -672,9 +672,9 @@ int can_ZM_spawn_pos(float vPos[3],bool witch = false,bool hint = true,bool draw
             if (fail) spawner_state = SPAWNER_SIGHT;
         }
     }
-    if (fail && draw && spawner_state>SPAWNER_NAV && spawner_last_valid && get_spawner_target_survivor(false,SPAWNER_DISTANCE)<0) // see if there's a good nearby position in memory
+    if (fail && draw && spawner_state>SPAWNER_NAV && get_spawner_target_survivor(false,SPAWNER_DISTANCE)<0) // see if there's a good nearby position in memory
     {
-        if (can_ZM_see(spawner_last_valid_pos) && can_ZM_spawn_pos(spawner_last_valid_pos,witch,false,false,true)==SPAWNER_OK)
+        if (spawner_last_valid && can_ZM_see(spawner_last_valid_pos) && can_ZM_spawn_pos(spawner_last_valid_pos,witch,false,false,true)==SPAWNER_OK)
         {
             vPos_spawner = spawner_last_valid_pos;
             fail = false;
