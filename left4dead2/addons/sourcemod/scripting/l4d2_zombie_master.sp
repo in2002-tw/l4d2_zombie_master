@@ -40,6 +40,7 @@ bool DEBUG = false;
 #include <l4d2_grid_lib>
 #include <l4d2_zombie_master/sdk>
 #include <l4d2_zombie_master/glow>
+#include <l4d2_zombie_master/spawner_validate>
 #include <l4d2_zombie_master/spawner_analog>
 #include <l4d2_zombie_master/spawner>
 #include <l4d2_zombie_master/spawncommands>
