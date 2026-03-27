@@ -480,7 +480,8 @@ int color_conditional[4] = {0,0,255,128};
 int color_allowed[4] = {0,255,0,128};
 int color_unit_select[4] = {255,255,255,128};
 
-float zm_target_pos[3], zm_spawner_pos[3];
+float zm_target_pos[3], zm_spawner_pos[3], spawner_last_valid_pos[3];
+bool spawner_last_valid = false;
 Address zm_spawner_navArea;
 //float zm_spawner_navSize[3];
 //float zm_spawner_navCenter[3]; // for future use in ZM_Horde

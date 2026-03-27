@@ -89,7 +89,7 @@ void update_ZM_spawner(const float target_pos[3], const float spawner_pos[3], co
         
         float t_now = GetEngineTime();
         
-        if ( (zm_spawner_state!=state || zm_target_pos[0]!=target_pos[0] || zm_target_pos[1]!=target_pos[1] || zm_target_pos[2]!=target_pos[2]) && (t_now-t_last_spawner_sound)>=2.0)
+        if ( (zm_spawner_state!=state && (t_now-t_last_spawner_sound)>=2.0) )
         {
             static char sound_name[64];
             if (state==SPAWNER_OK) sound_name = "";
@@ -108,6 +108,12 @@ void update_ZM_spawner(const float target_pos[3], const float spawner_pos[3], co
             //TE_SetupBeamRingPoint(draw_pos,HULL_DX+2.0,HULL_DX,g_iLaser,g_iHalo,0,0,g_fUpdateRate*2.0,2.5,0.0,color_conditional,0,0);
             //TE_SendToClient(zm_client);
             CreateZMGlow(target,false,true);
+        }
+        
+        if (state==SPAWNER_OK)
+        {
+            spawner_last_valid_pos = spawner_pos;
+            spawner_last_valid = true;
         }
         
         
@@ -510,6 +516,7 @@ int can_ZM_spawn(bool witch = false, bool hint = true)
 	if(TR_DidHit(trace))
 	{
     	TR_GetEndPosition(vPos,trace);
+    	zm_target_pos = vPos;
     	int entity = TR_GetEntityIndex(trace);
     	if (IsValidClient(entity) && GetClientTeam(entity)==TEAM_SURVIVOR && IsPlayerAlive(entity))
     	{
@@ -665,11 +672,11 @@ int can_ZM_spawn_pos(float vPos[3],bool witch = false,bool hint = true,bool draw
             if (fail) spawner_state = SPAWNER_SIGHT;
         }
     }
-    if (fail && draw && spawner_state>SPAWNER_NAV && zm_spawner_state==SPAWNER_OK && GetVectorDistance(vPos_spawner,zm_spawner_pos)<500.0) // see if there's a good nearby position in memory
+    if (fail && draw && spawner_state>SPAWNER_NAV && spawner_last_valid && get_spawner_target_survivor(false,SPAWNER_DISTANCE)<0) // see if there's a good nearby position in memory
     {
-        if (can_ZM_see(zm_spawner_pos) && can_ZM_spawn_pos(zm_spawner_pos,witch,false,false,true)==SPAWNER_OK)
+        if (can_ZM_see(spawner_last_valid_pos) && can_ZM_spawn_pos(spawner_last_valid_pos,witch,false,false,true)==SPAWNER_OK)
         {
-            vPos_spawner = zm_spawner_pos;
+            vPos_spawner = spawner_last_valid_pos;
             fail = false;
             spawner_state = SPAWNER_OK;
             if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
@@ -716,7 +723,7 @@ int can_ZM_spawn_pos(float vPos[3],bool witch = false,bool hint = true,bool draw
         return spawner_state;
     }
     if (draw) update_ZM_spawner(vPos,vPos_spawner,SPAWNER_OK,draw);
-    vPos = vPos_spawner; // in case dynamic adjustment was made
+    //vPos = vPos_spawner; // in case dynamic adjustment was made
     return SPAWNER_OK;
 }
 
@@ -727,7 +734,7 @@ bool can_ZM_see(float vPos[3])
     static float vEye[3], vPos2[3];
     vPos2 = vPos; vPos2[2] += 32.0;
     GetClientEyePosition(zm_client,vEye);
-    Handle trace = TR_TraceRayFilterEx(vEye,vPos2,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,zm_client,TRACE_WORLD_ONLY);
+    Handle trace = TR_TraceRayFilterEx(vEye,vPos2,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,zm_client);
     if(TR_DidHit(trace)) can_see = false;
     delete trace;
     //LogMessage("can_ZM_see %d", can_see);
@@ -931,8 +938,8 @@ int get_spawner_target_survivor(bool flow = false, int spawner_state = SPAWNER_D
         if (target_client<0 && spawner_state!=SPAWNER_OK && spawner_nearest_survivor>0)
 	    {
             target_client = spawner_nearest_survivor;
-            float test_pos[3];
-            test_pos = zm_spawner_pos;
+            static float test_pos[3];
+            test_pos = zm_target_pos;
             test_pos[2] += 25.0;
            	if (latest_distance<0.0 || latest_distance>250.0 || 
            	!IsValidClient(target_client) || !IsPlayerAlive(target_client) ||
