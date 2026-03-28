@@ -160,7 +160,7 @@ int Analog_CanSpawn(int zClass=ZOMBIECLASS_BOOMER, bool hint = true)
  *               SPAWNER_INVALID, SPAWNER_NAV -> RED
  *               SPAWNER_DISTANCE, SPAWNER_SIGHT, or SPAWNER_OTHER -> BLUE
  */
-int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_COMMON,bool hint = true,bool draw = true,bool skip_gridlib=false)
+int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint = true,bool draw = true,bool skip_gridlib=false)
 {
 	if (DEBUG) LogMessage("[zm] Analog_CanSpawn %.1f %.1f %.1f", vPos[0], vPos[1], vPos[2]);
 	if (zm_stage>=ZM_END) return SPAWNER_INVALID;
