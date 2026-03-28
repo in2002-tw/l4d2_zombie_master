@@ -354,7 +354,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     }
 
     zm_target_pos = aimPos;
-    t_last_spawner_update = GetEngineTime();
+    t_last_spawner_grid_update = GetEngineTime();
 
     // Render via GridRenderer
     float t_render = GetEngineTime();

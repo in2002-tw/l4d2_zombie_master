@@ -488,7 +488,8 @@ Address zm_spawner_navArea;
 //float zm_spawner_navSize[3];
 //float zm_spawner_navCenter[3]; // for future use in ZM_Horde
 int zm_spawner_state;
-float t_last_spawner_update;
+float t_last_spawner_update; // analog spawner
+float t_last_spawner_grid_update; // grid spawner
 float t_last_spawner_sound;
 
 int spawner_nearest_survivor = -1;

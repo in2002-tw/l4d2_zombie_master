@@ -848,8 +848,8 @@ Action zm_update(Handle timer = null)
           else update_t_zm_activity(t_now);
       }
       
-      // Draw spawner visuals for ZM
-      if (zm_menu_state>ZM_MENU_CLOSED && (t_now-t_last_spawner_update)>=g_fUpdateRate) Spawner_Update();
+      // Draw spawner visuals for ZM. Grid visualizer runs on its own timer
+      if (zm_menu_state>ZM_MENU_CLOSED) Spawner_Update();
       
    }
    else
@@ -961,6 +961,7 @@ Action zm_new_round(Handle timer = null)
     t_last_update = GetEngineTime();
     t_last_panic = t_last_update;
     t_last_spawner_update = t_last_update;
+    t_last_spawner_grid_update = t_last_update;
     t_last_spawner_sound = t_last_update;
     t_finale = t_last_update;
     t_last_action = t_last_update;

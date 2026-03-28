@@ -26,18 +26,16 @@ bool Spawner_Can_Spawn(int client)
 }
 
 /** Called by zm_update timer every g_fUpdateRate seconds when a menu is open. */
-int Spawner_Update()
+void Spawner_Update()
 {
-    switch (g_iSpawnerMode)
-    {
-        case 1:
-        {
-            Grid_Update();
-            return Analog_CanSpawn(ZOMBIECLASS_BOOMER, false);
-        }
-        case 2: return Grid_Update();
-        default: return Analog_CanSpawn(ZOMBIECLASS_BOOMER, false);
-    }
+    bool update_analog, update_grid;
+    float t_now = GetEngineTime();
+    if ( g_bGrid && g_iSpawnerMode>0 && (t_now-t_last_spawner_grid_update)>=g_fUpdateRate )
+        update_grid = true;
+    if ( (g_iSpawnerMode<2 || !g_bGrid) && (t_now-t_last_spawner_update)>=g_fUpdateRate )
+        update_analog = true;
+    if (update_grid) Grid_Update();
+    if (update_analog) Analog_CanSpawn(ZOMBIECLASS_BOOMER, false);
 }
 
 // --- Position resolution ---
