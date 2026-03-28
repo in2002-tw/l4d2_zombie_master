@@ -52,6 +52,13 @@ void Grid_Init()
 
 void Grid_Cleanup()
 {
+    if (g_hGridTimer != null)
+    {
+        KillTimer(g_hGridTimer);
+        g_hGridTimer = null;
+    }
+    g_GridCellCount = 0;
+    g_GridHasValidCell = false;
     if (g_bGridReady)
     {
         GridRenderer_Cleanup();
@@ -62,10 +69,7 @@ void Grid_Cleanup()
 void Grid_OnEnabled(int client)
 {
     if (!g_bGridReady)
-    {
-        if (!GridLib_IsReady()) return;
         Grid_Init();
-    }
     GridRenderer_OnClientEnabled(client);
     if (g_hGridTimer != null)
     {
@@ -87,10 +91,8 @@ void Grid_OnDisabled(int client)
     }
     g_GridCellCount = 0;
     g_GridHasValidCell = false;
-    if (g_bGridReady && client > 0 && client <= MaxClients)
-    {
+    if (client > 0 && client <= MaxClients)
         GridRenderer_OnClientDisabled(client);
-    }
 }
 
 // ==========================================================================
@@ -100,11 +102,14 @@ void Grid_OnDisabled(int client)
 Action Grid_TimerUpdate(Handle timer, int userid)
 {
     int client = GetClientOfUserId(userid);
-    if (!IsValidClientZM() || client != zm_client || !g_bGridReady || !GridLib_IsReady())
+    if (!IsValidClientZM() || client != zm_client || !g_bGridReady)
     {
         g_hGridTimer = null;
         return Plugin_Stop;
     }
+
+    if (!GridLib_IsReady())
+        return Plugin_Continue;
 
     // Hide grid when menu is closed or flow survivor glow is active
     if (zm_menu_state == ZM_MENU_CLOSED || g_bFlowSurvivorGlowActive)
