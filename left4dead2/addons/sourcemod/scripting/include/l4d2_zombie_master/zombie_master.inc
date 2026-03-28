@@ -781,7 +781,7 @@ stock bool nav_can_spawn_zombies(const int zClass = ZOMBIECLASS_COMMON,
     if (navArea!=Address_Null && l4dhooks_updated && L4D_NavArea_IsBlocked(navArea,TEAM_INFECTED,false)) return false;
     if (navAttributeFlags<0) navAttributeFlags = L4D_GetNavArea_AttributeFlags(navArea);
     if (navSpawnAttributes<0) navSpawnAttributes = L4D_GetNavArea_SpawnAttributes(navArea);
-    if (navSpawnAttributes&EMPTY && navSpawnAttributes&NO_MOBS && navSpawnAttributes&NOTHREAT) return false;
+    if (navSpawnAttributes&NAV_SPAWN_EMPTY && navSpawnAttributes&NAV_SPAWN_NO_MOBS && navSpawnAttributes&NAV_SPAWN_NOTHREAT) return false;
     if (zClass!=ZOMBIECLASS_WITCH)
     {
         if (navAttributeFlags & NAV_BASE_OUTSIDE_WORLD) return false;
