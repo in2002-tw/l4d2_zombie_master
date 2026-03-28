@@ -339,9 +339,9 @@ static void GridRendererProp_CreatePool(int client)
 	for (int i = 0; i < GRIDRENDERERPROP_MAX_ENTITIES; i++)
 	{
 		int ent = CreateEntityByName("prop_dynamic_override");
-		if (ent == -1)
+		if (!IsEntitySafe(ent))
 		{
-			LogError("[GridRenderer Prop] Failed to create entity at %d", i);
+			LogError("[GridRenderer Prop] Edict limit reached at %d/%d entities", i, GRIDRENDERERPROP_MAX_ENTITIES);
 			break;
 		}
 
