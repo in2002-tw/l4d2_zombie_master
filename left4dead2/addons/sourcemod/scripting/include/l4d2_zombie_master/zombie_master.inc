@@ -404,7 +404,7 @@ ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer,
        g_hCostCharger, g_hCostTank, g_hCostWitchStatic, g_hCostWitchMoving, g_hCostCommon, g_hCostUncommon, g_hLockSaferoom,
        g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait, g_hPanicRateMultiplier,
        g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons, g_hAllowFreeze,
-       g_hGridSearchRadius, g_hGrid, g_hSpawnerMode;
+       g_hGridSearchRadius, g_hGrid, g_hSpawnerMode, g_hPanicRefill;
 
 float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fStopInactivity,g_fSpecialCooldown, g_fPanicRateMultiplier,
 g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout,
@@ -432,7 +432,7 @@ int g_iSpawnerMode;
 int info_director = -1;
 
 // Scattered globals (moved from between functions in main file)
-bool playcount_increased = false;
+bool playcount_increased, g_bPanicRefill = false;
 int entref_control = INVALID_ENT_REFERENCE; // track the last special infected ZM looked at
 int entref_delete = INVALID_ENT_REFERENCE; // track the last zombie ZM looked at
 int entref_lastlook = INVALID_ENT_REFERENCE;
@@ -772,7 +772,7 @@ stock void get_zombieclass_name(int ZOMBIECLASS, char name[32])
 
 // Check if navArea is legal for zombies. Allow witches to be spawned in weird places
 // You may provide all attributes or automatically get them from navArea.
-stock bool nav_can_spawn_zombies(const bool witch = false,
+stock bool nav_can_spawn_zombies(const int zClass = ZOMBIECLASS_COMMON,
                                  Address navArea = Address_Null,
                                  int &navAttributeFlags = -1, int &navSpawnAttributes = -1,
                                  float navCenter[3] = {0.0,0.0,0.0}, float navSize[3] = {0.0,0.0,0.0})
@@ -780,7 +780,7 @@ stock bool nav_can_spawn_zombies(const bool witch = false,
     if (navArea!=Address_Null && l4dhooks_updated && L4D_NavArea_IsBlocked(navArea,TEAM_INFECTED,false)) return false;
     if (navAttributeFlags<0) navAttributeFlags = L4D_GetNavArea_AttributeFlags(navArea);
     if (navSpawnAttributes<0) navSpawnAttributes = L4D_GetNavArea_SpawnAttributes(navArea);
-    if (!witch)
+    if (zClass!=ZOMBIECLASS_WITCH)
     {
         if (navAttributeFlags & NAV_BASE_OUTSIDE_WORLD) return false;
         if (navSpawnAttributes & NAV_SPAWN_BATTLESTATION) return false;
@@ -1288,19 +1288,21 @@ stock bool IsObstructed(float pos[3], int entity = -1, bool debug=false, bool ig
 
 // for known obstructed pos, try adjusting position slightly
 // optional: navArea and center for try_center, try_random
+// optional: zClass to determine if ignore_zombies is used for relaxed obstruction checks
 // true on success, false on failure
 // future: make this more useful
-stock bool try_adjusting_obstructed_pos(float pos[3],
+stock bool try_adjusting_obstructed_pos(float pos[3], int zClass = ZOMBIECLASS_BOOMER,
                                         Address navArea=Address_Null, float center[3]={0.0,0.0,0.0},
                                         bool try_up = true,
                                         bool try_center = true, bool try_center_up = true,
                                         bool try_random = true, bool try_random_up = true)
 {
-    static float new_pos[3];
+    bool ignore_zombies = zClass==ZOMBIECLASS_COMMON;
+    float new_pos[3];
     if (try_up)
     {
         new_pos = pos; new_pos[2] += HULL_DZ_MIN_STRICT;
-        if (!IsObstructed(new_pos))
+        if (!IsObstructed(new_pos,_,_,ignore_zombies))
         {
             pos = new_pos;
             return true;
@@ -1309,7 +1311,7 @@ stock bool try_adjusting_obstructed_pos(float pos[3],
     
     if (try_center && center[0]!=0.0 && center[1]!=0.0)
     {
-        if (!IsObstructed(center))
+        if (!IsObstructed(center,_,_,ignore_zombies))
         {
             pos = center;
             return true;
@@ -1317,7 +1319,7 @@ stock bool try_adjusting_obstructed_pos(float pos[3],
         else if (try_center_up)
         {
             new_pos = center; new_pos[2] += HULL_DZ_MIN_STRICT;
-            if (!IsObstructed(new_pos))
+            if (!IsObstructed(new_pos,_,_,ignore_zombies))
             {
                 pos = new_pos;
                 return true;
@@ -1328,7 +1330,7 @@ stock bool try_adjusting_obstructed_pos(float pos[3],
     if (try_random && navArea!=Address_Null)
     {
         L4D_FindRandomSpot(navArea,new_pos);
-        if (!IsObstructed(new_pos))
+        if (!IsObstructed(new_pos,_,_,ignore_zombies))
         {
             pos = new_pos;
             return true;
@@ -1336,7 +1338,7 @@ stock bool try_adjusting_obstructed_pos(float pos[3],
         else if (try_random_up)
         {
             new_pos[2] += HULL_DZ_MIN_STRICT;
-            if (!IsObstructed(new_pos))
+            if (!IsObstructed(new_pos,_,_,ignore_zombies))
             {
                 pos = new_pos;
                 return true;
@@ -1804,7 +1806,7 @@ Action ZMControlSI(int client, int args)
          
          if (zClass==ZOMBIECLASS_TANK)
          {
-             if (IsObstructed(vOrigin,entity,_,true)) try_adjusting_obstructed_pos(vOrigin,_,_,true,false,false,false,false);
+             if (IsObstructed(vOrigin,entity,_,true)) try_adjusting_obstructed_pos(vOrigin,ZOMBIECLASS_TANK,_,_,true,false,false,false,false);
              L4D_ReplaceTank(entity,zm_client);
          }
          else L4D_TakeOverZombieBot(zm_client,entity);

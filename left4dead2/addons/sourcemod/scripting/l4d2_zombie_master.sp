@@ -114,6 +114,8 @@ public Plugin myinfo =
 // 60. Survivors still keep teleporting and falling to their death.
 // 62. Fun command: z_mute_infected no yelling or growling, allowing to stealth attack survivors.
 // 64. Crouched frozen specials should stay crouched.
+// 65. Toggle for panic reset common cooldown. For zm_panic.
+// 66. Smoker bug :D
 
 // SetEntPropFloat(witch, Prop_Send,"m_flModelScale", scale); 
 
@@ -192,11 +194,14 @@ public void OnPluginStart()
     g_hBankInitialPlayer = CreateConVar("zm_bank_initial_player", "300", "Additional initial ZM bank per extra player.",FCVAR_PROTECTED, true, 0.0, true, 1000000.0);
     g_hBankInitialPlayer.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hPanicCost = CreateConVar("zm_panic_cost", "200", "Horde panic cost.",FCVAR_PROTECTED , true, 0.0, true, 1000000.0);
+    g_hPanicCost = CreateConVar("zm_panic_cost", "200", "Horde panic cost. -1.0 to disable.",FCVAR_PROTECTED , true, -1.0, true, 1000000.0);
     g_hPanicCost.AddChangeHook(ConVarChanged_Cvars_ZMenu);
     
     g_hPanicDuration = CreateConVar("zm_panic_duration", "30", "Horde panic duration, in seconds.",FCVAR_PROTECTED , true, 10.0, true, 1000.0);
     g_hPanicDuration.AddChangeHook(ConVarChanged_Cvars);
+    
+    g_hPanicRefill = CreateConVar("zm_panic_refill", "1", "If 1, panic will reset spawn cooldown for commons.",FCVAR_PROTECTED , true, 0.0, true, 1.0);
+    g_hPanicRefill.AddChangeHook(ConVarChanged_Cvars);
     
     g_hUpdateRate = CreateConVar("zm_updaterate", "0.25", "Update rate for periodic ZM checks, in seconds.",FCVAR_PROTECTED , true, 0.1, true, 10.0);
     g_hUpdateRate.AddChangeHook(ConVarChanged_Cvars);

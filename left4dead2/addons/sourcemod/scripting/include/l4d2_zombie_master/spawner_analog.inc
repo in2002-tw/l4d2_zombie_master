@@ -6,9 +6,9 @@
 ///////////////////////////////////////
 
 // Filter context for SpawnerCellFilter callback
-//static float  g_SpawnerFilterOrigin[3];
-//static float  g_SpawnerFilterRadius;
-static bool   g_bSpawnerWitch;
+//float  g_SpawnerFilterOrigin[3];
+//float  g_SpawnerFilterRadius;
+int   g_iSpawnerZombieClass;
 
 /**
  * Draw the colored spawn indicator ring at the ZM's aim position and update spawner state.
@@ -86,13 +86,13 @@ stock bool nav_xy_OOB(float pos[3], float center[3], float size[3])
 
 /**
  * Main spawn validation orchestrator - from ZM client.
- * @param witch  If true, use relaxed nav validation rules for witch placement
+ * @param zClass  Specify internal zombie_master zombieclass. Witches have relaxed nav checks, commons have relaxed obstruction checks.
  * @param hint   If true, show HUD hints explaining why spawning is blocked
  * @return       SPAWNER_OK, -> GREEN
  *               SPAWNER_INVALID, SPAWNER_NAV -> RED
  *               SPAWNER_DISTANCE, SPAWNER_SIGHT, or SPAWNER_OTHER -> BLUE
  */
-int Analog_CanSpawn(bool witch = false, bool hint = true)
+int Analog_CanSpawn(int zClass=ZOMBIECLASS_BOOMER, bool hint = true)
 {
     if (DEBUG) LogMessage("[zm] Analog_CanSpawn");
 	if (!IsValidClientZM()) return SPAWNER_INVALID;
@@ -113,7 +113,7 @@ int Analog_CanSpawn(bool witch = false, bool hint = true)
             return SPAWNER_FLOW;
         }
     }
-	static float vAngles[3],vOrigin[3],vPos[3];
+	float vAngles[3],vOrigin[3],vPos[3];
 	GetClientEyePosition(zm_client,vOrigin);
 	GetClientEyeAngles(zm_client,vAngles);
     Handle trace = TR_TraceRayFilterEx(vOrigin,vAngles,MASK_SOLID,RayType_Infinite,FilterSpawner_HitSurvivors,zm_client);
@@ -124,7 +124,7 @@ int Analog_CanSpawn(bool witch = false, bool hint = true)
     	int entity = TR_GetEntityIndex(trace);
     	if (IsValidClient(entity) && GetClientTeam(entity)==TEAM_SURVIVOR && IsPlayerAlive(entity))
     	{
-        	static float vPos_spawner[3];
+        	float vPos_spawner[3];
         	GetClientAbsOrigin(entity,vPos_spawner);
         	update_ZM_spawner(vPos,vPos_spawner,SPAWNER_DISTANCE,true);
         	latest_distance = 0.0;
@@ -135,7 +135,7 @@ int Analog_CanSpawn(bool witch = false, bool hint = true)
 	}
 	else GetClientAbsOrigin(zm_client,vPos);
 	delete trace;
-    int spawner_state = Analog_CanSpawnPos(vPos,witch,hint,true);
+    int spawner_state = Analog_CanSpawnPos(vPos,zClass,hint,true);
     if (spawner_state==SPAWNER_OK && !zm_allow_spawns)
 	{
     	if (hint) update_hint("%T", "Zombie spawns OFF", zm_client);
@@ -152,8 +152,7 @@ int Analog_CanSpawn(bool witch = false, bool hint = true)
  * GridLib should run here to reposition the spawner if it's very close to a good spawn location.
  *
  * @param vPos   World position to check. It may be adjusted slightly if there's a valid position very close by.
- * @param witch  If true, use relaxed nav validation rules for witch placement
- * @param witch  If true, use relaxed nav validation rules for witch placement
+ * @param zClass 
  * @param hint   If true, show HUD hints explaining why spawning is blocked
  * @param draw   Run update_ZM_spawner() which will update zm_spawner globals + draw GREEN/BLUE/RED for ZM to see. Set draw=false for internal calculations, i.e. to check spawn rules.
  * @param skip_gridlib If true, skip gridlib fallback and immediately throw out a failed spawner state.
@@ -161,7 +160,7 @@ int Analog_CanSpawn(bool witch = false, bool hint = true)
  *               SPAWNER_INVALID, SPAWNER_NAV -> RED
  *               SPAWNER_DISTANCE, SPAWNER_SIGHT, or SPAWNER_OTHER -> BLUE
  */
-int Analog_CanSpawnPos(float vPos[3],bool witch = false,bool hint = true,bool draw = true,bool skip_gridlib=false)
+int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_COMMON,bool hint = true,bool draw = true,bool skip_gridlib=false)
 {
 	if (DEBUG) LogMessage("[zm] Analog_CanSpawn %.1f %.1f %.1f", vPos[0], vPos[1], vPos[2]);
 	if (zm_stage>=ZM_END) return SPAWNER_INVALID;
@@ -178,11 +177,12 @@ int Analog_CanSpawnPos(float vPos[3],bool witch = false,bool hint = true,bool dr
         return SPAWNER_INVALID;
     }
     
+    bool ignore_zombies = zClass == ZOMBIECLASS_COMMON;
     // vPos: input, adjusted on the fly
 	// vPos_spawner: final spawner position (output). later we decide where to draw the spawner depending on its state.
 	float vPos_spawner[3];
 	vPos_spawner = vPos;
-    float check_dist = (witch) ? 50.0 : 500.0;
+    float check_dist = (zClass=ZOMBIECLASS_WITCH) ? 50.0 : 500.0;
     float min_distance;
     latest_distance = -1.0;
     
@@ -202,7 +202,7 @@ int Analog_CanSpawnPos(float vPos[3],bool witch = false,bool hint = true,bool dr
         L4D_GetNavAreaCenter(navArea,navCenter);
         L4D_GetNavAreaSize(navArea,navSize);
         
-        if (!nav_can_spawn_zombies(witch,navArea,navAttrFlags,navSpawnAttrs,navCenter,navSize))
+        if (!nav_can_spawn_zombies(zClass,navArea,navAttrFlags,navSpawnAttrs,navCenter,navSize))
         {
             spawner_state = SPAWNER_NAV; // nav does not allow this zombie.
             fail = true;
@@ -217,22 +217,22 @@ int Analog_CanSpawnPos(float vPos[3],bool witch = false,bool hint = true,bool dr
             bool obstruction_checked = false;
             if (OOB) // If navmesh is outside expected xy: try center,center-up,random,random-up
             {
-                fail = !try_adjusting_obstructed_pos(vPos_spawner,navArea,navCenter,
+                fail = !try_adjusting_obstructed_pos(vPos_spawner,zClass,navArea,navCenter,
                                              false,        true,true,         true,true);
                 obstruction_checked = true;
             }
-            if (!fail && !obstruction_checked && IsObstructed(vPos_spawner)) // Navmesh xy is good, but we are obstructed. Try moving up.
+            if (!fail && !obstruction_checked && IsObstructed(vPos_spawner,_,_,ignore_zombies)) // Navmesh xy is good, but we are obstructed. Try moving up.
             {
-                fail = !try_adjusting_obstructed_pos(vPos_spawner,navArea,navCenter,
+                fail = !try_adjusting_obstructed_pos(vPos_spawner,zClass,navArea,navCenter,
                                              true,!obstruction_checked,!obstruction_checked,!obstruction_checked,!obstruction_checked);
                 
             }
             if (!fail && vPos_spawner[2]<z_min)
             {
-                static float new_vPos[3];
+                float new_vPos[3];
                 new_vPos = vPos_spawner;
                 new_vPos[2] = navCenter[2] + FloatAbs(navSize[2])/2.0 + 1.0;
-                if (!IsObstructed(new_vPos)) vPos_spawner = new_vPos;
+                if (!IsObstructed(new_vPos,_,_,ignore_zombies)) vPos_spawner = new_vPos;
                 else fail = true;
             }
             if (fail) spawner_state = SPAWNER_OTHER;
@@ -241,7 +241,7 @@ int Analog_CanSpawnPos(float vPos[3],bool witch = false,bool hint = true,bool dr
     else
     {
         vPos_spawner = vPos;
-        if (!witch)
+        if (zClass!=ZOMBIECLASS_WITCH)
         {
             spawner_state = SPAWNER_INVALID;
             fail = true;
@@ -269,9 +269,9 @@ int Analog_CanSpawnPos(float vPos[3],bool witch = false,bool hint = true,bool dr
     }
     if (fail && draw && spawner_state>SPAWNER_NAV && get_spawner_target_survivor(false,SPAWNER_DISTANCE)<0) // check other candidates
     {
-        static float newPos[3];
+        float newPos[3];
         newPos = spawner_last_valid_pos;
-        if (spawner_last_valid && can_ZM_see(newPos) && Analog_CanSpawnPos(newPos,witch,false,false,true)==SPAWNER_OK)
+        if (spawner_last_valid && can_ZM_see(newPos) && Analog_CanSpawnPos(newPos,zClass,false,false,true)==SPAWNER_OK)
         {
             vPos_spawner = newPos;
             fail = false;
@@ -282,7 +282,7 @@ int Analog_CanSpawnPos(float vPos[3],bool witch = false,bool hint = true,bool dr
     
         if (fail && !skip_gridlib) // ask gridlib for a better position
         {
-            if (FindNearbyValidSpawnCell(vPos_spawner,newPos,check_dist,witch) && Analog_CanSpawnPos(newPos,witch,false,false,true)==SPAWNER_OK)
+            if (FindNearbyValidSpawnCell(vPos_spawner,newPos,check_dist,zClass) && Analog_CanSpawnPos(newPos,zClass,false,false,true)==SPAWNER_OK)
             {
                 vPos_spawner = newPos;
                 fail = false;
@@ -307,7 +307,7 @@ int Analog_CanSpawnPos(float vPos[3],bool witch = false,bool hint = true,bool dr
                 case SPAWNER_INVALID: update_hint("%T", "Bad location", zm_client);
                 default: // SPAWNER_NAV 
                 {
-                    if (witch) update_hint("%T", "Witches illegal", zm_client);
+                    if (zClass==ZOMBIECLASS_WITCH) update_hint("%T", "Witches illegal", zm_client);
                     else update_hint("%T", "Zombies illegal", zm_client);
                 }
             }
@@ -328,7 +328,7 @@ bool can_ZM_see(float vPos[3])
 {
     if (!IsValidClientZM()) return false;
     bool can_see = true;
-    static float vEye[3], vPos2[3];
+    float vEye[3], vPos2[3];
     vPos2 = vPos; vPos2[2] += 32.0;
     GetClientEyePosition(zm_client,vEye);
     Handle trace = TR_TraceRayFilterEx(vEye,vPos2,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,zm_client);
@@ -359,13 +359,12 @@ int SpawnerCellFilter(int cellIdx)
     if (obstructed)
         return GRIDLIB_FILTER_DISCARD;
     
-    if (!nav_can_spawn_zombies(g_bSpawnerWitch,navArea))
+    if (!nav_can_spawn_zombies(g_iSpawnerZombieClass,navArea))
     {
         if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d failed nav attrs", cellIdx);
         return GRIDLIB_FILTER_DISCARD_NAV;
     }
-    
-    if (IsObstructed(cellPos)) // my obstruction check is more restrictive
+    if (IsObstructed(cellPos,_,_,g_iSpawnerZombieClass==ZOMBIECLASS_COMMON)) // my obstruction checks can be more restrictive
         return GRIDLIB_FILTER_DISCARD;
     
     if (IsValidClientZM() && !can_ZM_see(cellPos)) // Check if ZM can actually see that location.
@@ -408,7 +407,7 @@ int SpawnerCellFilter(int cellIdx)
  * @param radius    Search radius, defaults to g_fGridSearchRadius
  * @return          true if a valid cell was found, false otherwise
  */
-bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -1.0, bool witch = false)
+bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -1.0, int zClass = ZOMBIECLASS_COMMON)
 {
     if (radius <= 0.0) radius = g_fGridSearchRadius;
     if (radius <= 0.0)
@@ -430,11 +429,11 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
     // Set up filter context and batch PVS
     //g_SpawnerFilterOrigin = origin;
     //g_SpawnerFilterRadius = radius;
-    g_bSpawnerWitch = witch;
+    g_iSpawnerZombieClass = zClass;
     Spawner_BeginBatchPVS();
 
     float t_gridlib = GetEngineTime();
-    static int cells[16];
+    int cells[16];
     int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 16, SpawnerCellFilter);
     float gridlib_ms = (GetEngineTime() - t_gridlib) * 1000.0;
 
@@ -451,7 +450,7 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
         Address navArea;
         bool obstructed;
         GridLib_GetCellData(cells[i], cellPos, normal, navArea, obstructed);
-        //if (Analog_CanSpawnPos(cellPos, witch, false, false, true) != SPAWNER_OK)
+        //if (Analog_CanSpawnPos(cellPos, g_iSpawnerZombieClass, false, false, true) != SPAWNER_OK)
         //{
         //    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: cell %d Analog_CanSpawnPos fail", i);
         //    expensive_fails++;
@@ -468,7 +467,7 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
         
         //if (IsValidClientZM())
         //{
-        //    static float cellPos2[3];
+        //    float cellPos2[3];
         //    cellPos2 = cellPos; cellPos2[2] += 32.0;
         //    if (!L4D2_IsVisibleToPlayer(zm_client,TEAM_INFECTED,3,0,cellPos2))
         //    {
@@ -535,7 +534,7 @@ int get_spawner_target_survivor(bool flow = false, int spawner_state = SPAWNER_D
         if (target_client<0 && spawner_state!=SPAWNER_OK && spawner_nearest_survivor>0)
 	    {
             target_client = spawner_nearest_survivor;
-            static float test_pos[3];
+            float test_pos[3];
             test_pos = zm_target_pos;
             test_pos[2] += 25.0;
            	if (latest_distance<0.0 || latest_distance>250.0 || 
@@ -600,11 +599,11 @@ void mark_flow_survivor_and_zombie(int survivor=-1, int zombie=-1)
 // ==========================================================================
 
 // Per-spawn state for flow markers (set during Resolve, read during NotifySpawned)
-static bool  g_bAnalogFlowUsed;
-static int   g_iAnalogTargetClient;
-static bool  g_bAnalogHint;
-static bool  g_bAnalogBatchMode;
-static bool  g_bAnalogSurvivorBeamDrawn;
+bool  g_bAnalogFlowUsed;
+int   g_iAnalogTargetClient;
+bool  g_bAnalogHint;
+bool  g_bAnalogBatchMode;
+bool  g_bAnalogSurvivorBeamDrawn;
 
 void Analog_BeginSpawn()
 {
@@ -639,7 +638,7 @@ void Analog_EndSpawn()
 
 stock bool Analog_ValidatePosition(float pos[3], bool checkLOS = true)
 {
-    if (IsObstructed(pos)) return false;
+    if (IsObstructed(pos,_,_,g_iSpawnerZombieClass==ZOMBIECLASS_COMMON)) return false;
     if (checkLOS && can_any_alive_survivor_see(pos, false)) return false;
     return true;
 }
@@ -709,7 +708,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         bool try_gridlib = true;
         if (zm_spawner_navArea)
         {
-            static float navSize[3];
+            float navSize[3];
             L4D_GetNavAreaSize(zm_spawner_navArea, navSize);
             if (navSize[0] < 32.0) navSize[0] = 32.0;
             if (navSize[1] < 32.0) navSize[1] = 32.0;
@@ -757,7 +756,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             bool cellObstructed;
             if (!GridLib_GetCellData(cellIdx, pos, cellNormal, cellNavArea, cellObstructed))
                 continue;
-            if (cellObstructed || IsObstructed(pos))
+            if (cellObstructed || IsObstructed(pos,_,_,true))
                 continue;
 
             // PVS + single ray trace visibility check
@@ -792,7 +791,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             if (zm_spawner_navArea && count > 1)
             {
                 L4D_FindRandomSpot(zm_spawner_navArea, pos);
-                if (can_any_alive_survivor_see(pos, false) || IsObstructed(pos)) pos = zm_spawner_pos;
+                if (can_any_alive_survivor_see(pos, false) || IsObstructed(pos,_,_,true)) pos = zm_spawner_pos;
             }
             else pos = zm_spawner_pos;
         }
@@ -818,7 +817,7 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
 
     int spawner_state;
     if (flow) spawner_state = SPAWNER_DISTANCE;
-    else spawner_state = Analog_CanSpawn(true);
+    else spawner_state = Analog_CanSpawn(ZOMBIECLASS_WITCH);
     outPos = zm_spawner_pos;
 
     if (spawner_state != SPAWNER_OK)
@@ -834,7 +833,7 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
             float flow_survivor_fraction = get_survivor_flow_fraction(target_client);
             if (flow_survivor_fraction <= 0.91 && L4D_GetFlowFromPoint(outPos) < L4D2Direct_GetFlowDistance(target_client))
                 fail = true;
-            if (!fail && IsObstructed(outPos)) fail = true;
+            if (!fail && IsObstructed(outPos,_,_,false)) fail = true;
         }
         if (fail) return false;
 
@@ -845,6 +844,7 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
     return true;
 }
 
+// Analog_ResolveSpecialPosition(zombieclass, flow, outPos)
 /**
  * Resolve position for a special infected spawn.
  * Handles aimed/random PZ/flow internally.
@@ -853,10 +853,11 @@ bool Analog_ResolveSpecialPosition(int zombieclass, bool flow, float outPos[3])
 {
     Analog_BeginSpawn();
     g_bAnalogHint = true;
+    //LogMessage("Analog_ResolveSpecialPosition %d %d", zombieclass, flow);
 
     int spawner_state;
     if (flow) spawner_state = SPAWNER_DISTANCE;
-    else spawner_state = Analog_CanSpawn();
+    else spawner_state = Analog_CanSpawn(zombieclass);
     outPos = zm_spawner_pos;
 
     if (spawner_state != SPAWNER_OK)
@@ -864,7 +865,7 @@ bool Analog_ResolveSpecialPosition(int zombieclass, bool flow, float outPos[3])
         int target_client = get_spawner_target_survivor(flow, spawner_state);
         if (target_client < 0) return false;
 
-        if (!L4D_GetRandomPZSpawnPosition(target_client, zombieclass, 10, outPos) || IsObstructed(outPos))
+        if (!L4D_GetRandomPZSpawnPosition(target_client, zombieclass, 10, outPos) || IsObstructed(outPos,_,_,false))
             return false;
 
         if (zm_stage < ZM_STARTED && can_any_alive_survivor_see(outPos, false))
@@ -873,7 +874,6 @@ bool Analog_ResolveSpecialPosition(int zombieclass, bool flow, float outPos[3])
         g_bAnalogFlowUsed = true;
         g_iAnalogTargetClient = target_client;
     }
-
     return true;
 }
 

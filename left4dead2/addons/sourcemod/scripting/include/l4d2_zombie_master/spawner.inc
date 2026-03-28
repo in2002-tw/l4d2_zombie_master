@@ -33,10 +33,10 @@ int Spawner_Update()
         case 1:
         {
             Grid_Update();
-            return Analog_CanSpawn(false, false);
+            return Analog_CanSpawn(ZOMBIECLASS_BOOMER, false);
         }
         case 2: return Grid_Update();
-        default: return Analog_CanSpawn(false, false);
+        default: return Analog_CanSpawn(ZOMBIECLASS_BOOMER, false);
     }
 }
 

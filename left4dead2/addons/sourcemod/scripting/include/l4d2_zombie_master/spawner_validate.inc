@@ -80,7 +80,7 @@ bool any_alive_survivors_in_radius(float vecPos[3], float radius)
     }
     else
     {
-        static float pos[3];
+        float pos[3];
         for(i = 1; i <= MaxClients; i++)
         {
               if (IsValidClient(i) && GetClientTeam(i) == TEAM_SURVIVOR && IsPlayerAlive(i))
@@ -183,7 +183,7 @@ bool can_any_alive_survivor_see(float vecPos[3], bool hint = true)
     }
     else
     {
-        static float pos[3];
+        float pos[3];
         for(i = 1; i <= MaxClients; i++)
         {
               if (IsValidClient(i) && GetClientTeam(i) == TEAM_SURVIVOR && IsPlayerAlive(i))

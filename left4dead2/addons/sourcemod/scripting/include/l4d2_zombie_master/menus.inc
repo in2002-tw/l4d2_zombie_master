@@ -210,7 +210,7 @@ void create_common_menu()
     else buffer = "-";
     AddMenuItem(menu_common, "3", buffer);
     
-    if (L4D_IsSurvivalMode() || ZM_finale_announced) AddMenuItem(menu_common, "4", "-");
+    if (L4D_IsSurvivalMode() || ZM_finale_announced || g_iPanicCost<0) AddMenuItem(menu_common, "4", "-");
     else
     {
         Format(buffer,sizeof(buffer),"%T %d", "PANIC", zm_language, g_iPanicCost);
@@ -242,7 +242,7 @@ int common_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
             	case 3: zm_menu_state=ZM_MENU_UNCOMMON;
             	case 4:
             	{
-                	if (!L4D_IsSurvivalMode() && !ZM_finale_announced) ZMPanic(zm_client,0);
+                	if (!L4D_IsSurvivalMode() && !ZM_finale_announced && g_iPanicCost>=0) ZMPanic(zm_client,0);
             	}
             	case 5: zm_menu_state=ZM_MENU_AUTOCOMMON;
             	case 6: zm_menu_state=ZM_MENU_MAIN;

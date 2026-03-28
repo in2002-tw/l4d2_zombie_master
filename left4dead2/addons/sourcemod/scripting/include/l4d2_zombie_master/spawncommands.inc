@@ -667,7 +667,7 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
             return -1;
     }
 
-	if (DEBUG) LogMessage("[zm] ZM_Spawn_SI");
+	//LogMessage("[zm] ZM_Spawn_SI %d %d", ZOMBIECLASS, flow);
 
 	if (!setpos && is_zm_spamming()) return -1;
 
@@ -698,7 +698,7 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
            	return -1;
         }
         
-        if (!Spawner_ResolveSpecialPosition(ZOMBIECLASS, flow, spawn_pos))
+        if (!Spawner_ResolveSpecialPosition(ZOMBIECLASS,flow,spawn_pos))
         {
             if (zm_allow_spawns && g_iSpawnerMode>1) update_hint("%T", "Spawn failed", zm_client);
             return -1;
@@ -732,7 +732,6 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
        	SetEntProp(bot, Prop_Send, "m_iObserverMode", 0);
        	SetEntProp(bot, Prop_Send, "m_iPlayerState", 0);
        	SetEntProp(bot, Prop_Send, "m_zombieState", 0);
-       	// asdf if tank try setting zombieclass to 0 here temporarily? maybe it will stop music
        	DispatchSpawn(bot);
        	ActivateEntity(bot);
        	TeleportEntity(bot, spawn_pos, angle, NULL_VECTOR);
@@ -801,6 +800,7 @@ Action ZM_Smoker(int client, int args)
 {
    static char extra[32];
    if (args>0) GetCmdArg(1, extra, sizeof(extra));
+   else strcopy(extra,sizeof(extra),"");
    ZM_Unit_Special(client,ZOMBIECLASS_SMOKER,extra);
    return Plugin_Continue;
 }
@@ -810,6 +810,7 @@ Action ZM_Boomer(int client, int args)
 {
    static char extra[32] = "";
    if (args>0) GetCmdArg(1, extra, sizeof(extra));
+   else strcopy(extra,sizeof(extra),"");
    ZM_Unit_Special(client,ZOMBIECLASS_BOOMER,extra);
    return Plugin_Continue;
 }
@@ -819,6 +820,7 @@ Action ZM_Hunter(int client, int args)
 {
    static char extra[32] = "";
    if (args>0) GetCmdArg(1, extra, sizeof(extra));
+   else strcopy(extra,sizeof(extra),"");
    ZM_Unit_Special(client,ZOMBIECLASS_HUNTER,extra);
    return Plugin_Continue;
 }
@@ -828,6 +830,7 @@ Action ZM_Spitter(int client, int args)
 {
    static char extra[32] = "";
    if (args>0) GetCmdArg(1, extra, sizeof(extra));
+   else strcopy(extra,sizeof(extra),"");
    ZM_Unit_Special(client,ZOMBIECLASS_SPITTER,extra);
    return Plugin_Continue;
 }
@@ -837,6 +840,7 @@ Action ZM_Jockey(int client, int args)
 {
    static char extra[32] = "";
    if (args>0) GetCmdArg(1, extra, sizeof(extra));
+   else strcopy(extra,sizeof(extra),"");
    ZM_Unit_Special(client,ZOMBIECLASS_JOCKEY,extra);
    return Plugin_Continue;
 }
@@ -846,6 +850,7 @@ Action ZM_Charger(int client, int args)
 {
    static char extra[32] = "";
    if (args>0) GetCmdArg(1, extra, sizeof(extra));
+   else strcopy(extra,sizeof(extra),"");
    ZM_Unit_Special(client,ZOMBIECLASS_CHARGER,extra);
    return Plugin_Continue;
 }
@@ -855,6 +860,7 @@ Action ZM_Tank(int client, int args)
 {
    static char extra[32] = "";
    if (args>0) GetCmdArg(1, extra, sizeof(extra));
+   else strcopy(extra,sizeof(extra),"");
    ZM_Unit_Special(client,ZOMBIECLASS_TANK,extra);
    return Plugin_Continue;
 }
