@@ -2184,44 +2184,6 @@ Action zm_debug_player(int client, int args)
     return Plugin_Continue;
 }
 
-Action zm_entinfo(int client, int args)
-{
-    if (args < 1)
-    {
-        ReplyToCommand(client, "[zm] Usage: zm_entinfo <entity index>");
-        return Plugin_Handled;
-    }
-    char arg[8];
-    GetCmdArg(1, arg, sizeof(arg));
-    int ent = StringToInt(arg);
-    if (!IsValidEntity(ent))
-    {
-        ReplyToCommand(client, "[zm] Entity %d is not valid.", ent);
-        return Plugin_Handled;
-    }
-    char classname[64], netclass[64], model[PLATFORM_MAX_PATH];
-    GetEntityClassname(ent, classname, sizeof(classname));
-    GetEntityNetClass(ent, netclass, sizeof(netclass));
-    if (HasEntProp(ent, Prop_Data, "m_ModelName"))
-        GetEntPropString(ent, Prop_Data, "m_ModelName", model, sizeof(model));
-    int health = HasEntProp(ent, Prop_Send, "m_iHealth") ? GetEntProp(ent, Prop_Send, "m_iHealth") : -1;
-    int team = HasEntProp(ent, Prop_Send, "m_iTeamNum") ? GetEntProp(ent, Prop_Send, "m_iTeamNum") : -1;
-    float origin[3];
-    char pos[64];
-    if (HasEntProp(ent, Prop_Send, "m_vecOrigin"))
-    {
-        GetEntPropVector(ent, Prop_Send, "m_vecOrigin", origin);
-        FormatEx(pos, sizeof(pos), "(%.0f, %.0f, %.0f)", origin[0], origin[1], origin[2]);
-    }
-    else
-    {
-        pos = "n/a";
-    }
-    ReplyToCommand(client, "[zm] Entity %d: class=%s netclass=%s model=%s hp=%d team=%d pos=%s",
-        ent, classname, netclass, model, health, team, pos);
-    return Plugin_Handled;
-}
-
 void zm_fake_gamemode()
 {
     if (L4D_IsSurvivalMode()) FindConVar("mp_gamemode").ReplicateToClient(zm_client,"mutation15");
