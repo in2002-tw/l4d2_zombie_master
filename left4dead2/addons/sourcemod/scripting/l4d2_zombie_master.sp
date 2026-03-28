@@ -1615,6 +1615,9 @@ public void OnMapStart()
         //if (!lipsync_available) LogMessage("[zm] custom lipsynced voice lines cannot be played."); 
     }
     
+    if (g_hGrid.BoolValue)
+        GridRendererProp_PrecacheAssets();
+
     PrecacheSound(SOUND_PANIC_ON);
     PrecacheSound(SOUND_PANIC_OFF);
     

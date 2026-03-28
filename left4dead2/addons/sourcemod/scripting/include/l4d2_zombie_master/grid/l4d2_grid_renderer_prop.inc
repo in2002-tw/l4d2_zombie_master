@@ -299,7 +299,7 @@ static int GridRendererProp_ComputeAlpha(int dataIdx, int count, bool isClosest)
 /**
  * Precache model and add files to download table
  */
-static bool GridRendererProp_PrecacheAssets()
+stock bool GridRendererProp_PrecacheAssets()
 {
 	// Check if model file exists before trying to precache
 	if (!FileExists(GRIDRENDERERPROP_MODEL, true))

@@ -576,15 +576,19 @@ stock int GridLib_GetCellsForNavArea(Address navArea, int[] results, int maxResu
  * @param desiredCount  Number of cells desired
  * @param results       Output array of cell indices (sorted by distance to position)
  * @param maxResults    Maximum size of results array
+ * @param filter        Optional filter callback. When provided, cells are tested
+ *                      during BFS collection. Rejected cells are skipped.
  * @return              Number of cells found
  */
 stock int GridLib_FindCellsFromClosest(const float position[3],
                                        int desiredCount,
                                        int[] results,
-                                       int maxResults)
+                                       int maxResults,
+                                       GridLibCellFilter filter = INVALID_FUNCTION)
 {
-	GridLibLog("[GridLib] FindCellsFromClosest: pos=(%.0f,%.0f,%.0f) desired=%d maxResults=%d",
-		position[0], position[1], position[2], desiredCount, maxResults);
+	GridLibLog("[GridLib] FindCellsFromClosest: pos=(%.0f,%.0f,%.0f) desired=%d maxResults=%d filter=%s",
+		position[0], position[1], position[2], desiredCount, maxResults,
+		filter != INVALID_FUNCTION ? "yes" : "no");
 
 	if (!g_IsReady || g_GridCells == null || g_NavAreaCells == null)
 	{
@@ -636,6 +640,18 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 	ArrayList adjAreas = new ArrayList();
 	char navKey[20];
 
+	// Nav area blacklist for filter DISCARD_NAV results
+	static StringMap blacklistedNavAreas = null;
+	if (filter != INVALID_FUNCTION)
+	{
+		if (blacklistedNavAreas == null)
+			blacklistedNavAreas = new StringMap();
+		else
+			blacklistedNavAreas.Clear();
+	}
+
+	float filterT0 = GetEngineTime();
+
 	// Seed BFS with starting nav area
 	FormatEx(navKey, sizeof(navKey), "%x", startNavArea);
 	visited.SetValue(navKey, true);
@@ -643,7 +659,8 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 
 	int queueIdx = 0;
 	int stopAfter = -1; // queue length snapshot when cap was reached
-	while (queueIdx < queue.Length && candidateCount < 500)
+	bool filterAbort = false;
+	while (queueIdx < queue.Length && candidateCount < 500 && !filterAbort)
 	{
 		// Stop after processing one extra BFS ring beyond the cap
 		if (stopAfter >= 0 && queueIdx >= stopAfter)
@@ -671,6 +688,37 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 			{
 				int spawnAttrs = L4D_GetNavArea_SpawnAttributes(cell.navArea);
 				if (spawnAttrs & GRIDLIB_NAV_BLOCKED_ZOMBIES)
+					continue;
+			}
+
+			// Apply filter callback
+			if (filter != INVALID_FUNCTION)
+			{
+				// Check nav area blacklist first (O(1) lookup)
+				if (cell.navArea != Address_Null)
+				{
+					FormatEx(navKey, sizeof(navKey), "%x", cell.navArea);
+					int dummy;
+					if (blacklistedNavAreas.GetValue(navKey, dummy))
+						continue;
+				}
+
+				int filterResult = GridLib_CallFilter(filter, areaCells[i]);
+				if (filterResult == GRIDLIB_FILTER_DISCARD_ALL)
+				{
+					filterAbort = true;
+					break;
+				}
+				if (filterResult == GRIDLIB_FILTER_DISCARD_NAV)
+				{
+					if (cell.navArea != Address_Null)
+					{
+						FormatEx(navKey, sizeof(navKey), "%x", cell.navArea);
+						blacklistedNavAreas.SetValue(navKey, 1);
+					}
+					continue;
+				}
+				if (filterResult != GRIDLIB_FILTER_KEEP)
 					continue;
 			}
 
@@ -706,8 +754,12 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 			stopAfter = queue.Length;
 	}
 
-	GridLibLog("[GridLib] FindCellsFromClosest: BFS done. navAreas=%d candidates=%d cap=%d stopAfter=%d",
-		queueIdx, candidateCount, cap, stopAfter);
+	float filterMs = (filter != INVALID_FUNCTION) ? (GetEngineTime() - filterT0) * 1000.0 : 0.0;
+	GridLibLog("[GridLib] FindCellsFromClosest: BFS done. navAreas=%d candidates=%d cap=%d stopAfter=%d filter=%.2fms",
+		queueIdx, candidateCount, cap, stopAfter, filterMs);
+	if (filterMs > 5.0)
+		LogMessage("[GridLib] WARNING: FindCellsFromClosest filter took %.1f ms (navAreas=%d, candidates=%d)",
+			filterMs, queueIdx, candidateCount);
 
 	delete visited;
 	delete queue;
