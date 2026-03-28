@@ -6,9 +6,9 @@
 ///////////////////////////////////////
 
 // Filter context for SpawnerCellFilter callback
-static float  g_SpawnerFilterOrigin[3];
-static float  g_SpawnerFilterRadius;
-
+//static float  g_SpawnerFilterOrigin[3];
+//static float  g_SpawnerFilterRadius;
+static bool   g_bSpawnerWitch;
 
 /**
  * Draw the colored spawn indicator ring at the ZM's aim position and update spawner state.
@@ -113,7 +113,7 @@ int Analog_CanSpawn(bool witch = false, bool hint = true)
             return SPAWNER_FLOW;
         }
     }
-	float vAngles[3],vOrigin[3],vPos[3];
+	static float vAngles[3],vOrigin[3],vPos[3];
 	GetClientEyePosition(zm_client,vOrigin);
 	GetClientEyeAngles(zm_client,vAngles);
     Handle trace = TR_TraceRayFilterEx(vOrigin,vAngles,MASK_SOLID,RayType_Infinite,FilterSpawner_HitSurvivors,zm_client);
@@ -124,7 +124,7 @@ int Analog_CanSpawn(bool witch = false, bool hint = true)
     	int entity = TR_GetEntityIndex(trace);
     	if (IsValidClient(entity) && GetClientTeam(entity)==TEAM_SURVIVOR && IsPlayerAlive(entity))
     	{
-        	float vPos_spawner[3];
+        	static float vPos_spawner[3];
         	GetClientAbsOrigin(entity,vPos_spawner);
         	update_ZM_spawner(vPos,vPos_spawner,SPAWNER_DISTANCE,true);
         	latest_distance = 0.0;
@@ -135,7 +135,7 @@ int Analog_CanSpawn(bool witch = false, bool hint = true)
 	}
 	else GetClientAbsOrigin(zm_client,vPos);
 	delete trace;
-    int spawner_state = Analog_CanSpawnPos(vPos,witch,hint);
+    int spawner_state = Analog_CanSpawnPos(vPos,witch,hint,true);
     if (spawner_state==SPAWNER_OK && !zm_allow_spawns)
 	{
     	if (hint) update_hint("%T", "Zombie spawns OFF", zm_client);
@@ -163,7 +163,7 @@ int Analog_CanSpawn(bool witch = false, bool hint = true)
  */
 int Analog_CanSpawnPos(float vPos[3],bool witch = false,bool hint = true,bool draw = true,bool skip_gridlib=false)
 {
-	if (DEBUG) LogMessage("[zm] Analog_CanSpawn");
+	if (DEBUG) LogMessage("[zm] Analog_CanSpawn %.1f %.1f %.1f", vPos[0], vPos[1], vPos[2]);
 	if (zm_stage>=ZM_END) return SPAWNER_INVALID;
 	if ( (hint || draw) && !IsValidClientZM())
 	{
@@ -201,35 +201,42 @@ int Analog_CanSpawnPos(float vPos[3],bool witch = false,bool hint = true,bool dr
         navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
         L4D_GetNavAreaCenter(navArea,navCenter);
         L4D_GetNavAreaSize(navArea,navSize);
-        //float z_min = navCenter[2] - FloatAbs(navSize[2])/2.0;
-        float z_min = navCenter[2] - FloatAbs(navSize[2]); // fix only egregious out of bounds
         
-        bool OOB = nav_xy_OOB(vPos_spawner,navCenter,navSize);
-        bool obstruction_checked = false;
-        bool tried_center = false;
-        if (OOB) // If navmesh is outside expected xy: try center,center-up,random,random-up
+        if (!nav_can_spawn_zombies(witch,navArea,navAttrFlags,navSpawnAttrs,navCenter,navSize))
         {
-            fail = !try_adjusting_obstructed_pos(vPos_spawner,navArea,navCenter,
-                                         false,        true,true,         true,true);
-            tried_center = true;
-            obstruction_checked = true;
+            spawner_state = SPAWNER_NAV; // nav does not allow this zombie.
+            fail = true;
         }
-        if (!fail && !obstruction_checked && IsObstructed(vPos_spawner)) // Navmesh xy is good, but we are obstructed. Try moving up.
+        
+        if (!fail)
         {
-            fail = !try_adjusting_obstructed_pos(vPos_spawner,navArea,navCenter,
-                                         true,!tried_center,!tried_center,!tried_center,!tried_center);
+            //float z_min = navCenter[2] - FloatAbs(navSize[2])/2.0;
+            float z_min = navCenter[2] - FloatAbs(navSize[2]); // fix only egregious out of bounds
             
+            bool OOB = nav_xy_OOB(vPos_spawner,navCenter,navSize); // are we out of bounds for the navmesh?
+            bool obstruction_checked = false;
+            if (OOB) // If navmesh is outside expected xy: try center,center-up,random,random-up
+            {
+                fail = !try_adjusting_obstructed_pos(vPos_spawner,navArea,navCenter,
+                                             false,        true,true,         true,true);
+                obstruction_checked = true;
+            }
+            if (!fail && !obstruction_checked && IsObstructed(vPos_spawner)) // Navmesh xy is good, but we are obstructed. Try moving up.
+            {
+                fail = !try_adjusting_obstructed_pos(vPos_spawner,navArea,navCenter,
+                                             true,!obstruction_checked,!obstruction_checked,!obstruction_checked,!obstruction_checked);
+                
+            }
+            if (!fail && vPos_spawner[2]<z_min)
+            {
+                static float new_vPos[3];
+                new_vPos = vPos_spawner;
+                new_vPos[2] = navCenter[2] + FloatAbs(navSize[2])/2.0 + 1.0;
+                if (!IsObstructed(new_vPos)) vPos_spawner = new_vPos;
+                else fail = true;
+            }
+            if (fail) spawner_state = SPAWNER_OTHER;
         }
-        if (!fail && vPos_spawner[2]<z_min)
-        {
-            static float new_vPos[3];
-            new_vPos = vPos_spawner;
-            new_vPos[2] = navCenter[2] + FloatAbs(navSize[2])/2.0 + 1.0;
-            if (!IsObstructed(new_vPos)) vPos_spawner = new_vPos;
-            else fail = true;
-        }
-        if (fail) spawner_state = SPAWNER_OTHER;
-         
     }
     else
     {
@@ -240,17 +247,6 @@ int Analog_CanSpawnPos(float vPos[3],bool witch = false,bool hint = true,bool dr
             fail = true;
         }
     }
-    
-    if ( !fail || (draw && spawner_state>SPAWNER_NAV) ) // check navmesh properties for no-no. run this if spawner is CONDITIONAL to make it RED
-    {
-        if (navArea && !nav_can_spawn_zombies(witch, navArea,
-                                   navAttrFlags,navSpawnAttrs,
-                                   navCenter,navSize))
-        {
-            spawner_state = SPAWNER_NAV;
-            fail = true;
-        }
-    }
     if (!fail || draw) // nav area travel distance is expensive, skip if not needed
     {
         min_distance = min_distance_to_survivors(vPos_spawner,draw);
@@ -258,14 +254,9 @@ int Analog_CanSpawnPos(float vPos[3],bool witch = false,bool hint = true,bool dr
         if (zm_stage<ZM_STARTED && spawner_nearest_survivor>0) min_distance *= 2.0;
         if (min_distance>=0.0 && g_fSpawnMinDistance>0.0 && min_distance<g_fSpawnMinDistance)
         {
-            spawner_state = SPAWNER_DISTANCE;
+            if (!fail) spawner_state = SPAWNER_DISTANCE;
             fail = true;
         }
-    }
-    if (!fail) // check if obstructed
-    {
-        fail = IsObstructed(vPos_spawner);
-        if (fail) spawner_state = SPAWNER_OTHER;
     }
     if (!fail) // check if survivors can see
     {
@@ -276,26 +267,27 @@ int Analog_CanSpawnPos(float vPos[3],bool witch = false,bool hint = true,bool dr
             if (fail) spawner_state = SPAWNER_SIGHT;
         }
     }
-    if (fail && draw && spawner_state>SPAWNER_NAV && get_spawner_target_survivor(false,SPAWNER_DISTANCE)<0) // see if there's a good nearby position in memory
+    if (fail && draw && spawner_state>SPAWNER_NAV && get_spawner_target_survivor(false,SPAWNER_DISTANCE)<0) // check other candidates
     {
-        if (spawner_last_valid && can_ZM_see(spawner_last_valid_pos) && Analog_CanSpawnPos(spawner_last_valid_pos,witch,false,false,true)==SPAWNER_OK)
+        static float newPos[3];
+        newPos = spawner_last_valid_pos;
+        if (spawner_last_valid && can_ZM_see(newPos) && Analog_CanSpawnPos(newPos,witch,false,false,true)==SPAWNER_OK)
         {
-            vPos_spawner = spawner_last_valid_pos;
+            vPos_spawner = newPos;
             fail = false;
             spawner_state = SPAWNER_OK;
-            if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
-            if (DEBUG_SPAWNER) LogMessage("Valid old position");
+            if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(newPos,check_dist,true,true,true,TEAM_INFECTED);
+            //LogMessage("Valid old position %.1f %.1f %.1f", newPos[0], newPos[1], newPos[2]);
         }
     
         if (fail && !skip_gridlib) // ask gridlib for a better position
         {
-            static float vPos_gridlib[3];
-            if (FindNearbyValidSpawnCell(vPos_spawner,vPos_gridlib,check_dist))
+            if (FindNearbyValidSpawnCell(vPos_spawner,newPos,check_dist,witch) && Analog_CanSpawnPos(newPos,witch,false,false,true)==SPAWNER_OK)
             {
-                vPos_spawner = vPos_gridlib;
+                vPos_spawner = newPos;
                 fail = false;
                 spawner_state = SPAWNER_OK;
-                if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
+                if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(newPos,check_dist,true,true,true,TEAM_INFECTED);
             }
         }
     }
@@ -328,7 +320,7 @@ int Analog_CanSpawnPos(float vPos[3],bool witch = false,bool hint = true,bool dr
         return spawner_state;
     }
     if (draw) update_ZM_spawner(vPos,vPos_spawner,SPAWNER_OK,draw);
-    //vPos = vPos_spawner; // in case dynamic adjustment was made
+    vPos = vPos_spawner; // in case dynamic adjustment was made
     return SPAWNER_OK;
 }
 
@@ -367,7 +359,7 @@ int SpawnerCellFilter(int cellIdx)
     if (obstructed)
         return GRIDLIB_FILTER_DISCARD;
     
-    if (!nav_can_spawn_zombies(false,navArea))
+    if (!nav_can_spawn_zombies(g_bSpawnerWitch,navArea))
     {
         if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d failed nav attrs", cellIdx);
         return GRIDLIB_FILTER_DISCARD_NAV;
@@ -385,22 +377,22 @@ int SpawnerCellFilter(int cellIdx)
         return GRIDLIB_FILTER_DISCARD;
     }
 
-    float travel = L4D2_NavAreaTravelDistance(cellPos, g_SpawnerFilterOrigin, false);
-    if (travel < 0.0 || travel > g_SpawnerFilterRadius)
-    {
-        if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d travel fail %.0f", cellIdx, travel);
-        return GRIDLIB_FILTER_DISCARD;
-    }
+    //float travel = L4D2_NavAreaTravelDistance(cellPos, g_SpawnerFilterOrigin, false);
+    //if (travel < 0.0 || travel > g_SpawnerFilterRadius)
+    //{
+    //    if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d travel fail %.0f", cellIdx, travel);
+    //    return GRIDLIB_FILTER_DISCARD;
+    //}
 
-    if (g_fSpawnMinDistance > 0.0)
-    {
-        float minDist = min_distance_to_survivors(cellPos, _, g_fSpawnMinDistance);
-        if (minDist >= 0.0 && minDist < g_fSpawnMinDistance)
-        {
-            if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d too close (%.0f)", cellIdx, minDist);
-            return GRIDLIB_FILTER_DISCARD;
-        }
-    }
+    //if (g_fSpawnMinDistance > 0.0)
+    //{
+    //    float minDist = min_distance_to_survivors(cellPos, _, g_fSpawnMinDistance);
+    //    if (minDist >= 0.0 && minDist < g_fSpawnMinDistance)
+    //    {
+    //        if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d too close (%.0f)", cellIdx, minDist);
+    //        return GRIDLIB_FILTER_DISCARD;
+    //    }
+    //}
 
     return GRIDLIB_FILTER_KEEP;
 }
@@ -416,7 +408,7 @@ int SpawnerCellFilter(int cellIdx)
  * @param radius    Search radius, defaults to g_fGridSearchRadius
  * @return          true if a valid cell was found, false otherwise
  */
-bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -1.0)
+bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -1.0, bool witch = false)
 {
     if (radius <= 0.0) radius = g_fGridSearchRadius;
     if (radius <= 0.0)
@@ -436,8 +428,9 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
     float t_start = GetEngineTime();
 
     // Set up filter context and batch PVS
-    g_SpawnerFilterOrigin = origin;
-    g_SpawnerFilterRadius = radius;
+    //g_SpawnerFilterOrigin = origin;
+    //g_SpawnerFilterRadius = radius;
+    g_bSpawnerWitch = witch;
     Spawner_BeginBatchPVS();
 
     float t_gridlib = GetEngineTime();
@@ -517,7 +510,6 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
  */
 int get_spawner_target_survivor(bool flow = false, int spawner_state = SPAWNER_DISTANCE)
 {
-    if (!zm_allow_spawns) return -1;
     int target_client = -1;
     if (flow) target_client = L4D_GetHighestFlowSurvivor();
     else

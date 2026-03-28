@@ -32,7 +32,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.036 2026-03-24"
+#define PLUGIN_VERSION 			"0.9.04 2026-03-27"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -201,7 +201,7 @@ public void OnPluginStart()
     g_hUpdateRate = CreateConVar("zm_updaterate", "0.25", "Update rate for periodic ZM checks, in seconds.",FCVAR_PROTECTED , true, 0.1, true, 10.0);
     g_hUpdateRate.AddChangeHook(ConVarChanged_Cvars);
     
-    g_hMaxCommons = CreateConVar("zm_maxcommons", "75", "ZM max number of common zombies. Be careful.",FCVAR_PROTECTED , true, 0.0, true, 1000.0);
+    g_hMaxCommons = CreateConVar("zm_maxcommons", "75", "ZM max number of common zombies. Be careful.",FCVAR_PROTECTED , true, 0.0, true, 500.0);
     g_hMaxCommons.AddChangeHook(ConVarChanged_Cvars_ZMenu);
     
     g_hSpawnMinDistance = CreateConVar("zm_spawndistance", "400", "ZM minimum spawn distance.",FCVAR_PROTECTED, true, 0.0, true, 10000.0);
@@ -213,8 +213,8 @@ public void OnPluginStart()
     g_hGridSearchRadius = CreateConVar("zm_grid_search_radius", "500", "Search radius (units) for GridLib fallback spawn when indicator is blue.",FCVAR_PROTECTED, true, 0.0, true, 5000.0);
     g_hGridSearchRadius.AddChangeHook(ConVarChanged_Cvars);
 
-    g_hSpawnerMode = CreateConVar("zm_spawner_mode", "0", "Spawner display mode. 0 = analog (ring indicator), 1 = grid (colored cells).",FCVAR_PROTECTED, true, 0.0, true, 1.0);
-    g_hSpawnerMode.AddChangeHook(ConVarChanged_Cvars);
+    g_hSpawnerMode = CreateConVar("zm_spawner_mode", "0", "Default spawner mode. 0 = analog(3 rings), 1 = analog+grid, 2 = grid.",FCVAR_PROTECTED, true, 0.0, true, 2.0);
+    g_hSpawnerMode.AddChangeHook(ConVarChanged_Cvars_ZMenu);
 
     g_hCostBoomer = CreateConVar("zm_cost_boomer", "150", "ZM boomer cost. -1 to prevent spawns.",FCVAR_PROTECTED, true, -1.0, true, 10000.0);
     g_hCostBoomer.AddChangeHook(ConVarChanged_Cvars_ZMenu);

@@ -630,7 +630,16 @@ void create_other_menu()
     }
     else AddMenuItem(menu_other, "0", "-");
     
-    Format(buffer, sizeof(buffer), "Display: %s", g_iSpawnerMode == 0 ? "Analog" : "Grid");
+    if (g_bGrid)
+    {
+        switch (g_iSpawnerMode)
+        {
+            case 1: Format(buffer, sizeof(buffer), "Spawner: Default+Grid");
+            case 2: Format(buffer, sizeof(buffer), "Spawner: Grid");
+            default: Format(buffer, sizeof(buffer), "Spawner: Default");
+        }
+    }
+    else buffer = "-";
     AddMenuItem(menu_other, "1", buffer);
 
     Format(buffer, sizeof(buffer), "%T", "Teleport", zm_language);
@@ -674,7 +683,13 @@ int other_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
             	case 1:
             	{
             	    // Toggle spawner display mode
-            	    int newMode = (g_iSpawnerMode + 1) % 2;
+            	    int newMode;
+            	    if (g_bGrid)
+            	    {
+                	    newMode = g_iSpawnerMode + 1;
+                	    if (newMode>2) newMode = 0;
+            	    }
+            	    else newMode = 0;
             	    Spawner_OnDisabled(zm_client);
             	    g_iSpawnerMode = newMode;
             	    Spawner_OnEnabled(zm_client);

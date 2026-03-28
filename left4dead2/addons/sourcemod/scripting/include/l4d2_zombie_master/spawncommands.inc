@@ -123,7 +123,6 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 {
 	if (!g_bCvarAllow) return;
 	if (!(client==zm_client || client==0)) return;
-	
 	if (DEBUG) LogMessage("[zm] ZM_Horde");
 	
 	if (hint && is_zm_spamming()) return;
@@ -214,8 +213,13 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 
 	// Resolve spawn positions via provider
 	static float resolvedPositions[1500]; // 500 * 3 flat
-	int posCount = Spawner_ResolveCommonPositions(count, flow, angry, hint, resolvedPositions, 500);
+	int posCount = Spawner_ResolveCommonPositions(count,flow,angry,hint,resolvedPositions,500);
 	if (posCount < count) count = posCount;
+	if (count<=0)
+	{
+    	if (zm_allow_spawns && g_iSpawnerMode>1 && hint) update_hint("%T", "Spawn failed", zm_client);
+    	return;
+    }
 
 	int spawned = 0;
 	float randomPos[3], angle[3];
@@ -354,7 +358,7 @@ void ZM_Witch(int client,int witch_type, bool free = false, bool flow = false)
 	float spawn_pos[3];
 	if (!Spawner_ResolveWitchPosition(flow, spawn_pos))
 	{
-	    update_hint("%T", "Spawn failed", zm_client);
+	    if (zm_allow_spawns && g_iSpawnerMode>1) update_hint("%T", "Spawn failed", zm_client);
 	    return;
 	}
 
@@ -693,10 +697,10 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
            	update_hint("%T", "Cooldown active", zm_client);
            	return -1;
         }
-
+        
         if (!Spawner_ResolveSpecialPosition(ZOMBIECLASS, flow, spawn_pos))
         {
-            update_hint("%T", "Spawn failed", zm_client);
+            if (zm_allow_spawns && g_iSpawnerMode>1) update_hint("%T", "Spawn failed", zm_client);
             return -1;
         }
     }

@@ -604,6 +604,7 @@ void GetCvars()
     g_fAbilityCooldown = g_hAbilityCooldown.FloatValue;
 
     g_iSpawnerMode = g_hSpawnerMode.IntValue;
+    if (!g_bGrid) g_iSpawnerMode = 0;
 }
 
 Action ZM_MOTD(int client, int args)
@@ -1266,7 +1267,7 @@ stock bool IsObstructed(float pos[3], int entity = -1, bool debug=false, bool ig
 		if (hitEntity == 0) // Hit world
 		{
 			int hullSurfaceFlags = TR_GetSurfaceFlags(hullTrace);
-			if (!(hullSurfaceFlags & 0x0080) && !(hullSurfaceFlags & 0x0100) && !(hullSurfaceFlags & 0x0200))
+			if (!(hullSurfaceFlags & SURF_NODRAW) && !(hullSurfaceFlags & SURF_HINT) && !(hullSurfaceFlags & SURF_SKIP))
         			isObstructed = true;
 		}
 		else if (IsValidEntity(hitEntity))
@@ -1281,6 +1282,7 @@ stock bool IsObstructed(float pos[3], int entity = -1, bool debug=false, bool ig
 		}
 	}
 	delete hullTrace;
+	//LogMessage("IsObstructed %d %d %.1f %.1f %.1f", isObstructed, entity, pos[0], pos[1], pos[2]);
 	return isObstructed;
 }
 
@@ -2309,6 +2311,7 @@ void QuitZM(int client, bool print = true)
            }
            DispatchKeyValue(zm_client, "targetname", "client");
        }
+       Spawner_OnDisabled(zm_client);
        remove_all_ZM_glows();
        zm_client = -1;
        zm_client_userid = -1;
