@@ -133,6 +133,14 @@ stock int GridRenderer_DrawCells(int client,
 	                                  overridePositions, hasOverride);
 }
 
+/**
+ * Hide all grid cells for a client
+ */
+stock void GridRenderer_HideAll(int client)
+{
+	GridRendererProp_HideAll(client);
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================

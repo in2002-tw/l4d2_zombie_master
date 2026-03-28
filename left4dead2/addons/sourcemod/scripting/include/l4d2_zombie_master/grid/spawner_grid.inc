@@ -106,6 +106,18 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         return Plugin_Stop;
     }
 
+    // Hide grid when menu is closed or flow survivor glow is active
+    if (zm_menu_state == ZM_MENU_CLOSED || g_bFlowSurvivorGlowActive)
+    {
+        if (g_GridCellCount > 0)
+        {
+            g_GridCellCount = 0;
+            g_GridHasValidCell = false;
+            GridRenderer_HideAll(client);
+        }
+        return Plugin_Continue;
+    }
+
     float t_start = GetEngineTime();
 
     // Get aim position
@@ -381,23 +393,42 @@ int Grid_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
 {
     // Flow spawns delegate to analog (grid is aim-based only)
     if (flow)
-        return Analog_ResolveCommonPositions(count, flow, angry, hint, outPositions, maxOut);
+    {
+        Grid_BeginSpawn();
+        g_bGridHint = hint;
+        g_bGridBatchMode = true;
+        int result = Analog_ResolveCommonPositions(count, flow, angry, hint, outPositions, maxOut);
+        g_bGridFlowUsed = g_bAnalogFlowUsed;
+        g_iGridTargetClient = g_iAnalogTargetClient;
+        return result;
+    }
 
     Grid_BeginSpawn();
     g_bGridHint = hint;
     g_bGridBatchMode = true;
 
     if (!g_GridHasValidCell)
-        return 0;
+    {
+        // No valid grid cells - fall back to analog resolver
+        int result = Analog_ResolveCommonPositions(count, false, angry, hint, outPositions, maxOut);
+        g_bGridFlowUsed = g_bAnalogFlowUsed;
+        g_iGridTargetClient = g_iAnalogTargetClient;
+        return result;
+    }
 
-    // Count valid cells - if fewer than requested, return 0 (no partial spawns)
+    // Count valid cells - if fewer than requested, fall back to analog
     int validCount = 0;
     for (int i = 0; i < g_GridCellCount; i++)
     {
         if (g_GridValidFlags[i]) validCount++;
     }
     if (validCount < count)
-        return 0;
+    {
+        int result = Analog_ResolveCommonPositions(count, false, angry, hint, outPositions, maxOut);
+        g_bGridFlowUsed = g_bAnalogFlowUsed;
+        g_iGridTargetClient = g_iAnalogTargetClient;
+        return result;
+    }
 
     // Return valid cell positions from last timer update
     int resolved = 0;
@@ -418,12 +449,25 @@ int Grid_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
 bool Grid_ResolveWitchPosition(bool flow, float outPos[3])
 {
     if (flow)
-        return Analog_ResolveWitchPosition(flow, outPos);
+    {
+        Grid_BeginSpawn();
+        g_bGridHint = true;
+        bool result = Analog_ResolveWitchPosition(flow, outPos);
+        g_bGridFlowUsed = g_bAnalogFlowUsed;
+        g_iGridTargetClient = g_iAnalogTargetClient;
+        return result;
+    }
 
     Grid_BeginSpawn();
     g_bGridHint = true;
 
-    if (!g_GridHasValidCell) return false;
+    if (!g_GridHasValidCell)
+    {
+        bool result = Analog_ResolveWitchPosition(false, outPos);
+        g_bGridFlowUsed = g_bAnalogFlowUsed;
+        g_iGridTargetClient = g_iAnalogTargetClient;
+        return result;
+    }
 
     outPos = g_GridClosestValidPos;
     return true;
@@ -432,12 +476,25 @@ bool Grid_ResolveWitchPosition(bool flow, float outPos[3])
 bool Grid_ResolveSpecialPosition(int zombieclass, bool flow, float outPos[3])
 {
     if (flow)
-        return Analog_ResolveSpecialPosition(zombieclass, flow, outPos);
+    {
+        Grid_BeginSpawn();
+        g_bGridHint = true;
+        bool result = Analog_ResolveSpecialPosition(zombieclass, flow, outPos);
+        g_bGridFlowUsed = g_bAnalogFlowUsed;
+        g_iGridTargetClient = g_iAnalogTargetClient;
+        return result;
+    }
 
     Grid_BeginSpawn();
     g_bGridHint = true;
 
-    if (!g_GridHasValidCell) return false;
+    if (!g_GridHasValidCell)
+    {
+        bool result = Analog_ResolveSpecialPosition(zombieclass, false, outPos);
+        g_bGridFlowUsed = g_bAnalogFlowUsed;
+        g_iGridTargetClient = g_iAnalogTargetClient;
+        return result;
+    }
 
     outPos = g_GridClosestValidPos;
     return true;

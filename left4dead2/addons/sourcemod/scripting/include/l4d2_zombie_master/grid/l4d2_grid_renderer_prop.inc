@@ -496,6 +496,21 @@ static void GridRendererProp_HideEntity(int client, int idx)
 	}
 }
 
+/**
+ * Hide all prop entities for a client
+ */
+void GridRendererProp_HideAll(int client)
+{
+	if (!g_PropPool[client].initialized) return;
+	int totalEnts = g_PropPool[client].totalAllocated;
+	for (int e = 0; e < totalEnts; e++)
+	{
+		g_PropPool[client].assignedCell[e] = -1;
+		GridRendererProp_HideEntity(client, e);
+	}
+	g_PropPool[client].activeCount = 0;
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
