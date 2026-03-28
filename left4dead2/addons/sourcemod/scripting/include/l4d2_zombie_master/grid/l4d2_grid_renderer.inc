@@ -105,18 +105,22 @@ stock void GridRenderer_SetAlphaFade(bool enabled)
 /**
  * Draw cells for a client using prop_dynamic entities
  *
- * @param client          Client to draw for
- * @param cellIndices     Array of cell indices from GridLib
- * @param cellValid       Array of validation results (true = valid spawn)
- * @param count           Number of cells (max GRIDRENDERER_MAX_CELLS)
- * @param closestValidIdx Index into cellIndices of closest valid cell, or -1
- * @return                Number of cells drawn
+ * @param client             Client to draw for
+ * @param cellIndices        Array of cell indices from GridLib
+ * @param cellValid          Array of validation results (true = valid spawn)
+ * @param count              Number of cells (max GRIDRENDERER_MAX_CELLS)
+ * @param closestValidIdx    Index into cellIndices of closest valid cell, or -1
+ * @param overridePositions  Per-cell position overrides (e.g. on top of physics props)
+ * @param hasOverride        Whether each cell has a position override
+ * @return                   Number of cells drawn
  */
 stock int GridRenderer_DrawCells(int client,
                                  const int cellIndices[GRIDRENDERER_MAX_CELLS],
                                  const bool cellValid[GRIDRENDERER_MAX_CELLS],
                                  int count,
-                                 int closestValidIdx)
+                                 int closestValidIdx,
+                                 const float overridePositions[GRIDRENDERER_MAX_CELLS][3],
+                                 const bool hasOverride[GRIDRENDERER_MAX_CELLS])
 {
 	if (count <= 0)
 		return 0;
@@ -125,7 +129,8 @@ stock int GridRenderer_DrawCells(int client,
 		count = GRIDRENDERER_MAX_CELLS;
 
 	return GridRendererProp_DrawCells(client, cellIndices, cellValid,
-	                                  count, closestValidIdx);
+	                                  count, closestValidIdx,
+	                                  overridePositions, hasOverride);
 }
 
 // ============================================================================

@@ -139,7 +139,9 @@ stock int GridRendererProp_DrawCells(int client,
                                      const int cellIndices[GRIDRENDERER_MAX_CELLS],
                                      const bool cellValid[GRIDRENDERER_MAX_CELLS],
                                      int count,
-                                     int closestValidIdx)
+                                     int closestValidIdx,
+                                     const float overridePositions[GRIDRENDERER_MAX_CELLS][3],
+                                     const bool hasOverride[GRIDRENDERER_MAX_CELLS])
 {
 	if (!g_PropPool[client].initialized || !g_PropModelPrecached)
 		return 0;
@@ -217,6 +219,14 @@ stock int GridRendererProp_DrawCells(int client,
 
 		if (GridLib_GetCellData(cellIndices[i], position, normal, navArea, obstructed))
 		{
+			// Apply physics prop position override
+			if (hasOverride[i])
+			{
+				position[0] = overridePositions[i][0];
+				position[1] = overridePositions[i][1];
+				position[2] = overridePositions[i][2];
+			}
+
 			int color[4];
 			bool isClosest = (i == closestValidIdx);
 			GridRenderer_ResolveColor(cellValid[i], isClosest, color);
@@ -230,7 +240,7 @@ stock int GridRendererProp_DrawCells(int client,
 		freeIdx++;
 	}
 
-	// --- Phase 3: Update kept entities (color only, no teleport) ---
+	// --- Phase 3: Update kept entities (color + teleport if override changed) ---
 	int drawn = 0;
 	for (int e = 0; e < totalEnts; e++)
 	{
@@ -244,7 +254,31 @@ stock int GridRendererProp_DrawCells(int client,
 		GridRenderer_ResolveColor(cellValid[dataIdx], isClosest, color);
 		color[3] = GridRendererProp_ComputeAlpha(dataIdx, count, isClosest);
 
-		GridRendererProp_UpdateEntityColor(client, e, color);
+		// If this cell has a physics prop override, teleport to the adjusted position
+		if (hasOverride[dataIdx])
+		{
+			float position[3], normal[3];
+			Address navArea;
+			bool obstructed;
+			if (GridLib_GetCellData(cellIndices[dataIdx], position, normal, navArea, obstructed))
+			{
+				position[0] = overridePositions[dataIdx][0];
+				position[1] = overridePositions[dataIdx][1];
+				position[2] = overridePositions[dataIdx][2];
+
+				float angles[3];
+				GridRendererProp_NormalToAngles(normal, angles);
+				GridRendererProp_UpdateEntity(client, e, position, angles, color);
+			}
+			else
+			{
+				GridRendererProp_UpdateEntityColor(client, e, color);
+			}
+		}
+		else
+		{
+			GridRendererProp_UpdateEntityColor(client, e, color);
+		}
 		drawn++;
 	}
 

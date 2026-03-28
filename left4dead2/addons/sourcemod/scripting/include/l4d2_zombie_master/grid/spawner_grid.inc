@@ -36,6 +36,10 @@ static int    g_GridCellCount;
 static float  g_GridClosestValidPos[3];
 static bool   g_GridHasValidCell;
 
+// Physics prop position overrides (runtime-adjusted positions on top of props)
+static float  g_GridOverridePositions[GRID_MAX_CELLS][3];
+static bool   g_GridHasOverride[GRID_MAX_CELLS];
+
 // ==========================================================================
 // Lifecycle
 // ==========================================================================
@@ -161,6 +165,10 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         cachedSurvCount++;
     }
 
+    // Reset physics prop position overrides
+    for (int i = 0; i < GRID_MAX_CELLS; i++)
+        g_GridHasOverride[i] = false;
+
     for (int i = 0; i < cellCount; i++)
     {
         float pos[3], normal[3];
@@ -178,12 +186,48 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
         // Shared validation: same checks as analog provider
         float t_check = GetEngineTime();
-        if (obstructed || IsObstructed(pos))
+        if (obstructed)
         {
             ms_obstruct += (GetEngineTime() - t_check) * 1000.0;
             cellValid[i] = false;
             nObstructed++;
             continue;
+        }
+        if (IsObstructed(pos))
+        {
+            // If obstructed by a physics prop, try spawning on top of it
+            int hitProp = -1;
+            if (IsObstructedByPhysicsProp(pos, hitProp))
+            {
+                float topZ = GetPhysicsPropTopZ(hitProp, pos);
+                float adjustedPos[3];
+                adjustedPos[0] = pos[0];
+                adjustedPos[1] = pos[1];
+                adjustedPos[2] = topZ + 1.0;
+
+                if (!IsObstructed(adjustedPos))
+                {
+                    // Use adjusted position for this cell
+                    pos = adjustedPos;
+                    g_GridValidPositions[i] = adjustedPos;
+                    g_GridOverridePositions[i] = adjustedPos;
+                    g_GridHasOverride[i] = true;
+                }
+                else
+                {
+                    ms_obstruct += (GetEngineTime() - t_check) * 1000.0;
+                    cellValid[i] = false;
+                    nObstructed++;
+                    continue;
+                }
+            }
+            else
+            {
+                ms_obstruct += (GetEngineTime() - t_check) * 1000.0;
+                cellValid[i] = false;
+                nObstructed++;
+                continue;
+            }
         }
         ms_obstruct += (GetEngineTime() - t_check) * 1000.0;
 
@@ -297,7 +341,8 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
     // Render via GridRenderer
     float t_render = GetEngineTime();
-    GridRenderer_DrawCells(client, g_GridCellIndices, cellValid, cellCount, closestValidIdx);
+    GridRenderer_DrawCells(client, g_GridCellIndices, cellValid, cellCount, closestValidIdx,
+                           g_GridOverridePositions, g_GridHasOverride);
     float ms_render = (GetEngineTime() - t_render) * 1000.0;
 
     float elapsed_ms = (GetEngineTime() - t_start) * 1000.0;

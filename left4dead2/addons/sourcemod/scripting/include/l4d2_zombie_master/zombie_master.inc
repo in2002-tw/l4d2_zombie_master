@@ -1286,6 +1286,69 @@ stock bool IsObstructed(float pos[3], int entity = -1, bool debug=false, bool ig
 	return isObstructed;
 }
 
+// Check if a position is obstructed specifically by a physics prop.
+// If so, returns true and sets hitPropRef to the entity index.
+stock bool IsObstructedByPhysicsProp(float pos[3], int &hitPropRef = -1)
+{
+    Handle hullTrace = TR_TraceHullFilterEx(pos, pos, HULL_MINS, HULL_MAXS,
+                                            MASK_NPCSOLID, TraceFilter_Spawner, -1);
+    bool result = false;
+    if (TR_DidHit(hullTrace))
+    {
+        int hitEntity = TR_GetEntityIndex(hullTrace);
+        if (hitEntity > MaxClients && IsValidEntity(hitEntity))
+        {
+            static char className[32];
+            GetEntityClassname(hitEntity, className, sizeof(className));
+            if (strncmp(className, "prop_physics", 12) == 0 ||
+                StrEqual(className, "prop_car_alarm"))
+            {
+                hitPropRef = hitEntity;
+                result = true;
+            }
+        }
+    }
+    delete hullTrace;
+    return result;
+}
+
+// Trace filter that only hits a specific entity
+static int g_TraceFilter_TargetEntity = -1;
+
+bool TraceFilter_OnlyTargetEntity(int entity, int contentsMask)
+{
+    return (entity == g_TraceFilter_TargetEntity);
+}
+
+// Find the top Z coordinate of a physics prop at a given XY position.
+// Traces downward from above to find the prop's top surface.
+stock float GetPhysicsPropTopZ(int entity, const float pos[3])
+{
+    float startPos[3], endPos[3];
+    startPos[0] = pos[0];
+    startPos[1] = pos[1];
+    startPos[2] = pos[2] + 200.0;
+    endPos[0] = pos[0];
+    endPos[1] = pos[1];
+    endPos[2] = pos[2] - 50.0;
+
+    g_TraceFilter_TargetEntity = entity;
+    Handle trace = TR_TraceRayFilterEx(startPos, endPos, MASK_NPCSOLID,
+                                       RayType_EndPoint, TraceFilter_OnlyTargetEntity);
+
+    float topZ = pos[2];
+    if (TR_DidHit(trace))
+    {
+        float hitPos[3];
+        TR_GetEndPosition(hitPos, trace);
+        topZ = hitPos[2];
+    }
+
+    delete trace;
+    g_TraceFilter_TargetEntity = -1;
+    return topZ;
+}
+
 // for known obstructed pos, try adjusting position slightly
 // optional: navArea and center for try_center, try_random
 // optional: zClass to determine if ignore_zombies is used for relaxed obstruction checks
@@ -2116,9 +2179,47 @@ void set_specials_frozen(bool state)
 }
 
 Action zm_debug_player(int client, int args)
-{   
+{
     DumpPlayerState(client,client);
     return Plugin_Continue;
+}
+
+Action zm_entinfo(int client, int args)
+{
+    if (args < 1)
+    {
+        ReplyToCommand(client, "[zm] Usage: zm_entinfo <entity index>");
+        return Plugin_Handled;
+    }
+    char arg[8];
+    GetCmdArg(1, arg, sizeof(arg));
+    int ent = StringToInt(arg);
+    if (!IsValidEntity(ent))
+    {
+        ReplyToCommand(client, "[zm] Entity %d is not valid.", ent);
+        return Plugin_Handled;
+    }
+    char classname[64], netclass[64], model[PLATFORM_MAX_PATH];
+    GetEntityClassname(ent, classname, sizeof(classname));
+    GetEntityNetClass(ent, netclass, sizeof(netclass));
+    if (HasEntProp(ent, Prop_Data, "m_ModelName"))
+        GetEntPropString(ent, Prop_Data, "m_ModelName", model, sizeof(model));
+    int health = HasEntProp(ent, Prop_Send, "m_iHealth") ? GetEntProp(ent, Prop_Send, "m_iHealth") : -1;
+    int team = HasEntProp(ent, Prop_Send, "m_iTeamNum") ? GetEntProp(ent, Prop_Send, "m_iTeamNum") : -1;
+    float origin[3];
+    char pos[64];
+    if (HasEntProp(ent, Prop_Send, "m_vecOrigin"))
+    {
+        GetEntPropVector(ent, Prop_Send, "m_vecOrigin", origin);
+        FormatEx(pos, sizeof(pos), "(%.0f, %.0f, %.0f)", origin[0], origin[1], origin[2]);
+    }
+    else
+    {
+        pos = "n/a";
+    }
+    ReplyToCommand(client, "[zm] Entity %d: class=%s netclass=%s model=%s hp=%d team=%d pos=%s",
+        ent, classname, netclass, model, health, team, pos);
+    return Plugin_Handled;
 }
 
 void zm_fake_gamemode()

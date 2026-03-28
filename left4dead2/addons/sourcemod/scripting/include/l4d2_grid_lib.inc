@@ -1171,7 +1171,7 @@ static void GridLib_FindGroundZ(float cellPos[3],
 		trBandEnd[2]   = zTop - float(band + 1) * bandHeight;
 
 		Handle trace = TR_TraceRayFilterEx(trBandStart, trBandEnd, MASK_NPCSOLID,
-		                                   RayType_EndPoint, GridLib_TraceFilter_NoPlayers);
+		                                   RayType_EndPoint, GridLib_TraceFilter_NoPlayersNoPhysicsProps);
 
 		if (TR_DidHit(trace) && !TR_StartSolid(trace))
 		{
@@ -1433,11 +1433,13 @@ static bool GridLib_IsObstructed(const float pos[3])
 		}
 		else
 		{
-			// Skip env_physics_blocker entirely — its blocktype is toggleable
-			// at runtime, so it must be checked at spawn time, not precomputation
+			// Skip env_physics_blocker (blocktype toggleable at runtime)
+			// and physics props (movable at runtime, handled by spawn-time adjustment)
 			char className[32];
 			GetEntityClassname(hitEntity, className, sizeof(className));
-			if (!StrEqual(className, "env_physics_blocker"))
+			if (!StrEqual(className, "env_physics_blocker") &&
+			    strncmp(className, "prop_physics", 12) != 0 &&
+			    !StrEqual(className, "prop_car_alarm"))
 				isBlocked = true;
 		}
 	}
@@ -1458,4 +1460,15 @@ public bool GridLib_TraceFilter_World(int entity, int contentsMask)
 public bool GridLib_TraceFilter_NoPlayers(int entity, int contentsMask)
 {
 	return (entity > MaxClients || entity == 0);
+}
+
+public bool GridLib_TraceFilter_NoPlayersNoPhysicsProps(int entity, int contentsMask)
+{
+	if (entity == 0) return true;
+	if (entity <= MaxClients) return false;
+	static char className[32];
+	GetEntityClassname(entity, className, sizeof(className));
+	if (strncmp(className, "prop_physics", 12) == 0) return false;
+	if (StrEqual(className, "prop_car_alarm")) return false;
+	return true;
 }
