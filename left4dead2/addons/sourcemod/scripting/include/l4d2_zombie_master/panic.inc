@@ -79,7 +79,7 @@ void toggle_panic(bool state = true, bool overwrite = false, bool free = false)
        if (zm_stage==ZM_STARTED && !panic && IsValidClientZM() && !ZM_finale_announced)
            EmitSoundToClient(zm_client,SOUND_PANIC_ON,_,_,_,_,_,GetRandomInt(90,110));
        panic = true;
-       if (g_bPanicRefill) available_zombie_arr[ZOMBIECLASS_COMMON]=max_zombie_arr[ZOMBIECLASS_COMMON];
+       if (!manual_panic || g_bPanicRefill) available_zombie_arr[ZOMBIECLASS_COMMON]=max_zombie_arr[ZOMBIECLASS_COMMON];
        float t_now = GetEngineTime()
        if (strcmp(g_sCvarMPGameMode,"zm_clowns",false)==0 && clown_world_enable && (t_now-t_last_panic)>=30.0) ServerCommand("clown_world_randomize");
        t_last_panic = t_now;
