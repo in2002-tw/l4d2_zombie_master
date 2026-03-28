@@ -182,7 +182,7 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
 	// vPos_spawner: final spawner position (output). later we decide where to draw the spawner depending on its state.
 	float vPos_spawner[3];
 	vPos_spawner = vPos;
-    float check_dist = (zClass=ZOMBIECLASS_WITCH) ? 50.0 : 500.0;
+    float check_dist = (zClass==ZOMBIECLASS_WITCH) ? 50.0 : 500.0;
     float min_distance;
     latest_distance = -1.0;
     
