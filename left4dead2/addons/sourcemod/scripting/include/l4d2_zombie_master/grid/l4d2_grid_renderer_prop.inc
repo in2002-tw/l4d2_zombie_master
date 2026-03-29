@@ -515,6 +515,9 @@ static void GridRendererProp_HideEntity(int client, int idx)
 		// Set EF_NODRAW, keep EF_NOSHADOW + EF_NOINTERP
 		int effects = GetEntProp(ent, Prop_Send, "m_fEffects");
 		SetEntProp(ent, Prop_Send, "m_fEffects", effects | EF_NODRAW | EF_NOSHADOW | EF_NOINTERP);
+
+		SetEntProp(ent, Prop_Send, "m_glowColorOverride", 0);
+		AcceptEntityInput(ent, "StopGlowing");
 	}
 }
 

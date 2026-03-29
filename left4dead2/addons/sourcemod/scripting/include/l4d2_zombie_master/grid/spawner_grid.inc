@@ -350,6 +350,8 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
     if (cellCount == 0)
     {
+        if (g_GridCellCount > 0)
+            GridRenderer_HideAll(client);
         g_GridCellCount = 0;
         g_GridHasValidCell = false;
         zm_spawner_state = SPAWNER_INVALID;
