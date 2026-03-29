@@ -631,8 +631,13 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 	if (cap > 500)
 		cap = 500;
 
-	// BFS over nav areas to collect cells
-	float candidates[500][2]; // [distance, cellIndex]
+	// Collect unfiltered target: over-collect to account for filter rejection
+	int unfilteredTarget = cap * 5;
+	if (unfilteredTarget > 500)
+		unfilteredTarget = 500;
+
+	// BFS over nav areas to collect candidate cells (cheap checks only)
+	float candidates[500][3]; // [distance, cellIndex, navArea]
 	int candidateCount = 0;
 
 	StringMap visited = new StringMap();
@@ -640,17 +645,7 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 	ArrayList adjAreas = new ArrayList();
 	char navKey[20];
 
-	// Nav area blacklist for filter DISCARD_NAV results
-	static StringMap blacklistedNavAreas = null;
-	if (filter != INVALID_FUNCTION)
-	{
-		if (blacklistedNavAreas == null)
-			blacklistedNavAreas = new StringMap();
-		else
-			blacklistedNavAreas.Clear();
-	}
-
-	float filterT0 = GetEngineTime();
+	float collectT0 = GetEngineTime();
 
 	// Seed BFS with starting nav area
 	FormatEx(navKey, sizeof(navKey), "%x", startNavArea);
@@ -658,18 +653,17 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 	queue.Push(startNavArea);
 
 	int queueIdx = 0;
-	int stopAfter = -1; // queue length snapshot when cap was reached
-	bool filterAbort = false;
-	while (queueIdx < queue.Length && candidateCount < 500 && !filterAbort)
+	int stopAfter = -1; // queue length snapshot when target was reached
+	while (queueIdx < queue.Length && candidateCount < 500)
 	{
-		// Stop after processing one extra BFS ring beyond the cap
+		// Stop after processing one extra BFS ring beyond the unfiltered target
 		if (stopAfter >= 0 && queueIdx >= stopAfter)
 			break;
 
 		Address currentArea = queue.Get(queueIdx);
 		queueIdx++;
 
-		// Collect cells from this nav area
+		// Collect cells from this nav area (cheap checks only, no filter)
 		int areaCells[500];
 		int areaCellCount = GridLib_GetCellsForNavArea(currentArea, areaCells, 500);
 		GridLibLog("[GridLib] FindCellsFromClosest: BFS[%d] navArea=%x cells=%d total=%d",
@@ -677,7 +671,6 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 
 		for (int i = 0; i < areaCellCount && candidateCount < 500; i++)
 		{
-			// Skip obstructed cells
 			GridCell cell;
 			g_GridCells.GetArray(areaCells[i], cell, sizeof(GridCell));
 			if (cell.isObstructed)
@@ -691,40 +684,10 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 					continue;
 			}
 
-			// Apply filter callback
-			if (filter != INVALID_FUNCTION)
-			{
-				// Check nav area blacklist first (O(1) lookup)
-				if (cell.navArea != Address_Null)
-				{
-					FormatEx(navKey, sizeof(navKey), "%x", cell.navArea);
-					int dummy;
-					if (blacklistedNavAreas.GetValue(navKey, dummy))
-						continue;
-				}
-
-				int filterResult = GridLib_CallFilter(filter, areaCells[i]);
-				if (filterResult == GRIDLIB_FILTER_DISCARD_ALL)
-				{
-					filterAbort = true;
-					break;
-				}
-				if (filterResult == GRIDLIB_FILTER_DISCARD_NAV)
-				{
-					if (cell.navArea != Address_Null)
-					{
-						FormatEx(navKey, sizeof(navKey), "%x", cell.navArea);
-						blacklistedNavAreas.SetValue(navKey, 1);
-					}
-					continue;
-				}
-				if (filterResult != GRIDLIB_FILTER_KEEP)
-					continue;
-			}
-
 			float dist = GetVectorDistance(position, cell.position);
 			candidates[candidateCount][0] = dist;
 			candidates[candidateCount][1] = float(areaCells[i]);
+			candidates[candidateCount][2] = float(view_as<int>(cell.navArea));
 			candidateCount++;
 		}
 
@@ -748,27 +711,22 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 			}
 		}
 
-		// Once we hit the desired count, snapshot the queue length
+		// Once we hit the unfiltered target, snapshot the queue length
 		// so we process one more full ring of adjacent areas
-		if (stopAfter < 0 && candidateCount >= cap)
+		if (stopAfter < 0 && candidateCount >= unfilteredTarget)
 			stopAfter = queue.Length;
 	}
 
-	float filterMs = (filter != INVALID_FUNCTION) ? (GetEngineTime() - filterT0) * 1000.0 : 0.0;
-	GridLibLog("[GridLib] FindCellsFromClosest: BFS done. navAreas=%d candidates=%d cap=%d stopAfter=%d filter=%.2fms",
-		queueIdx, candidateCount, cap, stopAfter, filterMs);
-	if (filterMs > 5.0)
-		LogMessage("[GridLib] WARNING: FindCellsFromClosest filter took %.1f ms (navAreas=%d, candidates=%d)",
-			filterMs, queueIdx, candidateCount);
+	float collectMs = (GetEngineTime() - collectT0) * 1000.0;
+	GridLibLog("[GridLib] FindCellsFromClosest: BFS done. navAreas=%d candidates=%d target=%d stopAfter=%d collect=%.2fms",
+		queueIdx, candidateCount, unfilteredTarget, stopAfter, collectMs);
 
 	delete visited;
 	delete queue;
 	delete adjAreas;
 
-	// Sort by distance (selection sort)
-	int numToSelect = (candidateCount < cap) ? candidateCount : cap;
-
-	for (int i = 0; i < numToSelect; i++)
+	// Sort all candidates by distance (selection sort)
+	for (int i = 0; i < candidateCount - 1; i++)
 	{
 		int minIdx = i;
 		for (int j = i + 1; j < candidateCount; j++)
@@ -779,21 +737,79 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 
 		if (minIdx != i)
 		{
-			float temp[2];
+			float temp[3];
 			temp = candidates[i];
 			candidates[i] = candidates[minIdx];
 			candidates[minIdx] = temp;
 		}
-
-		results[i] = RoundToFloor(candidates[i][1]);
 	}
 
-	GridLibLog("[GridLib] FindCellsFromClosest: returning %d cells (closest dist=%.0f, farthest dist=%.0f)",
-		numToSelect,
-		numToSelect > 0 ? candidates[0][0] : 0.0,
-		numToSelect > 0 ? candidates[numToSelect - 1][0] : 0.0);
+	// Filter closest-first (expensive filter calls minimized)
+	float filterT0 = GetEngineTime();
+	int resultCount = 0;
+	int filterCalls = 0;
+	bool filterAbort = false;
 
-	return numToSelect;
+	// Nav area blacklist for filter DISCARD_NAV results
+	static StringMap blacklistedNavAreas = null;
+	if (filter != INVALID_FUNCTION)
+	{
+		if (blacklistedNavAreas == null)
+			blacklistedNavAreas = new StringMap();
+		else
+			blacklistedNavAreas.Clear();
+	}
+
+	for (int i = 0; i < candidateCount && resultCount < cap && !filterAbort; i++)
+	{
+		int cellIdx = RoundToFloor(candidates[i][1]);
+
+		if (filter != INVALID_FUNCTION)
+		{
+			// Check nav area blacklist first (O(1) lookup)
+			Address navArea = view_as<Address>(RoundToFloor(candidates[i][2]));
+			if (navArea != Address_Null)
+			{
+				FormatEx(navKey, sizeof(navKey), "%x", navArea);
+				int dummy;
+				if (blacklistedNavAreas.GetValue(navKey, dummy))
+					continue;
+			}
+
+			filterCalls++;
+			int filterResult = GridLib_CallFilter(filter, cellIdx);
+			if (filterResult == GRIDLIB_FILTER_DISCARD_ALL)
+			{
+				filterAbort = true;
+				break;
+			}
+			if (filterResult == GRIDLIB_FILTER_DISCARD_NAV)
+			{
+				if (navArea != Address_Null)
+				{
+					FormatEx(navKey, sizeof(navKey), "%x", navArea);
+					blacklistedNavAreas.SetValue(navKey, 1);
+				}
+				continue;
+			}
+			if (filterResult != GRIDLIB_FILTER_KEEP)
+				continue;
+		}
+
+		results[resultCount] = cellIdx;
+		resultCount++;
+	}
+
+	float filterMs = (filter != INVALID_FUNCTION) ? (GetEngineTime() - filterT0) * 1000.0 : 0.0;
+	GridLibLog("[GridLib] FindCellsFromClosest: returning %d cells, filterCalls=%d/%d collect=%.2fms filter=%.2fms (closest dist=%.0f, farthest dist=%.0f)",
+		resultCount, filterCalls, candidateCount, collectMs, filterMs,
+		resultCount > 0 ? candidates[0][0] : 0.0,
+		resultCount > 0 ? candidates[resultCount - 1][0] : 0.0);
+	if (filterMs > 5.0)
+		LogMessage("[GridLib] WARNING: FindCellsFromClosest filter took %.1f ms (filterCalls=%d, candidates=%d)",
+			filterMs, filterCalls, candidateCount);
+
+	return resultCount;
 }
 
 /**
