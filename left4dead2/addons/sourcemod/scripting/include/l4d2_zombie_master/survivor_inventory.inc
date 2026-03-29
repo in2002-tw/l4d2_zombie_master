@@ -38,9 +38,9 @@ Action zm_test_inventory(int client, int args)
 {
     int client2 = GetRandomSurvivor(1,1);
     if(!IsValidClient(client2) || !IsPlayerAlive(client2) || GetClientTeam(client2)!=TEAM_SURVIVOR) return Plugin_Continue;
-    //SpawnSpriteAbovePlayer(client2,0);
+    SpawnSpriteAbovePlayer(client2,0);
     SpawnSpriteAbovePlayer(client2,1);
-    //SpawnSpriteAbovePlayer(client2,2);
+    SpawnSpriteAbovePlayer(client2,2);
     return Plugin_Continue;
 }
 
@@ -75,40 +75,40 @@ stock int SpawnSpriteAbovePlayer(int client,int slot)
 	if (entref_old!=0 && IsValidEntRef(entref_old)) RemoveEntity(entref_old);
 	entref_sprites[client][slot] = INVALID_ENT_REFERENCE;
 	int iEnt = CreateEntityByName("env_sprite");
-	if(iEnt == -1) return -1;
+	if (!IsEntitySafe(iEnt)) return -1;
 	float fOrigin[3];
 	GetClientEyePosition(client, fOrigin);
-	fOrigin[2] += 30.0;
+	fOrigin[2] += 10.0;
 	switch (slot)
 	{
     	case 0:
     	{
         	SetEntityModel(iEnt, DECAL_MOLOTOV);
-        	//fOrigin[0] -= 20.0;
+        	fOrigin[0] -= 10.0;
     	}
     	case 1:
     	{
         	SetEntityModel(iEnt, DECAL_MEDKIT);
-        	//fOrigin[0] -= 10.0;
     	}
     	case 2:
     	{
         	SetEntityModel(iEnt, DECAL_PILLS);
+        	fOrigin[0] += 10.0;
     	}
 	}
-	DispatchKeyValue(iEnt, "GlowProxySize", "1");
+	//DispatchKeyValue(iEnt, "GlowProxySize", "1");
 	DispatchKeyValue(iEnt, "rendercolor", "255 255 255");
-	DispatchKeyValue(iEnt, "renderamt", "200");
-	//DispatchKeyValue(iEnt, "rendermode", "0");
-	DispatchKeyValue(iEnt, "rendermode", "10"); // Glow
-	DispatchKeyValue(iEnt, "renderfx", "0");
-	DispatchKeyValueFloat(iEnt, "framerate", 15.0);
-	DispatchKeyValueFloat(iEnt, "scale", 1.0);
-	SetEntPropVector(iEnt, Prop_Send, "m_vecMins", {-50.0, -50.0, 0.0});
-	SetEntPropVector(iEnt, Prop_Send, "m_vecMaxs", {-50.0, -50.0, 0.0});
-	SetEntProp(iEnt, Prop_Send, "m_nSolidType", 2);
-	int iEffects = GetEntProp(iEnt, Prop_Send, "m_fEffects");
-	SetEntProp(iEnt,Prop_Send,"m_fEffects", (iEffects | 32));
+	DispatchKeyValue(iEnt, "renderamt", "255");
+	DispatchKeyValue(iEnt, "rendermode", "5");
+	//DispatchKeyValue(iEnt, "rendermode", "9"); // Glow
+	//DispatchKeyValue(iEnt, "renderfx", "0");
+	//DispatchKeyValueFloat(iEnt, "framerate", 15.0);
+	DispatchKeyValueFloat(iEnt, "scale", 0.000001);
+	//SetEntPropVector(iEnt, Prop_Send, "m_vecMins", {-50.0, -50.0, 0.0});
+	//SetEntPropVector(iEnt, Prop_Send, "m_vecMaxs", {50.0, 50.0, 0.0});
+	//SetEntProp(iEnt, Prop_Send, "m_nSolidType", 2);
+	//int iEffects = GetEntProp(iEnt, Prop_Send, "m_fEffects");
+	//SetEntProp(iEnt,Prop_Send,"m_fEffects", (iEffects | 32));
 	DispatchSpawn(iEnt);
 	ActivateEntity(iEnt);
 	SDKHook(iEnt, SDKHook_SetTransmit, OnTransmitZM_Inventory);
