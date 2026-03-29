@@ -40,6 +40,25 @@ static bool   g_GridHasValidCell;
 static float  g_GridOverridePositions[GRID_MAX_CELLS][3];
 static bool   g_GridHasOverride[GRID_MAX_CELLS];
 
+// Validation context - set before the cell loop, read by helpers
+static float   g_GridCachedSurvPos[MAXPLAYERS+1][3];
+static float   g_GridCachedSurvFlow[MAXPLAYERS+1];
+static int     g_GridCachedSurvCount;
+static float   g_GridEffectiveMinDist;
+static Address g_GridCachedSurvNavArea[MAXPLAYERS+1];
+static bool    g_GridSurvNavAreaComputed[MAXPLAYERS+1];
+
+// Per-update timing accumulators (reset each tick, read by perf log)
+static float  g_GridMs_obstruct;
+static float  g_GridMs_nav;
+static float  g_GridMs_los;
+static float  g_GridMs_dist;
+static int    g_GridN_obstructed;
+static int    g_GridN_nav;
+static int    g_GridN_los;
+static int    g_GridN_dist;
+static int    g_GridN_valid;
+
 // ==========================================================================
 // Lifecycle
 // ==========================================================================
@@ -96,6 +115,185 @@ void Grid_OnDisabled(int client)
 }
 
 // ==========================================================================
+// Validation helpers
+// ==========================================================================
+
+static void Grid_CacheSurvivorData()
+{
+    g_GridCachedSurvCount = 0;
+    g_GridEffectiveMinDist = g_fSpawnMinDistance;
+    if (zm_stage < ZM_STARTED) g_GridEffectiveMinDist *= 2.0;
+    for (int s = 1; s <= MaxClients; s++)
+    {
+        if (!IsClientInGame(s) || !IsPlayerAlive(s) || GetClientTeam(s) != TEAM_SURVIVOR) continue;
+        GetClientAbsOrigin(s, g_GridCachedSurvPos[g_GridCachedSurvCount]);
+        g_GridCachedSurvFlow[g_GridCachedSurvCount] = L4D2Direct_GetFlowDistance(s);
+        g_GridCachedSurvCount++;
+    }
+    for (int i = 0; i < g_GridCachedSurvCount; i++)
+        g_GridSurvNavAreaComputed[i] = false;
+}
+
+static Address Grid_GetSurvivorNavArea(int survIdx)
+{
+    if (!g_GridSurvNavAreaComputed[survIdx])
+    {
+        g_GridCachedSurvNavArea[survIdx] = L4D_GetNearestNavArea(
+            g_GridCachedSurvPos[survIdx], 300.0, false, false, true, TEAM_SURVIVOR);
+        g_GridSurvNavAreaComputed[survIdx] = true;
+    }
+    return g_GridCachedSurvNavArea[survIdx];
+}
+
+static bool Grid_TryPhysPropRescue(int idx, float pos[3])
+{
+    int hitProp = -1;
+    if (!IsObstructedByPhysicsProp(pos, hitProp))
+        return false;
+
+    float topZ = GetPhysicsPropTopZ(hitProp, pos);
+    float adjustedPos[3];
+    adjustedPos[0] = pos[0];
+    adjustedPos[1] = pos[1];
+    adjustedPos[2] = topZ + 1.0;
+
+    if (IsObstructed(adjustedPos))
+        return false;
+
+    pos[0] = adjustedPos[0];
+    pos[1] = adjustedPos[1];
+    pos[2] = adjustedPos[2];
+    g_GridValidPositions[idx] = adjustedPos;
+    g_GridOverridePositions[idx] = adjustedPos;
+    g_GridHasOverride[idx] = true;
+    return true;
+}
+
+static bool Grid_CheckObstruction(int idx, float pos[3], bool obstructed)
+{
+    float t = GetEngineTime();
+
+    if (obstructed)
+    {
+        g_GridMs_obstruct += (GetEngineTime() - t) * 1000.0;
+        g_GridN_obstructed++;
+        return false;
+    }
+
+    if (IsObstructed(pos))
+    {
+        if (!Grid_TryPhysPropRescue(idx, pos))
+        {
+            g_GridMs_obstruct += (GetEngineTime() - t) * 1000.0;
+            g_GridN_obstructed++;
+            return false;
+        }
+    }
+
+    g_GridMs_obstruct += (GetEngineTime() - t) * 1000.0;
+    return true;
+}
+
+static bool Grid_CheckDistance(float pos[3], Address navArea)
+{
+    float t = GetEngineTime();
+
+    if (g_GridEffectiveMinDist <= 0.0 || g_GridCachedSurvCount == 0)
+    {
+        g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
+        return true;
+    }
+
+    float cellFlow = L4D_GetFlowFromPoint(pos);
+    bool tooClose = false;
+    int closestSurvByVec = -1;
+    float closestVecDist = 999999.0;
+
+    for (int s = 0; s < g_GridCachedSurvCount; s++)
+    {
+        // Tier 1: flow distance
+        float flowDiff = FloatAbs(cellFlow - g_GridCachedSurvFlow[s]);
+        if (cellFlow > 0.0 && g_GridCachedSurvFlow[s] > 0.0
+            && flowDiff >= g_GridEffectiveMinDist)
+            continue;
+
+        // Tier 2: vector distance
+        float vecDist = GetVectorDistance(pos, g_GridCachedSurvPos[s]);
+        if (vecDist >= g_GridEffectiveMinDist)
+            continue;
+
+        // Both too close - track closest survivor for potential NavMesh rescue
+        tooClose = true;
+        if (vecDist < closestVecDist)
+        {
+            closestVecDist = vecDist;
+            closestSurvByVec = s;
+        }
+    }
+
+    // Tier 3: bounded NavMesh path check for closest survivor only
+    if (tooClose && closestSurvByVec >= 0)
+    {
+        Address survNav = Grid_GetSurvivorNavArea(closestSurvByVec);
+        if (survNav != Address_Null && navArea != Address_Null
+            && !L4D2_NavAreaBuildPath(navArea, survNav, g_GridEffectiveMinDist, TEAM_INFECTED, false))
+            tooClose = false;
+    }
+
+    // Last saferoom distance check
+    if (!tooClose)
+    {
+        float distLast = distance_last_saferoom(pos);
+        if (distLast > 0.0 && distLast <= DISTANCE_LAST_SAFEROOM)
+            tooClose = true;
+    }
+
+    if (tooClose)
+    {
+        g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
+        g_GridN_dist++;
+        return false;
+    }
+
+    g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
+    return true;
+}
+
+static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstructed)
+{
+    // 1. Obstruction (includes physics prop rescue)
+    if (!Grid_CheckObstruction(idx, pos, obstructed))
+        return false;
+
+    // 2. Nav area attributes
+    float t = GetEngineTime();
+    if (!nav_can_spawn_zombies(false, navArea))
+    {
+        g_GridMs_nav += (GetEngineTime() - t) * 1000.0;
+        g_GridN_nav++;
+        return false;
+    }
+    g_GridMs_nav += (GetEngineTime() - t) * 1000.0;
+
+    // 3. Survivor line of sight
+    t = GetEngineTime();
+    if (can_any_alive_survivor_see_cheap(pos))
+    {
+        g_GridMs_los += (GetEngineTime() - t) * 1000.0;
+        g_GridN_los++;
+        return false;
+    }
+    g_GridMs_los += (GetEngineTime() - t) * 1000.0;
+
+    // 4. Distance to survivors + last saferoom
+    if (!Grid_CheckDistance(pos, navArea))
+        return false;
+
+    g_GridN_valid++;
+    return true;
+}
+
+// ==========================================================================
 // Visual update (own timer)
 // ==========================================================================
 
@@ -125,7 +323,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
     float t_start = GetEngineTime();
 
-    // Get aim position
+    // Aim trace
     float eyePos[3], eyeAngles[3];
     GetClientEyePosition(client, eyePos);
     GetClientEyeAngles(client, eyeAngles);
@@ -158,34 +356,30 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         return Plugin_Continue;
     }
 
-    // Validate each cell using shared ZM validation functions
+    // Prepare validation context
     float t_validate = GetEngineTime();
     Spawner_BeginBatchPVS();
+    Grid_CacheSurvivorData();
+
+    g_GridMs_obstruct = 0.0;
+    g_GridMs_nav = 0.0;
+    g_GridMs_los = 0.0;
+    g_GridMs_dist = 0.0;
+    g_GridN_obstructed = 0;
+    g_GridN_nav = 0;
+    g_GridN_los = 0;
+    g_GridN_dist = 0;
+    g_GridN_valid = 0;
 
     bool cellValid[GRID_MAX_CELLS];
     int closestValidIdx = -1;
     float closestDist = 999999.0;
-    int nObstructed = 0, nNav = 0, nLOS = 0, nDist = 0, nValid = 0;
-    float ms_obstruct = 0.0, ms_nav = 0.0, ms_los = 0.0, ms_dist = 0.0;
+    Address closestNavArea;
 
-    // Pre-compute survivor positions + flow once for distance checks
-    float cachedSurvPos[MAXPLAYERS+1][3];
-    float cachedSurvFlow[MAXPLAYERS+1];
-    int cachedSurvCount = 0;
-    float effectiveMinDist = g_fSpawnMinDistance;
-    if (zm_stage < ZM_STARTED) effectiveMinDist *= 2.0;
-    for (int s = 1; s <= MaxClients; s++)
-    {
-        if (!IsClientInGame(s) || !IsPlayerAlive(s) || GetClientTeam(s) != TEAM_SURVIVOR) continue;
-        GetClientAbsOrigin(s, cachedSurvPos[cachedSurvCount]);
-        cachedSurvFlow[cachedSurvCount] = L4D2Direct_GetFlowDistance(s);
-        cachedSurvCount++;
-    }
-
-    // Reset physics prop position overrides
     for (int i = 0; i < GRID_MAX_CELLS; i++)
         g_GridHasOverride[i] = false;
 
+    // Validate each cell
     for (int i = 0; i < cellCount; i++)
     {
         float pos[3], normal[3];
@@ -201,141 +395,17 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         g_GridValidPositions[i] = pos;
         g_GridCellIndices[i] = nearbyCells[i];
 
-        // Shared validation: same checks as analog provider
-        float t_check = GetEngineTime();
-        if (obstructed)
+        cellValid[i] = Grid_ValidateCell(i, pos, navArea, obstructed);
+
+        if (cellValid[i])
         {
-            ms_obstruct += (GetEngineTime() - t_check) * 1000.0;
-            cellValid[i] = false;
-            nObstructed++;
-            continue;
-        }
-        if (IsObstructed(pos))
-        {
-            // If obstructed by a physics prop, try spawning on top of it
-            int hitProp = -1;
-            if (IsObstructedByPhysicsProp(pos, hitProp))
+            float dist = GetVectorDistance(aimPos, pos);
+            if (closestValidIdx == -1 || dist < closestDist)
             {
-                float topZ = GetPhysicsPropTopZ(hitProp, pos);
-                float adjustedPos[3];
-                adjustedPos[0] = pos[0];
-                adjustedPos[1] = pos[1];
-                adjustedPos[2] = topZ + 1.0;
-
-                if (!IsObstructed(adjustedPos))
-                {
-                    // Use adjusted position for this cell
-                    pos = adjustedPos;
-                    g_GridValidPositions[i] = adjustedPos;
-                    g_GridOverridePositions[i] = adjustedPos;
-                    g_GridHasOverride[i] = true;
-                }
-                else
-                {
-                    ms_obstruct += (GetEngineTime() - t_check) * 1000.0;
-                    cellValid[i] = false;
-                    nObstructed++;
-                    continue;
-                }
+                closestValidIdx = i;
+                closestDist = dist;
+                closestNavArea = navArea;
             }
-            else
-            {
-                ms_obstruct += (GetEngineTime() - t_check) * 1000.0;
-                cellValid[i] = false;
-                nObstructed++;
-                continue;
-            }
-        }
-        ms_obstruct += (GetEngineTime() - t_check) * 1000.0;
-
-        t_check = GetEngineTime();
-        if (!nav_can_spawn_zombies(false, navArea))
-        {
-            ms_nav += (GetEngineTime() - t_check) * 1000.0;
-            cellValid[i] = false;
-            nNav++;
-            continue;
-        }
-        ms_nav += (GetEngineTime() - t_check) * 1000.0;
-
-        t_check = GetEngineTime();
-        if (can_any_alive_survivor_see_cheap(pos))
-        {
-            ms_los += (GetEngineTime() - t_check) * 1000.0;
-            cellValid[i] = false;
-            nLOS++;
-            continue;
-        }
-        ms_los += (GetEngineTime() - t_check) * 1000.0;
-
-        // Distance check: 3-tier (flow -> vector -> NavMesh for closest survivor only)
-        // 1. Flow difference >= threshold: definitely far enough (free)
-        // 2. Vector distance >= threshold: far enough (cheap)
-        // 3. Both too close: try NavMesh travel for the closest-by-vector survivor only (1 call)
-        //    NavMesh rescues cells in adjacent rooms with similar flow but long walking paths.
-        t_check = GetEngineTime();
-        if (effectiveMinDist > 0.0 && cachedSurvCount > 0)
-        {
-            float cellFlow = L4D_GetFlowFromPoint(pos);
-            bool tooClose = false;
-            int closestSurvByVec = -1;
-            float closestVecDist = 999999.0;
-
-            for (int s = 0; s < cachedSurvCount; s++)
-            {
-                // Tier 1: flow distance
-                float flowDiff = FloatAbs(cellFlow - cachedSurvFlow[s]);
-                if (cellFlow > 0.0 && cachedSurvFlow[s] > 0.0 && flowDiff >= effectiveMinDist)
-                    continue;
-
-                // Tier 2: vector distance
-                float vecDist = GetVectorDistance(pos, cachedSurvPos[s]);
-                if (vecDist >= effectiveMinDist)
-                    continue;
-
-                // Both too close - track closest survivor for potential NavMesh rescue
-                tooClose = true;
-                if (vecDist < closestVecDist)
-                {
-                    closestVecDist = vecDist;
-                    closestSurvByVec = s;
-                }
-            }
-
-            if (tooClose && closestSurvByVec >= 0)
-            {
-                // Tier 3: NavMesh travel for closest survivor only (1 call, not N)
-                float navDist = L4D2_NavAreaTravelDistance(pos, cachedSurvPos[closestSurvByVec], false);
-                if (navDist >= 0.0 && navDist >= effectiveMinDist)
-                    tooClose = false; // rescued by NavMesh - walking path is long enough
-            }
-            
-            if (!tooClose)
-            {
-               static float min_distance_last;
-               min_distance_last = distance_last_saferoom(pos);
-               if (min_distance_last>0.0 && min_distance_last<=DISTANCE_LAST_SAFEROOM) tooClose = true;
-            }
-
-            if (tooClose)
-            {
-                ms_dist += (GetEngineTime() - t_check) * 1000.0;
-                cellValid[i] = false;
-                nDist++;
-                continue;
-            }
-        }
-        ms_dist += (GetEngineTime() - t_check) * 1000.0;
-
-        cellValid[i] = true;
-        nValid++;
-
-        // Track closest valid cell to aim point
-        float dist = GetVectorDistance(aimPos, pos);
-        if (closestValidIdx == -1 || dist < closestDist)
-        {
-            closestValidIdx = i;
-            closestDist = dist;
         }
     }
 
@@ -353,7 +423,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         g_GridClosestValidPos = g_GridValidPositions[closestValidIdx];
         zm_spawner_pos = g_GridClosestValidPos;
         zm_spawner_state = SPAWNER_OK;
-        zm_spawner_navArea = L4D_GetNearestNavArea(g_GridClosestValidPos, 500.0, true, true, true, TEAM_INFECTED);
+        zm_spawner_navArea = closestNavArea;
     }
     else
     {
@@ -363,7 +433,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     zm_target_pos = aimPos;
     t_last_spawner_grid_update = GetEngineTime();
 
-    // Render via GridRenderer
+    // Render
     float t_render = GetEngineTime();
     GridRenderer_DrawCells(client, g_GridCellIndices, cellValid, cellCount, closestValidIdx,
                            g_GridOverridePositions, g_GridHasOverride);
@@ -372,8 +442,10 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     float elapsed_ms = (GetEngineTime() - t_start) * 1000.0;
     if (elapsed_ms > 5.0)
         LogMessage("[zm] WARNING: Grid_TimerUpdate took %.1f ms (%d cells: %d valid, %d obstructed, %d nav, %d LOS, %d dist) find=%.1f validate=%.1f [obstruct=%.1f nav=%.1f los=%.1f dist=%.1f] render=%.1f",
-            elapsed_ms, cellCount, nValid, nObstructed, nNav, nLOS, nDist,
-            ms_find, ms_validate, ms_obstruct, ms_nav, ms_los, ms_dist, ms_render);
+            elapsed_ms, cellCount, g_GridN_valid, g_GridN_obstructed,
+            g_GridN_nav, g_GridN_los, g_GridN_dist,
+            ms_find, ms_validate, g_GridMs_obstruct, g_GridMs_nav,
+            g_GridMs_los, g_GridMs_dist, ms_render);
 
     return Plugin_Continue;
 }

@@ -36,7 +36,7 @@
 // Cell colors (RGBA)
 #define GRIDRENDERER_COLOR_VALID             {0, 100, 0, 255}      // Dark green
 #define GRIDRENDERER_COLOR_INVALID           {100, 0, 0, 255}      // Dark red
-#define GRIDRENDERER_COLOR_HIGHLIGHT         {0, 180, 180, 255}    // Cyan
+#define GRIDRENDERER_COLOR_HIGHLIGHT         {0, 255, 0, 255}      // Green
 #define GRIDRENDERER_COLOR_HIGHLIGHT_INVALID {255, 128, 0, 255}    // Orange
 
 // ============================================================================
