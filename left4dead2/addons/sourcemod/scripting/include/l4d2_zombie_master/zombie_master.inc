@@ -565,6 +565,8 @@ void GetCvars()
     g_iPanicCost = g_hPanicCost.IntValue;
     g_fPanicDuration = g_hPanicDuration.FloatValue;
     
+    g_bPanicRefill = g_hPanicRefill.BoolValue;
+    
     g_bLockSaferoom = g_hLockSaferoom.BoolValue;
     
     g_fPrepTimeZM = g_hPrepTimeZM.FloatValue;
