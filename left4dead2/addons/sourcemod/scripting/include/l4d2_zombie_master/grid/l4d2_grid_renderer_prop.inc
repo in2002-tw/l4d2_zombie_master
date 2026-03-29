@@ -234,7 +234,7 @@ stock int GridRendererProp_DrawCells(int client,
 
 			float angles[3];
 			GridRendererProp_NormalToAngles(normal, angles);
-			GridRendererProp_UpdateEntity(client, freeIdx, position, angles, color);
+			GridRendererProp_UpdateEntity(client, freeIdx, position, angles, color, isClosest && cellValid[i]);
 		}
 
 		freeIdx++;
@@ -254,6 +254,8 @@ stock int GridRendererProp_DrawCells(int client,
 		GridRenderer_ResolveColor(cellValid[dataIdx], isClosest, color);
 		color[3] = GridRendererProp_ComputeAlpha(dataIdx, count, isClosest);
 
+		bool glowThis = isClosest && cellValid[dataIdx];
+
 		// If this cell has a physics prop override, teleport to the adjusted position
 		if (hasOverride[dataIdx])
 		{
@@ -268,16 +270,16 @@ stock int GridRendererProp_DrawCells(int client,
 
 				float angles[3];
 				GridRendererProp_NormalToAngles(normal, angles);
-				GridRendererProp_UpdateEntity(client, e, position, angles, color);
+				GridRendererProp_UpdateEntity(client, e, position, angles, color, glowThis);
 			}
 			else
 			{
-				GridRendererProp_UpdateEntityColor(client, e, color);
+				GridRendererProp_UpdateEntityColor(client, e, color, glowThis);
 			}
 		}
 		else
 		{
-			GridRendererProp_UpdateEntityColor(client, e, color);
+			GridRendererProp_UpdateEntityColor(client, e, color, glowThis);
 		}
 		drawn++;
 	}
@@ -443,43 +445,63 @@ static void GridRendererProp_DestroyPool(int client)
 // ============================================================================
 
 /**
- * Update a prop entity's position, angle, and color
+ * Update a prop entity's position, angle, color, and glow state
  */
 static void GridRendererProp_UpdateEntity(int client, int idx,
                                            const float position[3],
                                            const float angles[3],
-                                           const int color[4])
+                                           const int color[4],
+                                           bool glow)
 {
 	int ent = EntRefToEntIndex(g_PropPool[client].entities[idx]);
 	if (ent == INVALID_ENT_REFERENCE || !IsValidEntity(ent))
 		return;
 
-	// Position and orient
 	TeleportEntity(ent, position, angles, NULL_VECTOR);
-
-	// Set color
 	SetEntityRenderColor(ent, color[0], color[1], color[2], color[3]);
 
-	// Make visible: clear EF_NODRAW, keep EF_NOSHADOW + EF_NOINTERP
 	int effects = GetEntProp(ent, Prop_Send, "m_fEffects");
 	SetEntProp(ent, Prop_Send, "m_fEffects", (effects & ~EF_NODRAW) | EF_NOSHADOW | EF_NOINTERP);
+
+	GridRendererProp_SetGlow(ent, glow, color);
 }
 
 /**
- * Update a prop entity's color only (no teleport) and ensure visible
+ * Update a prop entity's color and glow only (no teleport) and ensure visible
  */
-static void GridRendererProp_UpdateEntityColor(int client, int idx, const int color[4])
+static void GridRendererProp_UpdateEntityColor(int client, int idx, const int color[4], bool glow)
 {
 	int ent = EntRefToEntIndex(g_PropPool[client].entities[idx]);
 	if (ent == INVALID_ENT_REFERENCE || !IsValidEntity(ent))
 		return;
 
-	// Set color
 	SetEntityRenderColor(ent, color[0], color[1], color[2], color[3]);
 
-	// Make visible: clear EF_NODRAW, keep EF_NOSHADOW + EF_NOINTERP
 	int effects = GetEntProp(ent, Prop_Send, "m_fEffects");
 	SetEntProp(ent, Prop_Send, "m_fEffects", (effects & ~EF_NODRAW) | EF_NOSHADOW | EF_NOINTERP);
+
+	GridRendererProp_SetGlow(ent, glow, color);
+}
+
+/**
+ * Toggle glow on/off for a prop entity
+ */
+static void GridRendererProp_SetGlow(int ent, bool glow, const int color[4])
+{
+	if (glow)
+	{
+		int rgb = (color[0] << 16) | (color[1] << 8) | color[2];
+		SetEntProp(ent, Prop_Send, "m_iGlowType", 3);
+		SetEntProp(ent, Prop_Send, "m_glowColorOverride", rgb);
+		SetEntProp(ent, Prop_Send, "m_nGlowRangeMin", 0);
+		SetEntProp(ent, Prop_Send, "m_nGlowRange", 999999);
+		AcceptEntityInput(ent, "StartGlowing");
+	}
+	else
+	{
+		SetEntProp(ent, Prop_Send, "m_glowColorOverride", 0);
+		AcceptEntityInput(ent, "StopGlowing");
+	}
 }
 
 /**

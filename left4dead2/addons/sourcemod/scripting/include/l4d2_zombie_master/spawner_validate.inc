@@ -241,7 +241,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3])
    testPoints[0] = vecPos;
    AddVectors(vecPos, {0.0, 0.0, HULL_DZ}, testPoints[1]);
    AddVectors(vecPos, {0.0, 0.0, HULL_DDZ}, testPoints[2]);
-   
+
    //if (l4dhooks_updated && !any_alive_survivors_in_radius(vecPos,fog_distance)) return false;
 
    if (g_bBatchPVSActive)
@@ -257,8 +257,6 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3])
 
            int client = g_iBatchSurvivorClients[s];
            if (L4D2_IsVisibleToPlayer(client, TEAM_SURVIVOR, 3, 0, testPoints[1])) return true;
-           if (L4D2_IsVisibleToPlayer(client, TEAM_SURVIVOR, 3, 0, testPoints[0])) return true;
-           if (L4D2_IsVisibleToPlayer(client, TEAM_SURVIVOR, 3, 0, testPoints[2])) return true;
        }
        return false;
    }

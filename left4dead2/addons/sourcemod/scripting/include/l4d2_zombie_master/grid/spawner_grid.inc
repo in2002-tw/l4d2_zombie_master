@@ -328,7 +328,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     GetClientEyePosition(client, eyePos);
     GetClientEyeAngles(client, eyeAngles);
 
-    Handle trace = TR_TraceRayFilterEx(eyePos, eyeAngles, MASK_SHOT,
+    Handle trace = TR_TraceRayFilterEx(eyePos, eyeAngles, MASK_SOLID,
         RayType_Infinite, FilterSpawner, client);
 
     if (!TR_DidHit(trace))
