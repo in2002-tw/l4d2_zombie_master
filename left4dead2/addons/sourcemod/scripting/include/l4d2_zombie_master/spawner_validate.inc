@@ -107,8 +107,6 @@ bool can_any_alive_survivor_see(float vecPos[3], bool hint = true)
    if (DEBUG) LogMessage("[zm] can_any_alive_survivor_see");
    bool visible = false;
    
-   if (l4dhooks_updated && !any_alive_survivors_in_radius(vecPos,fog_distance)) return false;
-   
    static float VecPos2[3]; AddVectors(vecPos,{0.0,0.0,HULL_DZ},VecPos2);
    static float VecPos3[3]; AddVectors(vecPos,{-HULL_DX,-HULL_DX,HULL_DZ},VecPos3);
    static float VecPos4[3]; AddVectors(vecPos,{HULL_DX,HULL_DX,HULL_DZ},VecPos4);
@@ -239,10 +237,12 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3])
    if (DEBUG) LogMessage("[zm] can_any_alive_survivor_see_cheap");
 
    // 3 test points: ground, mid-height center (most likely), top center
-   float testPoints[3][3];
+   static float testPoints[3][3];
    testPoints[0] = vecPos;
    AddVectors(vecPos, {0.0, 0.0, HULL_DZ}, testPoints[1]);
    AddVectors(vecPos, {0.0, 0.0, HULL_DDZ}, testPoints[2]);
+   
+   //if (l4dhooks_updated && !any_alive_survivors_in_radius(vecPos,fog_distance)) return false;
 
    if (g_bBatchPVSActive)
    {
@@ -315,20 +315,12 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float min
    float d_raw = -1.0;
    float pos2[3];
    if (store_client) spawner_nearest_survivor = -1;
-
    // Is there at least one survivor close enough? If not, end early.
    bool hit = true;
    if (min_distance<0.0) min_distance = (g_fSpawnMinDistance<150.0) ? 150.0 : g_fSpawnMinDistance; // 150.0 for "survivor being targeted" detection
    if (l4dhooks_updated) hit = any_alive_survivors_in_radius(pos,min_distance);
-   if (!hit)
-   {
-        if (min_distance>DISTANCE_LAST_SAFEROOM)
-        {
-            float distance_last = distance_last_saferoom(pos);
-            if (distance_last>0.0 && distance_last<min_distance) return DISTANCE_LAST_SAFEROOM-1.0;
-        }
-        return min_distance+1.0;
-    }
+   if (!hit) return min_distance+1.0;
+   
 
     if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor)) // Check first saferoom
     {

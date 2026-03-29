@@ -9,6 +9,7 @@
 //float  g_SpawnerFilterOrigin[3];
 //float  g_SpawnerFilterRadius;
 int   g_iSpawnerZombieClass;
+bool g_bLastDoorValid = false;
 
 /**
  * Draw the colored spawn indicator ring at the ZM's aim position and update spawner state.
@@ -259,6 +260,16 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
             fail = true;
         }
     }
+    if (!fail || spawner_state>SPAWNER_NAV) // if OK or BLUE, check for last saferoom abuse.
+    {
+        static float distance_last;
+        distance_last = distance_last_saferoom(vPos_spawner);
+        if (distance_last>0.0 && distance_last<DISTANCE_LAST_SAFEROOM)
+        {
+            fail = true;
+            spawner_state = SPAWNER_NAV;
+        }
+    }
     if (!fail) // check if survivors can see
     {
         bool obscured = ( (navSpawnAttrs & NAV_SPAWN_OBSCURED) || (navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
@@ -366,10 +377,13 @@ int SpawnerCellFilter(int cellIdx)
         return GRIDLIB_FILTER_DISCARD_NAV;
     }
     
-    static float distance_last;
-    distance_last = distance_last_saferoom(cellPos);
-    if (distance_last>0.0 && distance_last_saferoom(cellPos)<DISTANCE_LAST_SAFEROOM) // prevent saferoom abuse
-        return GRIDLIB_FILTER_DISCARD;
+    if (g_bLastDoorValid)
+    {
+        static float distance_last;
+        distance_last = distance_last_saferoom(cellPos);
+        if (distance_last>0.0 && distance_last_saferoom(cellPos)<DISTANCE_LAST_SAFEROOM) // prevent last saferoom abuse
+            return GRIDLIB_FILTER_DISCARD;
+    }
     
     if (IsObstructed(cellPos,_,_,g_iSpawnerZombieClass==ZOMBIECLASS_COMMON)) // my obstruction checks can be more restrictive
         return GRIDLIB_FILTER_DISCARD;
@@ -437,6 +451,7 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
     //g_SpawnerFilterOrigin = origin;
     //g_SpawnerFilterRadius = radius;
     g_iSpawnerZombieClass = zClass;
+    g_bLastDoorValid = IsValidEntity(lastdoor);
     Spawner_BeginBatchPVS();
 
     float t_gridlib = GetEngineTime();
@@ -665,6 +680,8 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
     Analog_BeginSpawn();
     g_bAnalogHint = hint;
     g_bAnalogBatchMode = true;
+    static float min_distance_last;
+    bool valid_last = IsValidEntity(lastdoor); 
 
     int spawner_state;
     if (flow) spawner_state = SPAWNER_DISTANCE;
@@ -689,7 +706,6 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         int tries = (count <= 10) ? 5 : 3;
         int resolved = 0;
         float randomPos[3];
-
         for (int i = 0; i < count && resolved < maxOut; i++)
         {
             if (!IsValidClient(target_client) || !IsPlayerAlive(target_client))
@@ -698,6 +714,12 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
                 continue;
             if (zm_stage < ZM_STARTED && can_any_alive_survivor_see(randomPos, false))
                 continue;
+            if (valid_last)
+            {
+                min_distance_last = distance_last_saferoom(randomPos);
+                if (min_distance_last>0.0 && min_distance_last<=DISTANCE_LAST_SAFEROOM)
+                    continue;
+            }
             if (!expected_angry)
             {
                 if (flow_survivor_fraction <= 0.91 && L4D_GetFlowFromPoint(randomPos) < flow_survivor)
@@ -807,7 +829,8 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             if (zm_spawner_navArea && count > 1)
             {
                 L4D_FindRandomSpot(zm_spawner_navArea, pos);
-                if (can_any_alive_survivor_see(pos, false) || IsObstructed(pos,_,_,true)) pos = zm_spawner_pos;
+                if (valid_last && distance_last_saferoom(pos)<=DISTANCE_LAST_SAFEROOM) pos = zm_spawner_pos;
+                else if (can_any_alive_survivor_see(pos, false) || IsObstructed(pos,_,_,true)) pos = zm_spawner_pos;
             }
             else pos = zm_spawner_pos;
         }

@@ -65,7 +65,7 @@
 static float HULL_MINS[3] = {-HULL_DX_STRICT,-HULL_DX_STRICT,HULL_DZ_MIN_STRICT};
 static float HULL_MAXS[3] = {HULL_DX_STRICT,HULL_DX_STRICT,HULL_DZ_MAX_STRICT};
 
-#define DISTANCE_LAST_SAFEROOM 100.0
+#define DISTANCE_LAST_SAFEROOM 100.0 // minimum distance to saferoom for valid zombie spawns
 
 #define AREA_COMMON 1024.0 // how much surface area a Common Infected is going to take up; 32x32
 
@@ -2110,7 +2110,7 @@ void update_ZM_looktarget(bool draw = true)
    {
        if (IsValidClient(target) && GetClientTeam(target)==TEAM_SURVIVOR && IsPlayerAlive(target))
        {
-           if (!IsValidEntRef(g_iGlowList[target])) CreateZMGlow(target,false,true);
+           if (!IsValidEntRef(g_iGlowList[target]) && L4D2_GetSurvivorVictim(zm_client)!=target) CreateZMGlow(target,false,true);
        }
        else if ( strcmp(class,"infected")==0 || strcmp(class,"witch")==0 || (IsValidClient(target) && GetClientTeam(target)==TEAM_INFECTED && IsFakeClient(target)) )
        {
