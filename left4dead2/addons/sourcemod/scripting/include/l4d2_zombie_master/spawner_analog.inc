@@ -53,7 +53,7 @@ void update_ZM_spawner(const float target_pos[3], const float spawner_pos[3], co
         t_last_spawner_update = t_now;
         
         int target = get_spawner_target_survivor(false,state);
-        if (target>0 && g_iGlowList[target]==INVALID_ENT_REFERENCE) // Draw survivor with CONDITIONAL color
+        if (target>0 && g_iGlowList[target]==INVALID_ENT_REFERENCE && L4D2_GetSurvivorVictim(zm_client)!=target) // Draw survivor with CONDITIONAL color
         {
             //GetClientEyePosition(target,draw_pos);
             //draw_pos[2] += 10.0;
@@ -96,7 +96,8 @@ int Analog_CanSpawn(int zClass=ZOMBIECLASS_BOOMER, bool hint = true)
 {
     if (DEBUG) LogMessage("[zm] Analog_CanSpawn");
 	if (!IsValidClientZM()) return SPAWNER_INVALID;
-	if (zm_stage>=ZM_END) return SPAWNER_INVALID;	
+	if (zm_stage>=ZM_END) return SPAWNER_INVALID;
+	if (IsPlayerAlive(zm_client) && L4D2_GetSurvivorVictim(zm_client)>0) return SPAWNER_FLOW; 
 	int observermode = GetEntProp(zm_client, Prop_Send, "m_iObserverMode");
     if ( (observermode==4 || observermode==5) && get_spawner_target_survivor(false,SPAWNER_DISTANCE)>0 )
     {
@@ -364,6 +365,12 @@ int SpawnerCellFilter(int cellIdx)
         if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d failed nav attrs", cellIdx);
         return GRIDLIB_FILTER_DISCARD_NAV;
     }
+    
+    static float distance_last;
+    distance_last = distance_last_saferoom(cellPos);
+    if (distance_last>0.0 && distance_last_saferoom(cellPos)<DISTANCE_LAST_SAFEROOM) // prevent saferoom abuse
+        return GRIDLIB_FILTER_DISCARD;
+    
     if (IsObstructed(cellPos,_,_,g_iSpawnerZombieClass==ZOMBIECLASS_COMMON)) // my obstruction checks can be more restrictive
         return GRIDLIB_FILTER_DISCARD;
     
@@ -516,12 +523,21 @@ int get_spawner_target_survivor(bool flow = false, int spawner_state = SPAWNER_D
         int lastlook = -1;
         if (IsValidClientZM())
         {
-            int observermode = GetEntProp(zm_client, Prop_Send, "m_iObserverMode");
-            if (observermode==4 || observermode==5)
+            if (IsPlayerAlive(zm_client))
             {
-                lastlook = GetEntPropEnt(zm_client, Prop_Send, "m_hObserverTarget");
-                if (IsValidClient(lastlook) && IsPlayerAlive(lastlook) && GetClientTeam(lastlook)==TEAM_SURVIVOR)
-                    target_client = lastlook;
+                 lastlook = L4D2_GetSurvivorVictim(zm_client);
+                 if (IsValidClient(lastlook) && IsPlayerAlive(lastlook) && GetClientTeam(lastlook)==TEAM_SURVIVOR)
+                     target_client = lastlook;
+            }
+            else
+            {
+                int observermode = GetEntProp(zm_client, Prop_Send, "m_iObserverMode");
+                if (observermode==4 || observermode==5)
+                {
+                    lastlook = GetEntPropEnt(zm_client, Prop_Send, "m_hObserverTarget");
+                    if (IsValidClient(lastlook) && IsPlayerAlive(lastlook) && GetClientTeam(lastlook)==TEAM_SURVIVOR)
+                        target_client = lastlook;
+                }
             }
         }
         if (target_client<0 && IsValidEntRef(entref_lastlook))

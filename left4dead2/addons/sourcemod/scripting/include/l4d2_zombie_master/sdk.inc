@@ -27,13 +27,6 @@ Handle hCreateTank = null;
 Handle hInfectedAttackSurvivorTeam = null;
 //hTankEnterStasis, hTankLeaveStasis = null;
 
-// PVS (Potentially Visible Set) engine calls
-Handle hGetClusterForOrigin = null;
-Handle hGetPVSForCluster = null;
-Handle hCheckOriginInPVS = null;
-Address g_pEngineServer = Address_Null;
-#define PVS_BUFFER_SIZE 8192
-
 // https://github.com/Ilusion9/entityIO-sm
 Handle g_DHook_AcceptInput = null;
 
@@ -116,7 +109,11 @@ void PrepSDKCall()
 		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
 		hGetClusterForOrigin = EndPrepSDKCall();
 		if (hGetClusterForOrigin != null) LogMessage("[zm] SDKCall ready: GetClusterForOrigin");
-		else LogMessage("[zm] WARNING: Failed to create GetClusterForOrigin SDKCall");
+		else
+		{
+    		g_bGrid = false;
+    		LogMessage("[zm] WARNING: Failed to create GetClusterForOrigin SDKCall");
+        }
 
 		// GetPVSForCluster(int cluster, int pvslength, unsigned char* outputpvs) → int
 		StartPrepSDKCall(SDKCall_Raw);
@@ -127,8 +124,11 @@ void PrepSDKCall()
 		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
 		hGetPVSForCluster = EndPrepSDKCall();
 		if (hGetPVSForCluster != null) LogMessage("[zm] SDKCall ready: GetPVSForCluster");
-		else LogMessage("[zm] WARNING: Failed to create GetPVSForCluster SDKCall");
-
+		else
+		{
+    		g_bGrid = false;
+    		LogMessage("[zm] WARNING: Failed to create GetPVSForCluster SDKCall");
+        }
 		// CheckOriginInPVS(Vector const&, unsigned char const*, int) → bool
 		StartPrepSDKCall(SDKCall_Raw);
 		PrepSDKCall_SetVirtual(GameConfGetOffset(hGameData, "IVEngineServer::CheckOriginInPVS"));
@@ -138,10 +138,15 @@ void PrepSDKCall()
 		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
 		hCheckOriginInPVS = EndPrepSDKCall();
 		if (hCheckOriginInPVS != null) LogMessage("[zm] SDKCall ready: CheckOriginInPVS");
-		else LogMessage("[zm] WARNING: Failed to create CheckOriginInPVS SDKCall");
+		else
+		{
+    		g_bGrid = false;
+    		LogMessage("[zm] WARNING: Failed to create CheckOriginInPVS SDKCall");
+		}
 	}
 	else
 	{
+		g_bGrid = false;
 		LogMessage("[zm] WARNING: Could not find engine server pointer, PVS checks disabled");
 	}
 

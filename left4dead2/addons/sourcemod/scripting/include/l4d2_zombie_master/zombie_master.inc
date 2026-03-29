@@ -65,6 +65,7 @@
 static float HULL_MINS[3] = {-HULL_DX_STRICT,-HULL_DX_STRICT,HULL_DZ_MIN_STRICT};
 static float HULL_MAXS[3] = {HULL_DX_STRICT,HULL_DX_STRICT,HULL_DZ_MAX_STRICT};
 
+#define DISTANCE_LAST_SAFEROOM 100.0
 
 #define AREA_COMMON 1024.0 // how much surface area a Common Infected is going to take up; 32x32
 
@@ -364,6 +365,13 @@ Handle fq_timer = INVALID_HANDLE;
 Handle ems_hud_timer = INVALID_HANDLE;
 bool recordpos = true; // for tank stutter fix
 
+// PVS (Potentially Visible Set) engine calls
+Handle hGetClusterForOrigin = null;
+Handle hGetPVSForCluster = null;
+Handle hCheckOriginInPVS = null;
+Address g_pEngineServer = Address_Null;
+#define PVS_BUFFER_SIZE 8192
+
 float t_vomited[MAXPLAYERS+1] = {0.0,...}; // tracking when to spawn horde
 
 bool specials_frozen = false;
@@ -595,12 +603,14 @@ void GetCvars()
     
     if (g_hGrid.BoolValue!=g_bGrid)
     {
-        g_bGrid = g_hGrid.BoolValue;
+        if (g_bGrid && IsValidClientZM()) Spawner_OnDisabled(zm_client); 
+        g_bGrid = g_hGrid.BoolValue && hGetClusterForOrigin!=null && l4dhooks_updated;
         if (g_bGrid && L4D_HasMapStarted() && !GridLib_IsReady())
         {
             GridLib_Initialize();
             GridLib_StartPrecomputation();
         }
+        if (g_bGrid!=g_hGrid.BoolValue) SetConVarBool(g_hGrid,g_bGrid);
     }
     
     g_fAbilityCooldown = g_hAbilityCooldown.FloatValue;
@@ -2468,4 +2478,12 @@ void ResetTimer()
         hp_timers[i] = INVALID_HANDLE;
     }
     if (g_bCvarAllow && zm_stage<ZM_END) zm_update();
+}
+
+static float last_saferoom_pos[3];
+float distance_last_saferoom(float pos[3])
+{
+    if (ZM_finale_announced || L4D_IsSurvivalMode() || !IsValidEntity(lastdoor)) return -1.0;
+    L4D_GetEntityWorldSpaceCenter(lastdoor,last_saferoom_pos);
+    return GetVectorDistance(pos,last_saferoom_pos);
 }

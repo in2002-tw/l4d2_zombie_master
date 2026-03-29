@@ -309,6 +309,13 @@ Action Grid_TimerUpdate(Handle timer, int userid)
                 if (navDist >= 0.0 && navDist >= effectiveMinDist)
                     tooClose = false; // rescued by NavMesh - walking path is long enough
             }
+            
+            if (!tooClose)
+            {
+               static float min_distance_last;
+               min_distance_last = distance_last_saferoom(pos);
+               if (min_distance_last>0.0 && min_distance_last<=DISTANCE_LAST_SAFEROOM) tooClose = true;
+            }
 
             if (tooClose)
             {

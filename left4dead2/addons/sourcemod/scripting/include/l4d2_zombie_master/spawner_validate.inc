@@ -106,12 +106,14 @@ bool can_any_alive_survivor_see(float vecPos[3], bool hint = true)
 {
    if (DEBUG) LogMessage("[zm] can_any_alive_survivor_see");
    bool visible = false;
-
-   float VecPos2[3]; AddVectors(vecPos,{0.0,0.0,HULL_DZ},VecPos2);
-   float VecPos3[3]; AddVectors(vecPos,{-HULL_DX,-HULL_DX,HULL_DZ},VecPos3);
-   float VecPos4[3]; AddVectors(vecPos,{HULL_DX,HULL_DX,HULL_DZ},VecPos4);
-   float VecPos5[3]; AddVectors(vecPos,{HULL_DX,-HULL_DX,HULL_DDZ},VecPos5);
-   float VecPos6[3]; AddVectors(vecPos,{0.0,0.0,HULL_DDZ},VecPos6);
+   
+   if (l4dhooks_updated && !any_alive_survivors_in_radius(vecPos,fog_distance)) return false;
+   
+   static float VecPos2[3]; AddVectors(vecPos,{0.0,0.0,HULL_DZ},VecPos2);
+   static float VecPos3[3]; AddVectors(vecPos,{-HULL_DX,-HULL_DX,HULL_DZ},VecPos3);
+   static float VecPos4[3]; AddVectors(vecPos,{HULL_DX,HULL_DX,HULL_DZ},VecPos4);
+   static float VecPos5[3]; AddVectors(vecPos,{HULL_DX,-HULL_DX,HULL_DDZ},VecPos5);
+   static float VecPos6[3]; AddVectors(vecPos,{0.0,0.0,HULL_DDZ},VecPos6);
 
    // Check line of sight with saferoom door
    if (!L4D_IsSurvivalMode() && zm_stage<ZM_STARTED && IsValidEntRef(g_iLockedDoor))
@@ -119,7 +121,7 @@ bool can_any_alive_survivor_see(float vecPos[3], bool hint = true)
         int filter_client = -1;
         if (IsValidClientZM()) filter_client = zm_client;
         int door = EntRefToEntIndex(g_iLockedDoor);
-        float saferoom_pos[3];
+        static float saferoom_pos[3];
         L4D_GetEntityWorldSpaceCenter(door,saferoom_pos);
         saferoom_pos[2] -= 10.0;
         if (GetVectorDistance(saferoom_pos,vecPos)<=fog_distance)
@@ -317,24 +319,13 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float min
    // Is there at least one survivor close enough? If not, end early.
    bool hit = true;
    if (min_distance<0.0) min_distance = (g_fSpawnMinDistance<150.0) ? 150.0 : g_fSpawnMinDistance; // 150.0 for "survivor being targeted" detection
-   if (l4dhooks_updated) hit = any_alive_survivors_in_radius(pos,min_distance); // replace with L4D_FindEntityByClassnameNearest. exit early
+   if (l4dhooks_updated) hit = any_alive_survivors_in_radius(pos,min_distance);
    if (!hit)
    {
-        if (!L4D_IsSurvivalMode() && IsValidEntity(lastdoor)) // Check last saferoom
+        if (min_distance>DISTANCE_LAST_SAFEROOM)
         {
-            L4D_GetEntityWorldSpaceCenter(lastdoor,pos2);
-            d_raw_temp = GetVectorDistance(pos,pos2);
-            if ( d_raw_temp<=75.0 && (d_raw<0.0 || d_raw_temp<d_raw) )
-            {
-                if (store_client) spawner_nearest_survivor = -1;
-                return d_raw_temp;
-            }
-            d_nav_temp = L4D2_NavAreaTravelDistance(pos,pos2,false);
-            if (d_nav_temp>=0.0 && d_nav_temp<=75.0 && (d_nav<0.0 || d_nav_temp<d_nav))
-            {
-                if (store_client) spawner_nearest_survivor = -1;
-                return d_nav_temp;
-            }
+            float distance_last = distance_last_saferoom(pos);
+            if (distance_last>0.0 && distance_last<min_distance) return DISTANCE_LAST_SAFEROOM-1.0;
         }
         return min_distance+1.0;
     }

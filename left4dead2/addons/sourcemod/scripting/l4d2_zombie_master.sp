@@ -213,7 +213,7 @@ public void OnPluginStart()
     g_hSpawnMinDistance.AddChangeHook(ConVarChanged_Cvars);
     
     g_hGrid = CreateConVar("zm_grid", "1", "Integrate GridLib into ZM spawner.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
-    g_hGrid.AddChangeHook(ConVarChanged_Cvars);
+    g_hGrid.AddChangeHook(ConVarChanged_Cvars_ZMenu);
     
     g_hGridSearchRadius = CreateConVar("zm_grid_search_radius", "500", "Search radius (units) for GridLib fallback spawn when indicator is blue.",FCVAR_PROTECTED, true, 0.0, true, 5000.0);
     g_hGridSearchRadius.AddChangeHook(ConVarChanged_Cvars);
@@ -437,7 +437,7 @@ void IsAllowed()
     
     if ( L4D_HasPlayerControlledZombies() && bCvarAllow)
     {
-        SetConVarInt(g_hCvarAllow,0);
+        SetConVarBool(g_hCvarAllow,false);
         PrintToChatAll("[zm] %t", "ZM restrict notify");
         return;
     }
@@ -1616,7 +1616,7 @@ public void OnMapStart()
         //if (!lipsync_available) LogMessage("[zm] custom lipsynced voice lines cannot be played."); 
     }
     
-    if (g_hGrid.BoolValue)
+    //if (g_hGrid.BoolValue)
         GridRendererProp_PrecacheAssets();
 
     PrecacheSound(SOUND_PANIC_ON);
@@ -1812,7 +1812,7 @@ void evtRoundEnd(Event event, const char[] name, bool dontBroadcast)
         	PrintHintText(zm_client, "%t", "ZM win text");
         	char zm_name[MAX_NAME_LENGTH]; 
             GetClientName(zm_client,zm_name,sizeof(zm_name));
-            PrintToChatAll("[zm] %t", "ZM won", zm_name);
+            PrintToChatAll("[zm %d] %t", bank, "ZM won", zm_name);
     	}
     	QuitZM_Force(zm_client); // InputKill prevention
 	}
