@@ -459,8 +459,6 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
     int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 16, SpawnerCellFilter);
     float gridlib_ms = (GetEngineTime() - t_gridlib) * 1000.0;
 
-    Spawner_EndBatchPVS();
-
     if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: %d pre-validated candidates (gridlib=%.2f ms)", count, gridlib_ms);
 
     // All returned cells passed nav/obstruction/travel/distance/visibility checks.
@@ -761,35 +759,21 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
     }
 
     // Build survivor PVS data for gridlib visibility filtering
-    char survivorPVS[MAXPLAYERS+1][PVS_BUFFER_SIZE];
-    float survivorEyePos[MAXPLAYERS+1][3];
-    int survivorPVSCount = 0;
-    if (use_gridlib && hCheckOriginInPVS != null)
+    if (use_gridlib)
     {
-        for (int s = 1; s <= MaxClients; s++)
-        {
-            if (!IsClientInGame(s) || GetClientTeam(s) != TEAM_SURVIVOR || !IsPlayerAlive(s))
-                continue;
-            GetClientEyePosition(s, survivorEyePos[survivorPVSCount]);
-            int cluster = PVS_GetClusterForOrigin(survivorEyePos[survivorPVSCount]);
-            if (cluster >= 0)
-            {
-                PVS_GetForCluster(cluster, survivorPVS[survivorPVSCount]);
-                survivorPVSCount++;
-            }
-        }
+        Spawner_BeginBatchPVS();
+        if (!g_bBatchPVSActive) use_gridlib = false;
     }
-
     int resolved = 0;
+    static float pos[3];
     for (int i = 0; i < count && resolved < maxOut; i++)
     {
-        float pos[3];
-        bool fallback_original_navmesh = false;
 
+        bool fallback_original_navmesh = false;
         if (use_gridlib)
         {
             int cellIdx = gridlib_cells[i % gridlib_cell_count];
-            float cellNormal[3];
+            static float cellNormal[3];
             Address cellNavArea;
             bool cellObstructed;
             if (!GridLib_GetCellData(cellIdx, pos, cellNormal, cellNavArea, cellObstructed))
@@ -798,18 +782,18 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
                 continue;
 
             // PVS + single ray trace visibility check
-            if (survivorPVSCount > 0)
+            if (g_iBatchSurvivorCount > 0)
             {
                 bool actuallyVisible = false;
-                float cellEye[3];
+                static float cellEye[3];
                 cellEye[0] = pos[0];
                 cellEye[1] = pos[1];
                 cellEye[2] = pos[2] + 36.0;
-                for (int s = 0; s < survivorPVSCount; s++)
+                for (int s = 0; s < g_iBatchSurvivorCount; s++)
                 {
-                    if (!PVS_CheckOriginInPVS(pos, survivorPVS[s]))
+                    if (!PVS_CheckOriginInPVS(pos,g_BatchSurvivorPVS[s]))
                         continue;
-                    Handle trace = TR_TraceRayFilterEx(cellEye, survivorEyePos[s],
+                    Handle trace = TR_TraceRayFilterEx(cellEye, g_fBatchSurvivorPos[s],
                         MASK_VISIBLE, RayType_EndPoint, FilterSpawner, -1);
                     bool hit = TR_DidHit(trace);
                     delete trace;

@@ -411,7 +411,6 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         }
     }
 
-    Spawner_EndBatchPVS();
     float ms_validate = (GetEngineTime() - t_validate) * 1000.0;
 
     // Cache results

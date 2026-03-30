@@ -371,6 +371,13 @@ Handle hGetPVSForCluster = null;
 Handle hCheckOriginInPVS = null;
 Address g_pEngineServer = Address_Null;
 #define PVS_BUFFER_SIZE 8192
+#define PVS_VALID_TIME 0.05 // seconds
+bool   g_bBatchPVSActive = false;
+int    g_iBatchSurvivorCount = 0;
+char   g_BatchSurvivorPVS[MAXPLAYERS+1][PVS_BUFFER_SIZE];
+int    g_iBatchSurvivorClients[MAXPLAYERS+1];
+float  g_fBatchSurvivorPos[MAXPLAYERS+1][3];
+float  g_fBatchTime;
 
 float t_vomited[MAXPLAYERS+1] = {0.0,...}; // tracking when to spawn horde
 

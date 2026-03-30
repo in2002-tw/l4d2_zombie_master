@@ -887,6 +887,7 @@ Action zm_update(Handle timer = null)
 
 Action zm_new_round(Handle timer = null)
 {
+    g_bBatchPVSActive = false;
     if (!g_bCvarAllow)
     {
         zm_stage = ZM_END;
@@ -1428,7 +1429,11 @@ public Action evtPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     
     L4D2_RemoveEntityGlow(victim);
     
-    if(GetClientTeam(victim)!=TEAM_INFECTED) return Plugin_Continue;
+    if(GetClientTeam(victim)!=TEAM_INFECTED)
+    {
+        if (GetClientTeam(victim)==TEAM_SURVIVOR) g_bBatchPVSActive = false; // nullify precached PVS
+        return Plugin_Continue;
+    }
     
     char targetName[20];
     GetEntPropString(victim, Prop_Data, "m_iName", targetName, sizeof(targetName));
@@ -1684,6 +1689,7 @@ public void OnMapStart()
 public void OnMapEnd()
 {
 	if (DEBUG) LogMessage("[zm] OnMapEnd");
+	g_bBatchPVSActive = false;
 	Spawner_Cleanup();
 	if (GridLib_IsReady()) GridLib_Cleanup();
 	if (!g_bCvarAllow) return;
@@ -1780,6 +1786,7 @@ void evtRoundEnd(Event event, const char[] name, bool dontBroadcast)
 	
 	if (DEBUG) LogMessage("[zm] evtRoundEnd");
     
+    g_bBatchPVSActive = false;
     if (!g_bCvarAllow)
     {
         zm_stage = ZM_END;
@@ -1812,7 +1819,7 @@ void evtRoundEnd(Event event, const char[] name, bool dontBroadcast)
         	PrintHintText(zm_client, "%t", "ZM win text");
         	char zm_name[MAX_NAME_LENGTH]; 
             GetClientName(zm_client,zm_name,sizeof(zm_name));
-            PrintToChatAll("[zm %d] %t", bank, "ZM won", zm_name);
+            PrintToChatAll("[zm] %d %t", bank, "ZM won", zm_name);
     	}
     	QuitZM_Force(zm_client); // InputKill prevention
 	}
