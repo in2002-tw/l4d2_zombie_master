@@ -275,9 +275,9 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
     float t_start = GetEngineTime();
     static float aimPos[3];
-    if (g_iSpawnerMode==1 && zm_spawner_state==SPAWNER_OK) aimPos = zm_spawner_pos;
-    else
-    {
+    //if (g_iSpawnerMode==1 && zm_spawner_state==SPAWNER_OK) aimPos = zm_spawner_pos;
+    //else
+    //{
         // Aim trace
         static float eyePos[3], eyeAngles[3];
         GetClientEyePosition(client, eyePos);
@@ -294,7 +294,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     
         TR_GetEndPosition(aimPos, trace);
         delete trace;
-    }
+    //}
 
     // Find nearby cells
     float t_find = GetEngineTime();
@@ -302,14 +302,20 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     int cellCount = GridLib_FindNearbyCells(aimPos, GRID_SEARCH_RADIUS,
         GRID_MAX_Z_DIFF, nearbyCells, GRID_MAX_CELLS);
     float ms_find = (GetEngineTime() - t_find) * 1000.0;
-
+    
+    if (cellCount<=1 && g_iSpawnerMode==1 && zm_spawner_state==SPAWNER_OK)
+    {
+        aimPos = zm_spawner_pos;
+        cellCount = GridLib_FindNearbyCells(aimPos, GRID_SEARCH_RADIUS,GRID_MAX_Z_DIFF, nearbyCells, GRID_MAX_CELLS);
+    }
+    
     if (cellCount == 0)
     {
         if (g_GridCellCount > 0)
             GridRenderer_HideAll(client);
         g_GridCellCount = 0;
         g_GridHasValidCell = false;
-        zm_spawner_state = SPAWNER_INVALID;
+        if (g_iSpawnerMode==2) zm_spawner_state = SPAWNER_INVALID;
         return Plugin_Continue;
     }
 
