@@ -383,16 +383,19 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     if (g_GridHasValidCell)
     {
         g_GridClosestValidPos = g_GridValidPositions[closestValidIdx];
-        zm_spawner_pos = g_GridClosestValidPos;
-        zm_spawner_state = SPAWNER_OK;
-        zm_spawner_navArea = closestNavArea;
+        if (g_iSpawnerMode==2)
+        {
+            zm_spawner_pos = g_GridClosestValidPos;
+            zm_spawner_state = SPAWNER_OK;
+            zm_spawner_navArea = closestNavArea;
+        }
     }
     else
     {
-        zm_spawner_state = SPAWNER_SIGHT;
+        if (g_iSpawnerMode==2) zm_spawner_state = SPAWNER_SIGHT;
     }
 
-    zm_target_pos = aimPos;
+    if (g_iSpawnerMode==2) zm_target_pos = aimPos;
     t_last_spawner_grid_update = GetEngineTime();
 
     // Render
