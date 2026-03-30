@@ -282,26 +282,31 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
     if (fail && draw && spawner_state>SPAWNER_NAV && get_spawner_target_survivor(false,SPAWNER_DISTANCE)<0) // check other candidates
     {
         float newPos[3];
-        newPos = spawner_last_valid_pos;
-        if (spawner_last_valid && can_ZM_see(newPos) && Analog_CanSpawnPos(newPos,zClass,false,false,true)==SPAWNER_OK)
+        if (!skip_gridlib && g_bGridReady && g_iSpawnerMode>0 && g_GridHasValidCell)
         {
-            vPos_spawner = newPos;
-            fail = false;
-            spawner_state = SPAWNER_OK;
-            if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(newPos,check_dist,true,true,true,TEAM_INFECTED);
-            //LogMessage("Valid old position %.1f %.1f %.1f", newPos[0], newPos[1], newPos[2]);
+            newPos = g_GridClosestValidPos;
+            if (Analog_CanSpawnPos(newPos,zClass,false,false,true)==SPAWNER_OK)
+                fail = false;
         }
-    
+        if (fail && spawner_last_valid)
+        {
+            newPos = spawner_last_valid_pos;
+            if (can_ZM_see(newPos) && Analog_CanSpawnPos(newPos,zClass,false,false,true)==SPAWNER_OK)
+                fail = false;
+        }
         if (fail && !skip_gridlib) // ask gridlib for a better position
         {
             if (FindNearbyValidSpawnCell(vPos_spawner,newPos,check_dist,zClass) && Analog_CanSpawnPos(newPos,zClass,false,false,true)==SPAWNER_OK)
-            {
-                vPos_spawner = newPos;
                 fail = false;
-                spawner_state = SPAWNER_OK;
-                if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(newPos,check_dist,true,true,true,TEAM_INFECTED);
-            }
         }
+        
+        if (!fail) // we fixed it!! YIPPEEEEEEEEEEEEEEEEEEE
+        {
+            vPos_spawner = newPos;
+            spawner_state = SPAWNER_OK;
+            if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(newPos,check_dist,true,true,true,TEAM_INFECTED);
+        }
+        
     }
     if (fail)
     {

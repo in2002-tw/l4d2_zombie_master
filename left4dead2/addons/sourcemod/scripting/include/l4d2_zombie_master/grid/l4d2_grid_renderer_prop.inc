@@ -234,7 +234,7 @@ stock int GridRendererProp_DrawCells(int client,
 
 			float angles[3];
 			GridRendererProp_NormalToAngles(normal, angles);
-			GridRendererProp_UpdateEntity(client, freeIdx, position, angles, color, isClosest && cellValid[i]);
+			GridRendererProp_UpdateEntity(client, freeIdx, position, angles, color, isClosest && cellValid[i] && g_iSpawnerMode==2);
 		}
 
 		freeIdx++;
@@ -254,7 +254,7 @@ stock int GridRendererProp_DrawCells(int client,
 		GridRenderer_ResolveColor(cellValid[dataIdx], isClosest, color);
 		color[3] = GridRendererProp_ComputeAlpha(dataIdx, count, isClosest);
 
-		bool glowThis = isClosest && cellValid[dataIdx];
+		bool glowThis = isClosest && cellValid[dataIdx] && g_iSpawnerMode==2;
 
 		// If this cell has a physics prop override, teleport to the adjusted position
 		if (hasOverride[dataIdx])
@@ -310,14 +310,14 @@ stock int GridRendererProp_DrawCells(int client,
  */
 static int GridRendererProp_ComputeAlpha(int dataIdx, int count, bool isClosest)
 {
-	if (isClosest)
+	if (isClosest && g_iSpawnerMode==2)
 		return 220;
 
 	if (!g_PropAlphaFade)
 		return 150;
 
 	// Fade from ALPHA_CENTER (nearest) to ALPHA_EDGE (furthest)
-	static const int ALPHA_CENTER = 190;
+	static const int ALPHA_CENTER = 150;
 	static const int ALPHA_EDGE = 35;
 
 	if (count <= 1)

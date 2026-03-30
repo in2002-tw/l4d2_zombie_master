@@ -379,6 +379,53 @@ int    g_iBatchSurvivorClients[MAXPLAYERS+1];
 float  g_fBatchSurvivorPos[MAXPLAYERS+1][3];
 float  g_fBatchTime;
 
+#define GRID_SEARCH_RADIUS  150.0
+#define GRID_MAX_Z_DIFF     100.0
+#define GRID_MAX_CELLS      25
+#define GRID_UPDATE_RATE    0.1
+
+// State
+Handle g_hGridTimer;
+bool   g_bGridReady;
+
+// Per-spawn flow marker state (same pattern as analog)
+bool   g_bGridFlowUsed;
+int    g_iGridTargetClient;
+bool   g_bGridHint;
+bool   g_bGridBatchMode;
+bool   g_bGridSurvivorBeamDrawn;
+
+// Cached validation results from last timer update
+float  g_GridValidPositions[GRID_MAX_CELLS][3];
+bool   g_GridValidFlags[GRID_MAX_CELLS];
+int    g_GridCellIndices[GRID_MAX_CELLS];
+int    g_GridCellCount;
+float  g_GridClosestValidPos[3];
+bool   g_GridHasValidCell;
+
+// Physics prop position overrides (runtime-adjusted positions on top of props)
+float  g_GridOverridePositions[GRID_MAX_CELLS][3];
+bool   g_GridHasOverride[GRID_MAX_CELLS];
+
+// Validation context - set before the cell loop, read by helpers
+float   g_GridCachedSurvPos[MAXPLAYERS+1][3];
+float   g_GridCachedSurvFlow[MAXPLAYERS+1];
+int     g_GridCachedSurvCount;
+float   g_GridEffectiveMinDist;
+Address g_GridCachedSurvNavArea[MAXPLAYERS+1];
+bool    g_GridSurvNavAreaComputed[MAXPLAYERS+1];
+
+// Per-update timing accumulators (reset each tick, read by perf log)
+float  g_GridMs_obstruct;
+float  g_GridMs_nav;
+float  g_GridMs_los;
+float  g_GridMs_dist;
+int    g_GridN_obstructed;
+int    g_GridN_nav;
+int    g_GridN_los;
+int    g_GridN_dist;
+int    g_GridN_valid;
+
 float t_vomited[MAXPLAYERS+1] = {0.0,...}; // tracking when to spawn horde
 
 bool specials_frozen = false;

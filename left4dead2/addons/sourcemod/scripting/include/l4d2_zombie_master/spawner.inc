@@ -104,7 +104,11 @@ void Spawner_EndSpawn()
 void Spawner_OnEnabled(int client)
 {
     if (client <= 0 || client > MaxClients) return;
-    if (g_iSpawnerMode>0) Grid_OnEnabled(client);
+    if (g_iSpawnerMode>0)
+    {
+        GridRenderer_SetAlphaFade(g_iSpawnerMode==2);
+        Grid_OnEnabled(client);
+    }
 }
 
 /** Provider teardown when ZM role ends or provider switches. */

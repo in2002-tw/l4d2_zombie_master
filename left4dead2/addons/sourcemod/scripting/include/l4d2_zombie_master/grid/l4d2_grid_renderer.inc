@@ -154,7 +154,7 @@ stock void GridRenderer_HideAll(int client)
  */
 stock void GridRenderer_ResolveColor(bool isValid, bool isClosest, int color[4])
 {
-	if (isClosest)
+	if (isClosest && g_iSpawnerMode==2)
 	{
 		if (isValid)
 		{

@@ -12,53 +12,6 @@
  * Flow spawns delegate to the analog provider.
  */
 
-#define GRID_SEARCH_RADIUS  150.0
-#define GRID_MAX_Z_DIFF     100.0
-#define GRID_MAX_CELLS      25
-#define GRID_UPDATE_RATE    0.1
-
-// State
-static Handle g_hGridTimer;
-static bool   g_bGridReady;
-
-// Per-spawn flow marker state (same pattern as analog)
-static bool   g_bGridFlowUsed;
-static int    g_iGridTargetClient;
-static bool   g_bGridHint;
-static bool   g_bGridBatchMode;
-static bool   g_bGridSurvivorBeamDrawn;
-
-// Cached validation results from last timer update
-static float  g_GridValidPositions[GRID_MAX_CELLS][3];
-static bool   g_GridValidFlags[GRID_MAX_CELLS];
-static int    g_GridCellIndices[GRID_MAX_CELLS];
-static int    g_GridCellCount;
-static float  g_GridClosestValidPos[3];
-static bool   g_GridHasValidCell;
-
-// Physics prop position overrides (runtime-adjusted positions on top of props)
-static float  g_GridOverridePositions[GRID_MAX_CELLS][3];
-static bool   g_GridHasOverride[GRID_MAX_CELLS];
-
-// Validation context - set before the cell loop, read by helpers
-static float   g_GridCachedSurvPos[MAXPLAYERS+1][3];
-static float   g_GridCachedSurvFlow[MAXPLAYERS+1];
-static int     g_GridCachedSurvCount;
-static float   g_GridEffectiveMinDist;
-static Address g_GridCachedSurvNavArea[MAXPLAYERS+1];
-static bool    g_GridSurvNavAreaComputed[MAXPLAYERS+1];
-
-// Per-update timing accumulators (reset each tick, read by perf log)
-static float  g_GridMs_obstruct;
-static float  g_GridMs_nav;
-static float  g_GridMs_los;
-static float  g_GridMs_dist;
-static int    g_GridN_obstructed;
-static int    g_GridN_nav;
-static int    g_GridN_los;
-static int    g_GridN_dist;
-static int    g_GridN_valid;
-
 // ==========================================================================
 // Lifecycle
 // ==========================================================================
