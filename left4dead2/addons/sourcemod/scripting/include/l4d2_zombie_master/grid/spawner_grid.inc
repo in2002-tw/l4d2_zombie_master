@@ -48,8 +48,7 @@ void Grid_OnEnabled(int client)
         KillTimer(g_hGridTimer);
         g_hGridTimer = null;
     }
-    g_hGridTimer = CreateTimer(GRID_UPDATE_RATE, Grid_TimerUpdate,
-        GetClientUserId(client), TIMER_REPEAT);
+    if (g_iSpawnerMode==2) g_hGridTimer = CreateTimer(GRID_UPDATE_RATE, Grid_TimerUpdate, GetClientUserId(client), TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
     g_GridCellCount = 0;
     g_GridHasValidCell = false;
 }
@@ -410,6 +409,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
 int Grid_Update()
 {
+    if (g_iSpawnerMode==1 && IsValidClientZM()) Grid_TimerUpdate(null,GetClientUserId(zm_client));
     return zm_spawner_state;
 }
 
