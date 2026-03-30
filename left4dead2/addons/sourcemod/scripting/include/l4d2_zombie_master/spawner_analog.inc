@@ -40,7 +40,7 @@ void update_ZM_spawner(const float target_pos[3], const float spawner_pos[3], co
         TE_SetupBeamRingPoint(draw_pos,HULL_DX-2.0,HULL_DX+2.0,g_iLaser,g_iHalo,0,0,g_fUpdateRate*2.0,1.5,0.0,color,0,0);
         TE_SendToClient(zm_client);
         
-        float t_now = GetEngineTime();
+        float t_now = GetGameTime();
         
         if ( (zm_spawner_state!=state && (t_now-t_last_spawner_sound)>=2.0) )
         {
@@ -436,7 +436,7 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
         return false;
     }
 
-    float t_start = GetEngineTime();
+    float t_start = GetEngineTime(); // for profiling
 
     // Set up filter context and batch PVS
     //g_SpawnerFilterOrigin = origin;

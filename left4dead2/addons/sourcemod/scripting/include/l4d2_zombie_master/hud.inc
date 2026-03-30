@@ -57,7 +57,7 @@ Action perform_HUD_update(Handle timer = null)
     int HUD_ZM_flags = HUD_FLAG_TEAM_INFECTED|HUD_FLAG_ALIGN_LEFT|HUD_FLAG_TEXT;
     int HUD_ZM_HINT_flags = HUD_FLAG_TEAM_INFECTED|HUD_FLAG_ALIGN_LEFT|HUD_FLAG_TEXT|HUD_FLAG_NOBG;
     
-    float t_now = GetEngineTime();
+    float t_now = GetGameTime();
     int rows;
     float cols;
     

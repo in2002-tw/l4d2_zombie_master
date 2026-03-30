@@ -461,6 +461,8 @@ static void GridRendererProp_UpdateEntity(int client, int idx,
 	SetEntityRenderColor(ent, color[0], color[1], color[2], color[3]);
 
 	int effects = GetEntProp(ent, Prop_Send, "m_fEffects");
+	if (g_iSpawnerMode<2) effects = (effects & ~EF_NODRAW) | EF_NOSHADOW;
+	else effects = (effects & ~EF_NODRAW) | EF_NOSHADOW | EF_NOINTERP;
 	SetEntProp(ent, Prop_Send, "m_fEffects", (effects & ~EF_NODRAW) | EF_NOSHADOW | EF_NOINTERP);
 
 	GridRendererProp_SetGlow(ent, glow, color);

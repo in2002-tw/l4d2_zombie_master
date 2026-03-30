@@ -29,7 +29,7 @@ bool Spawner_Can_Spawn(int client)
 void Spawner_Update()
 {
     bool update_analog, update_grid;
-    float t_now = GetEngineTime();
+    float t_now = GetGameTime();
     if ( g_bGrid && g_iSpawnerMode>0 && (t_now-t_last_spawner_grid_update)>=g_fUpdateRate )
         update_grid = true;
     if ( (g_iSpawnerMode<2 || !g_bGrid) && (t_now-t_last_spawner_update)>=g_fUpdateRate )

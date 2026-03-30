@@ -97,7 +97,7 @@ Action fair_queue_update(Handle timer = null)
     
     if (DEBUG) LogMessage("[zm] fair_queue_update");
     
-    float t_now = GetEngineTime();
+    float t_now = GetGameTime();
 
     if (IsValidClient(client_offer) && !IsFakeClient(client_offer))
     {

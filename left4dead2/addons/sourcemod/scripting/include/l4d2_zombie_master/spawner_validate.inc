@@ -40,7 +40,7 @@ void Spawner_BeginBatchPVS()
 		g_iBatchSurvivorCount++;
 	}
 	g_bBatchPVSActive = g_iBatchSurvivorCount>0;
-	if (g_bBatchPVSActive) g_fBatchTime = GetEngineTime();
+	if (g_bBatchPVSActive) g_fBatchTime = GetGameTime();
 	if (DEBUG_SPAWNER) LogMessage("[zm] BeginBatchPVS: %d survivors, active=%d", g_iBatchSurvivorCount, g_bBatchPVSActive);
 }
 
@@ -49,7 +49,7 @@ bool Is_PVS_Valid()
 {
     if (g_bBatchPVSActive)
     {
-        if ( g_iAliveSurvivors!=g_iBatchSurvivorCount || (GetEngineTime()-g_fBatchTime)>PVS_VALID_TIME)
+        if ( g_iAliveSurvivors!=g_iBatchSurvivorCount || (GetGameTime()-g_fBatchTime)>PVS_VALID_TIME)
         {
             g_bBatchPVSActive = false;
             g_iBatchSurvivorCount = 0;

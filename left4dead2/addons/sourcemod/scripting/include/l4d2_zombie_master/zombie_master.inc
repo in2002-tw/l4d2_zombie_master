@@ -804,13 +804,13 @@ Action ZM_MOTD(int client, int args)
 void update_t_zm_activity(float new_t = -1.0)
 {
     zm_kick_notify = false;
-    if (new_t<0.0) t_zm_activity = GetEngineTime();
+    if (new_t<0.0) t_zm_activity = GetGameTime();
     else t_zm_activity = new_t;
 }
 
 bool is_zm_spamming()
 {
-    float t_now = GetEngineTime();
+    float t_now = GetGameTime();
     if ( (t_now-t_last_action)<=0.11 ) // typical tickrate is 30
     {
         update_hint("%T", "STOP SPAMMING", zm_client);
@@ -1092,7 +1092,7 @@ float get_bank_rate()
          multiplier = 2.0;
      }
      else if ( (current==FINALE_CUSTOM_CLEAROUT || current==FINALE_CUSTOM_SCRIPTED) &&
-               (GetEngineTime()-t_finale)>=g_fMinFinaleStage ) 
+               (GetGameTime()-t_finale)>=g_fMinFinaleStage ) 
      {
          zero_rate = false;
      }
@@ -2050,7 +2050,7 @@ void start_zm_round(bool play_sound = true)
      if (IsValidClientZM()) PrintHintText(zm_client, "%t", "Round started");
      update_hint("%T", "Round started", zm_client);
      if (play_sound) EmitSoundToAll(SOUND_START);
-     t_round_start = GetEngineTime();
+     t_round_start = GetGameTime();
      L4D2Direct_SetPendingMobCount(0);
      if (g_bMemes && !meme_delivered)
      {
@@ -2225,7 +2225,7 @@ void update_director_script_scopes(bool warn = true)
         if (DEBUG && warn) LogMessage("[zm] DirectorOptions scope changed! mob %d", pending_mob); 
         old_scope4 = scope4;
         //scope_changed = true;
-        //t_scope_change = GetEngineTime();
+        //t_scope_change = GetGameTime();
     }
      
 }
@@ -2313,7 +2313,7 @@ Action JoinZM(int client, int args)
       		{
           		char name[MAX_NAME_LENGTH]; 
                 GetClientName(client_offer,name,sizeof(name));
-                int timeleft = RoundFloat(g_fFairQueueWait - (GetEngineTime() - t_offer));
+                int timeleft = RoundFloat(g_fFairQueueWait - (GetGameTime() - t_offer));
                 if (timeleft<0) timeleft = 0;
            		PrintToChat(client, "[zm] %T", "Offered ZM Ticker", client, name, timeleft); 
       		}
@@ -2509,7 +2509,7 @@ Action zm_kick(int client, int args)
 
 void update_vomited(int victim)
 {
-    float t_now = GetEngineTime();
+    float t_now = GetGameTime();
     if ( FloatAbs(t_now-t_vomited[victim])<5.0 ) return;
     request_update_glow(victim);
     t_vomited[victim] = t_now;

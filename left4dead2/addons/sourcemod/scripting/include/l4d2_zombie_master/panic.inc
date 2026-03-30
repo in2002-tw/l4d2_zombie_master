@@ -23,7 +23,7 @@ void update_panic()
     if (!panic) toggle_panic(true,true,true);
     else
     {
-        t_last_panic = GetEngineTime();
+        t_last_panic = GetGameTime();
         available_zombie_arr[ZOMBIECLASS_COMMON]=max_zombie_arr[ZOMBIECLASS_COMMON];
     }
     
@@ -80,7 +80,7 @@ void toggle_panic(bool state = true, bool overwrite = false, bool free = false)
            EmitSoundToClient(zm_client,SOUND_PANIC_ON,_,_,_,_,_,GetRandomInt(90,110));
        panic = true;
        if (!manual_panic || g_bPanicRefill) available_zombie_arr[ZOMBIECLASS_COMMON]=max_zombie_arr[ZOMBIECLASS_COMMON];
-       float t_now = GetEngineTime()
+       float t_now = GetGameTime()
        if (strcmp(g_sCvarMPGameMode,"zm_clowns",false)==0 && clown_world_enable && (t_now-t_last_panic)>=30.0) ServerCommand("clown_world_randomize");
        t_last_panic = t_now;
        t_last_autocommon = t_last_panic - 5.0; // immediately start spawning autocommon PANIC zombies
@@ -179,7 +179,7 @@ bool panic_conditions(bool mob_just_spawned=false)
     }
     else return false;
     
-    if ((GetEngineTime()-t_round_start)<=10.0) return false;
+    if ((GetGameTime()-t_round_start)<=10.0) return false;
     if (panic && manual_panic) return false;
     if (script_CommonLimit<=0) return false;
     if (L4D2Direct_GetPendingMobCount()<=0 && !mob_just_spawned && !natural_mob) return false;
@@ -190,7 +190,7 @@ void check_panic(bool mob_spawned = false)
 {
     if (!L4D_IsSurvivalMode() && !ZM_finale_announced)
     {
-        float t_now = GetEngineTime();
+        float t_now = GetGameTime();
         if (panic_conditions(mob_spawned)) update_panic();
         else if (panic && (t_now-t_last_panic)>=g_fPanicDuration ) toggle_panic(false,true,true);
         else if (!panic)

@@ -32,7 +32,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.05 2026-03-30"
+#define PLUGIN_VERSION 			"0.9.06 2026-03-30"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -94,6 +94,7 @@ public Plugin myinfo =
 // 26. New models for uncommons.
 // 27. Majority of code moved to /include
 // 28. Major spawner overhaul: GridLib implemented
+// 29. Some game logic related checks were referencing GetEngineTime and not GameTime.Whoops!
 
 // TO DO LIST:
 // 5. Gas station tornado (done by zyiks, not implemented)
@@ -602,7 +603,7 @@ Action zm_update(Handle timer = null)
        check_panic();
    }
    
-   float t_now = GetEngineTime();
+   float t_now = GetGameTime();
    float dt = t_now - t_last_update;
    if (dt>0.0)
    {
@@ -960,7 +961,7 @@ Action zm_new_round(Handle timer = null)
     
     ZM_finale_announced = false;
     zm_can_start = !g_bLockSaferoom;
-    t_last_update = GetEngineTime();
+    t_last_update = GetGameTime();
     t_last_panic = t_last_update;
     t_last_spawner_update = t_last_update;
     t_last_spawner_grid_update = t_last_update;
@@ -1279,7 +1280,7 @@ public void L4D2_OnChangeFinaleStage_Post(int finaleType, const char[] arg)
     
     available_zombie_arr[ZOMBIECLASS_COMMON]=max_zombie_arr[ZOMBIECLASS_COMMON];
     
-    float t_now = GetEngineTime();
+    float t_now = GetGameTime();
     int add_bank = g_iBonusFinaleStage*g_iAliveSurvivors;
     if ( (t_now-t_finale)>=g_fMinFinaleStage || finaleType==FINALE_HORDE_ESCAPE ||
             finaleType==FINALE_GAUNTLET_ESCAPE || prev_finaleType==FINALE_HALFTIME_BOSS || prev_finaleType==FINALE_FINAL_BOSS ||
@@ -1994,7 +1995,7 @@ void Event_TriggeredCarAlarm(Event event, const char[] name, bool dontBroadcast)
         else
         {
             bank += g_iPanicCost;
-            t_last_panic = GetEngineTime();
+            t_last_panic = GetGameTime();
         }
     }
     
@@ -2143,7 +2144,7 @@ public void OnClientPutInServer(int client)
 	if (!IsFakeClient(client))
 	{
        	clients_in_server = true;
-       	t_last_join = GetEngineTime();
+       	t_last_join = GetGameTime();
        	if (DEBUG) LogMessage("[zm] t_last_join updated");
        	CreateTimer(15.0,set_client_active,client,TIMER_FLAG_NO_MAPCHANGE);
        	if (fq_timer==INVALID_HANDLE) fq_timer = CreateTimer(2.0,fair_queue_update);
@@ -2156,7 +2157,7 @@ public void OnClientPutInServer(int client)
 public void OnClientConnected(int client)
 {
     if (!g_bCvarAllow || IsFakeClient(client)) return;
-    clients_t_join[client] = GetEngineTime();
+    clients_t_join[client] = GetGameTime();
     clients_offered[client] = false;
 }
 

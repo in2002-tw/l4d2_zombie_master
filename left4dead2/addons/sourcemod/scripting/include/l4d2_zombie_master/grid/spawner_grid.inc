@@ -396,7 +396,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     }
 
     if (g_iSpawnerMode==2) zm_target_pos = aimPos;
-    t_last_spawner_grid_update = GetEngineTime();
+    t_last_spawner_grid_update = GetGameTime();
 
     // Render
     float t_render = GetEngineTime();

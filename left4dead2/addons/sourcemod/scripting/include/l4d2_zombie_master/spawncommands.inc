@@ -127,6 +127,8 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 	
 	if (hint && is_zm_spamming()) return;
 	
+	//float t_start = GetEngineTime(); // for profiling
+	
 	CountCommons(null,false);
 	if (live_zombie_arr[ZOMBIECLASS_COMMON]>=max_zombie_arr[ZOMBIECLASS_COMMON])
 	{
@@ -307,6 +309,10 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
     	//zm_update();
     	update_EMS_HUD();
 	}
+	
+	//float elapsed_ms = (GetEngineTime() - t_start) * 1000.0;
+	//LogMessage("ZM_Horde ct=%d %s angry=%d flow=%d took %f ms",count,type,angry,flow,elapsed_ms);
+	
 }
 
 /**

@@ -389,7 +389,7 @@ void can_zm_start()
       return;
    }
    
-   float t_now = GetEngineTime();
+   float t_now = GetGameTime();
    if ( IsValidClientZM() && (t_now-t_last_join)>=saferoom_cooldown )
    {
       if ((t_now - t_zm_join)>=g_fPrepTimeZM) zm_can_start = true;
@@ -560,7 +560,7 @@ void tp_survivor_start(int client, bool notify = false)
 Action Timer_StartPrecomputeNav(Handle timer)
 {
 	if (DEBUG) LogMessage("[zm] Starting navmesh precomputation...");
-	float startTime = GetEngineTime();
+	float startTime = GetEngineTime(); // for profiling
 
 	// Get all nav areas
 	ArrayList allAreas = new ArrayList();

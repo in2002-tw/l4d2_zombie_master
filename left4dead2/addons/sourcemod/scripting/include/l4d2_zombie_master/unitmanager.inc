@@ -35,14 +35,14 @@ bool verify_stutter_fixed()
     if (IsClientTimingOut(zm_client))
     {
         float latency = GetClientAvgLatency(zm_client, NetFlow_Both) * 2.0;
-        t_stutter = GetEngineTime() + latency;
+        t_stutter = GetGameTime() + latency;
         return false;
     }
     if (IsPlayerAlive(zm_client))
     {
         return true;
     }
-    if ( GetEngineTime()>(t_stutter+5.0) )
+    if ( GetGameTime()>(t_stutter+5.0) )
     {
         LogMessage("[zm] Tank stutter fix timed out, report this to mod authors");
         EmitSoundToAll(SOUND_BUG);
@@ -55,7 +55,7 @@ void NextFrame_Check_Stutter(int stored_roundcount)
 {
     if (DEBUG) LogMessage("[zm] NextFrame_Check_Stutter");
     if (stored_roundcount!=roundcount) return;
-    if (verify_stutter_fixed() && GetEngineTime()>t_stutter)
+    if (verify_stutter_fixed() && GetGameTime()>t_stutter)
     {
         RequestFrame(ZM_FixCamera,false);
         CreateTimer(1.0,stop_tankmusic,TIMER_FLAG_NO_MAPCHANGE);
@@ -85,7 +85,7 @@ void ZM_FixTankStutter(bool freeze = true)
     SetEntProp(zm_client,Prop_Data,"m_iHealth",0);
     
     float latency = GetClientAvgLatency(zm_client, NetFlow_Both) * 2.0;
-    t_stutter = GetEngineTime() + latency;
+    t_stutter = GetGameTime() + latency;
     
     if (DEBUG) LogMessage("[zm] ZM_FixTankStutter, latency %f", latency);
     RequestFrame(NextFrame_Check_Stutter,roundcount);
@@ -241,7 +241,7 @@ float get_class_cooldown(int ZOMBIECLASS)
 
 void sanity_check_available(int zClass, float t_now = -1.0)
 {
-    if (t_now<0.0) t_now = GetEngineTime();
+    if (t_now<0.0) t_now = GetGameTime();
     bool apply_cooldown = false;
     if (live_zombie_arr[zClass]>0) apply_cooldown = true;
     else if ( available_zombie_arr[zClass]<max_zombie_arr[zClass] &&
@@ -267,7 +267,7 @@ void create_timer_add_available_zombie(float delay,int zClass, int round, int co
     char zClassName[32]; 
     get_zombieclass_name(zClass,zClassName);
     if (DEBUG) LogMessage("[zm] create_timer_add_available_zombie %d %s, delay: %f", count, zClassName, delay);
-    timestamp_available_arr[zClass] = GetEngineTime() + delay;
+    timestamp_available_arr[zClass] = GetGameTime() + delay;
     DataPack pack;
     CreateDataTimer(delay, timer_add_available_zombie, pack, TIMER_FLAG_NO_MAPCHANGE);
     pack.WriteCell(zClass);
@@ -298,7 +298,7 @@ void add_available_zombie(int zClass, int add=1, bool draw = true)
         if (DEBUG) LogMessage("[zm] add_available_zombie %d %s", add, zClassName);
     }
     
-    if (add<0) timestamp_available_arr[zClass] = GetEngineTime()+get_class_cooldown(zClass);
+    if (add<0) timestamp_available_arr[zClass] = GetGameTime()+get_class_cooldown(zClass);
     
     available_zombie_arr[zClass] += add;
     if (available_zombie_arr[zClass]>max_zombie_arr[zClass]) available_zombie_arr[zClass] = max_zombie_arr[zClass];
