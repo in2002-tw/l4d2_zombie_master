@@ -336,20 +336,6 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
     return SPAWNER_OK;
 }
 
-bool can_ZM_see(float vPos[3])
-{
-    if (!IsValidClientZM()) return false;
-    bool can_see = true;
-    float vEye[3], vPos2[3];
-    vPos2 = vPos; vPos2[2] += 32.0;
-    GetClientEyePosition(zm_client,vEye);
-    Handle trace = TR_TraceRayFilterEx(vEye,vPos2,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,zm_client);
-    if(TR_DidHit(trace)) can_see = false;
-    delete trace;
-    //LogMessage("can_ZM_see %d", can_see);
-    return can_see;
-}
-
 /**
  * GridLib filter callback for spawn cell validation.
  * Returns GRIDLIB_FILTER_KEEP, GRIDLIB_FILTER_DISCARD, or GRIDLIB_FILTER_DISCARD_NAV.

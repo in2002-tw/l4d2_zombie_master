@@ -801,8 +801,8 @@ stock bool nav_can_spawn_zombies(const int zClass = ZOMBIECLASS_COMMON,
     if (navArea!=Address_Null && l4dhooks_updated && L4D_NavArea_IsBlocked(navArea,TEAM_INFECTED,false)) return false;
     if (navAttributeFlags<0) navAttributeFlags = L4D_GetNavArea_AttributeFlags(navArea);
     if (navSpawnAttributes<0) navSpawnAttributes = L4D_GetNavArea_SpawnAttributes(navArea);
-    //if (navSpawnAttributes&NAV_SPAWN_EMPTY && navSpawnAttributes&NAV_SPAWN_NO_MOBS && navSpawnAttributes&NAV_SPAWN_NOTHREAT) return false;
-    if (navSpawnAttributes&NAV_SPAWN_EMPTY && navSpawnAttributes&NAV_SPAWN_NOTHREAT) return false;
+    if (navSpawnAttributes&NAV_SPAWN_EMPTY && navSpawnAttributes&NAV_SPAWN_NO_MOBS && navSpawnAttributes&NAV_SPAWN_NOTHREAT) return false;
+    //if (navSpawnAttributes&NAV_SPAWN_EMPTY && navSpawnAttributes&NAV_SPAWN_NOTHREAT) return false;
     if (zClass!=ZOMBIECLASS_WITCH)
     {
         if (navAttributeFlags & NAV_BASE_OUTSIDE_WORLD) return false;
@@ -2495,4 +2495,19 @@ float distance_last_saferoom(float pos[3])
     if (ZM_finale_announced || L4D_IsSurvivalMode() || !IsValidEntity(lastdoor)) return -1.0;
     L4D_GetEntityWorldSpaceCenter(lastdoor,last_saferoom_pos);
     return GetVectorDistance(pos,last_saferoom_pos);
+}
+
+// Check if ZM can see position
+bool can_ZM_see(float vPos[3])
+{
+    if (!IsValidClientZM()) return false;
+    float vEye[3], vPos2[3];
+    GetClientEyePosition(zm_client,vEye);
+    if (GetVectorDistance(vPos,vEye)>=fog_distance) return false;
+    vPos2 = vPos; vPos2[2] += 32.0;
+    bool can_see = true;
+    Handle trace = TR_TraceRayFilterEx(vEye,vPos2,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,zm_client);
+    if(TR_DidHit(trace)) can_see = false;
+    delete trace;
+    return can_see;
 }
