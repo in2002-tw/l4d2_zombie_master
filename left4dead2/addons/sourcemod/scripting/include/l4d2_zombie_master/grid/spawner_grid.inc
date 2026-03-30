@@ -274,24 +274,27 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     }
 
     float t_start = GetEngineTime();
-
-    // Aim trace
-    float eyePos[3], eyeAngles[3];
-    GetClientEyePosition(client, eyePos);
-    GetClientEyeAngles(client, eyeAngles);
-
-    Handle trace = TR_TraceRayFilterEx(eyePos, eyeAngles, MASK_SOLID,
-        RayType_Infinite, FilterSpawner, client);
-
-    if (!TR_DidHit(trace))
+    static float aimPos[3];
+    if (g_iSpawnerMode==1 && zm_spawner_state==SPAWNER_OK) aimPos = zm_spawner_pos;
+    else
     {
+        // Aim trace
+        static float eyePos[3], eyeAngles[3];
+        GetClientEyePosition(client, eyePos);
+        GetClientEyeAngles(client, eyeAngles);
+    
+        Handle trace = TR_TraceRayFilterEx(eyePos, eyeAngles, MASK_SOLID,
+            RayType_Infinite, FilterSpawner, client);
+    
+        if (!TR_DidHit(trace))
+        {
+            delete trace;
+            return Plugin_Continue;
+        }
+    
+        TR_GetEndPosition(aimPos, trace);
         delete trace;
-        return Plugin_Continue;
     }
-
-    float aimPos[3];
-    TR_GetEndPosition(aimPos, trace);
-    delete trace;
 
     // Find nearby cells
     float t_find = GetEngineTime();

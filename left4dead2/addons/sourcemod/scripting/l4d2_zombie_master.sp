@@ -850,6 +850,7 @@ Action zm_update(Handle timer = null)
       
       // Draw spawner visuals for ZM. Grid visualizer runs on its own timer
       if (zm_menu_state>ZM_MENU_CLOSED) Spawner_Update();
+      else if (g_iSpawnerMode>0 && g_bGridReady) GridRenderer_HideAll(zm_client); // grid needs to be hidden manually
       
    }
    else
