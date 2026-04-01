@@ -8,8 +8,8 @@
 #include <left4dhooks>
 
 #define PLUGIN_NAME			"l4d2_shoot_alert_common"
-#define PLUGIN_VERSION 		"1.88 2026-03-19"
-#define CONFIG_FILENAME     PLUGIN_NAME
+#define PLUGIN_VERSION 		"1.89 2026-04-01"
+#define CONFIG_FILENAME       PLUGIN_NAME
 
 public Plugin myinfo =
 {
@@ -20,6 +20,17 @@ public Plugin myinfo =
 	url = "https://forums.alliedmods.net/showthread.php?t=352360,https://github.com/gvazdas/l4d2_zombie_master"
 }
 
+enum // ty Silvers
+{
+	TYPE_CEDA			= 11,
+	TYPE_MUD_MEN		= 12,
+	TYPE_ROAD_WORKER	= 13,
+	TYPE_FALLEN		= 14,
+	TYPE_RIOT			= 15,
+	TYPE_CLOWN		= 16,
+	TYPE_JIMMY_GIBBS	= 17
+}
+
 #define TEAM_SPECTATOR		1
 #define TEAM_SURVIVOR		2
 #define TEAM_INFECTED		3
@@ -28,13 +39,6 @@ public Plugin myinfo =
 #if DEBUG
 int g_iLaser;
 #endif
-
-// Infected Actions:
-// InfectedDying
-// InfectedStaggerAround InfectedLeanOnWall InfectedStandDazed InfectedWander
-// InfectedAlert
-// InfectedAttack -> ChaseVictim, PunchVictim
-// InfectedExecAction
 
 // Optimizations
 Handle timer_hook; // reduce weapon_fire hook/unhook spam
@@ -127,7 +131,7 @@ void ConVarChanged_Gamemode(ConVar convar, const char[] oldValue, const char[] n
 
 void GetCvars()
 {
-    bool update = false;
+    bool update = false; // should hooks be checked?
     alert_range = g_hCvarAlertRange.FloatValue;
     rush_range = g_hCvarRushRange.FloatValue;
     alert_probability = g_hCvarAlertProbability.FloatValue;
@@ -335,7 +339,7 @@ public void L4D_PipeBomb_Detonate_Post(int entity, int client)
 {
     if (!weapon_fire_hooked) return;
     if (!IsValidClient(client) || GetClientTeam(client)!=TEAM_SURVIVOR) return;
-    char class[32];
+    static char class[32];
     GetEntityClassname(entity,class,sizeof(class));
     if (strcmp(class,"pipe_bomb_projectile")!=0) return; // bug noted in l4dhooks documentation
     #if DEBUG 
@@ -349,7 +353,7 @@ void alert_constructor(int entity, int client, float multiplier = 1.0, bool forc
 {
     if (multiplier<=0.0) return; // 0.0 multipliers mean silence.
     if (!force && FindEntityByClassname(-1,"pipe_bomb_projectile")!=INVALID_ENT_REFERENCE) return; // pipe bombs are louder than any gun or voice.
-    float pos[3];
+    static float pos[3];
     //L4D_GetEntityWorldSpaceCenter(entity,pos);
     GetEntPropVector(entity,Prop_Send,"m_vecOrigin",pos); // for consistency with L4D_FindEntityByClassname
     pos_arr[client][0] = pos[0]; pos_arr[client][1] = pos[1]; pos_arr[client][2] = pos[2];
@@ -370,7 +374,7 @@ Action alert_update(Handle timer, int entref) // Delayed alert nearby infected.
     float max_range = get_max_range(multipliers[client]);
     if (max_range<=20.0) return Plugin_Stop; // range too small to catch anything.
     if (local[client] && FindEntityByClassname(-1,"pipe_bomb_projectile")!=INVALID_ENT_REFERENCE) return Plugin_Stop; // unless we are a grenade, pipe bombs are louder
-    float pos[3];
+    static float pos[3];
     pos[0] = pos_arr[client][0]; pos[1] = pos_arr[client][1]; pos[2] = pos_arr[client][2];
     if (l4dhooks_updated && L4D_FindEntityByClassnameNearest("infected",pos,max_range)<=0) return Plugin_Stop;
     //if (local[client] && rush_range>0.0 && l4dhooks_updated) L4D2_RushVictim(client,range_rush_effective/LOS_multiplier);
@@ -427,7 +431,7 @@ bool AlertCallback(int entity, int client) // Return true to continue enumeratin
         ignore_infected(entity);
         return true;
     }
-    float pos[3], pos2[3];
+    static float pos[3], pos2[3];
     pos[0] = pos_arr[client][0]; pos[1] = pos_arr[client][1]; pos[2] = pos_arr[client][2];
     //L4D_GetEntityWorldSpaceCenter(entity,pos2);
     GetEntPropVector(entity,Prop_Send,"m_vecOrigin",pos2);
@@ -550,7 +554,7 @@ void evtPlayerTeam(Event event, const char[] name, bool dontBroadcast)
 
 int get_commons(bool calm=false, bool late=false) // Counting ONLY non-aggro infected
 {
-    int entity = -1;
+    int entity = INVALID_ENT_REFERENCE;
     int count = 0;
     while( (entity = FindEntityByClassname(entity,"infected")) != INVALID_ENT_REFERENCE )
     {
@@ -608,10 +612,9 @@ void reset_timers(bool force = true) // Cancel pending alert_update
 
 stock bool is_infected(int infected)
 {
-    char class[16];
+    static char class[16];
     GetEntityClassname(infected,class,sizeof(class));
     return strcmp(class,"infected")==0;
-    //return HasEntProp(infected,Prop_Send,"m_mobRush"); // Silvers benchmarked - this is slower!
 }
 
 stock bool is_bad_infected(int infected) // both props change dynamically and need to be monitored.
@@ -621,13 +624,7 @@ stock bool is_bad_infected(int infected) // both props change dynamically and ne
 
 stock bool infected_can_hear(int infected) // prop is set once on entity create and never changed.
 {
-    char sModelName[64]; // Road crew have headphones, ignore gunfire.
-    GetEntPropString(infected,Prop_Data,"m_ModelName",sModelName,sizeof(sModelName));
-    if (strncmp(sModelName[28],"roadcrew",8,false)==0 || strncmp(sModelName[28],"baggagehandler_02",17,false)==0)
-    {
-        return false;
-    }
-    return true;
+    return GetEntProp(infected,Prop_Send,"m_Gender")!=TYPE_ROAD_WORKER;
 }
 
 stock float get_max_range(float multiplier = 1.0) // Find max of alert range and rush range.
