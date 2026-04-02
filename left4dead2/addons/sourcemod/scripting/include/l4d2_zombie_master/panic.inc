@@ -92,7 +92,8 @@ void toggle_panic(bool state = true, bool overwrite = false, bool free = false)
        if (!manual_panic && IsValidClientZM()) PrintHintText(zm_client, "%t", "ZM panic notify");
        if (manual_panic) update_hint("%T", "panic_rate_reduced", zm_client);
        actual_state = true;
-       infected_panic(hInfectedAttackSurvivorTeam);
+       //infected_panic(hInfectedAttackSurvivorTeam);
+       infected_panic(null);
        
     }
     else

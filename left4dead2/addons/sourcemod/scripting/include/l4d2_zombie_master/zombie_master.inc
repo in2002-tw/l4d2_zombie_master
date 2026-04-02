@@ -1795,8 +1795,6 @@ bool can_change_finale_stage()
 void announce_finale()
 {
     if (DEBUG) LogMessage("[zm] announce_finale");
-    //if (hInfectedAttackSurvivorTeam) infected_panic(hInfectedAttackSurvivorTeam,true);
-    //infected_panic(null,true); // force all commons to mobrush so they don't get culled by director
     if (L4D_IsSurvivalMode() || zm_stage!=ZM_STARTED) return;
     if (panic) toggle_panic(false,true);
     if (!ZM_finale_announced)

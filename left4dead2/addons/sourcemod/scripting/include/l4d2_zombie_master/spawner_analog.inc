@@ -179,7 +179,7 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
         return SPAWNER_INVALID;
     }
     
-    bool ignore_zombies = zClass == ZOMBIECLASS_COMMON;
+    bool ignore_zombies = zClass==ZOMBIECLASS_COMMON;
     // vPos: input, adjusted on the fly
 	// vPos_spawner: final spawner position (output). later we decide where to draw the spawner depending on its state.
 	float vPos_spawner[3];
@@ -243,7 +243,7 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
     else
     {
         vPos_spawner = vPos;
-        if (zClass!=ZOMBIECLASS_WITCH)
+        if (zClass!=ZOMBIECLASS_WITCH || IsObstructed(vPos_spawner,_,_,ignore_zombies))
         {
             spawner_state = SPAWNER_INVALID;
             fail = true;
@@ -279,6 +279,11 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
             if (fail) spawner_state = SPAWNER_SIGHT;
         }
     }
+    //if (!fail && IsObstructed(vPos_spawner,_,_,ignore_zombies))
+    //{
+    //    fail = true;
+    //    spawner_state = SPAWNER_OTHER;
+    //}
     if (fail && draw && spawner_state>SPAWNER_NAV && get_spawner_target_survivor(false,SPAWNER_DISTANCE)<0) // check other candidates
     {
         float newPos[3];
@@ -306,7 +311,6 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
             spawner_state = SPAWNER_OK;
             if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(newPos,check_dist,true,true,true,TEAM_INFECTED);
         }
-        
     }
     if (fail)
     {
@@ -833,6 +837,7 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
     if (flow) spawner_state = SPAWNER_DISTANCE;
     else spawner_state = Analog_CanSpawn(ZOMBIECLASS_WITCH);
     outPos = zm_spawner_pos;
+    LogMessage("Analog_ResolveWitchPosition %d", spawner_state);
 
     if (spawner_state != SPAWNER_OK)
     {
@@ -850,7 +855,6 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
             if (!fail && IsObstructed(outPos,_,_,false)) fail = true;
         }
         if (fail) return false;
-
         g_bAnalogFlowUsed = true;
         g_iAnalogTargetClient = target_client;
     }

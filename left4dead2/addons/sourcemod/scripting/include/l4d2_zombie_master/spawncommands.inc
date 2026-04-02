@@ -73,7 +73,6 @@ Action ZM_Spawn_Horde(int client, int args)
 Action clown_check_rush(Handle timer, int entref)
 {
     if (!IsValidEntRef(entref)) return Plugin_Stop;
-    if (!HasEntProp(entref, Prop_Send, "m_mobRush")) return Plugin_Stop;
     if (panic) return Plugin_Continue;
     bool glow = false;
     if ((GetEntProp(entref, Prop_Send, "m_mobRush"))>0) glow = true;
@@ -266,7 +265,7 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
            g_iEntities += 1;
            if (angry)
            {
-               if (hInfectedAttackSurvivorTeam) SDKCall(hInfectedAttackSurvivorTeam,zombie);
+               //if (hInfectedAttackSurvivorTeam) SDKCall(hInfectedAttackSurvivorTeam,zombie);
                SetEntProp(zombie, Prop_Send, "m_mobRush", 1);
            }
            
@@ -625,9 +624,9 @@ void spawn_free_angry_zombies(int victim, int count, bool refund = true)
             if (zombie>0)
             {
                 live_zombie_arr[ZOMBIECLASS_COMMON] += 1;
-                if (hInfectedAttackSurvivorTeam) SDKCall(hInfectedAttackSurvivorTeam,zombie);
+                //if (hInfectedAttackSurvivorTeam) SDKCall(hInfectedAttackSurvivorTeam,zombie);
                 SetEntProp(zombie, Prop_Send, "m_mobRush", 1);
-                SetEntPropEnt(zombie, Prop_Send, "m_clientLookatTarget",victim);
+                if (IsPlayerAlive(victim)) command_infected_attack(zombie,victim);
             }
 
         }

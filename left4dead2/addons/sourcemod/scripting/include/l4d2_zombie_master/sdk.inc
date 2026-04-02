@@ -24,7 +24,7 @@ Handle hCreateTank = null;
 #define NAME_CreateTank "NextBotCreatePlayerBot<Tank>"
 #define NAME_CreateTank_L4D1 "reloffs_NextBotCreatePlayerBot<Tank>"
 
-Handle hInfectedAttackSurvivorTeam = null;
+//Handle hInfectedAttackSurvivorTeam = null;
 //hTankEnterStasis, hTankLeaveStasis = null;
 
 // https://github.com/Ilusion9/entityIO-sm
@@ -69,9 +69,9 @@ void PrepSDKCall()
     //g_hDTR_InputKillHierarchy = DynamicDetour.FromConf(hGameData, "l4d2_zombie_master::CBaseEntity::InputKillHierarchy");
     //if (!g_hDTR_InputKillHierarchy) LogMessage("[zm] Failed to create DynamicDetour InputKillHierarchy");
 
-    StartPrepSDKCall(SDKCall_Entity);
-	PrepSDKCall_SetFromConf(hGameData, SDKConf_Signature, "Infected::AttackSurvivorTeam");
-	hInfectedAttackSurvivorTeam = EndPrepSDKCall();
+    //StartPrepSDKCall(SDKCall_Entity);
+	//PrepSDKCall_SetFromConf(hGameData, SDKConf_Signature, "Infected::AttackSurvivorTeam");
+	//hInfectedAttackSurvivorTeam = EndPrepSDKCall();
 
 	//StartPrepSDKCall(SDKCall_Entity);
 	//PrepSDKCall_SetFromConf(hGameData_l4dhooks, SDKConf_Signature, "Tank::EnterStasis");

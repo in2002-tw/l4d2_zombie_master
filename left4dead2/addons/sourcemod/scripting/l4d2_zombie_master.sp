@@ -115,10 +115,7 @@ public Plugin myinfo =
 // 60. Survivors still keep teleporting and falling to their death.
 // 62. Fun command: z_mute_infected no yelling or growling, allowing to stealth attack survivors.
 // 64. Crouched frozen specials should stay crouched.
-// 65. Toggle for panic reset common cooldown. For zm_panic.
-// 66. Smoker bug :D
-
-// SetEntPropFloat(witch, Prop_Send,"m_flModelScale", scale); 
+// 67. Fix obstruction shit
 
 // Idle tank: 1. TankBehavior NOT STARTED  ( 0xAD39A30 ) 
 // Attacking Tank: 2. TankAttack STARTED  ( 0xD410FB0 ) 
@@ -1368,12 +1365,13 @@ public void OnClientSayCommand_Post(int client, const char[] command, const char
     if (DEBUG) LogMessage("[zm] ZM_SayHorde %d %d", client, num_args);
    	if (live_zombie_arr[ZOMBIECLASS_COMMON]>=max_zombie_arr[ZOMBIECLASS_COMMON])
    	{
-       	int zombie = -1;
-       	while ( (zombie=FindEntityByClassname(zombie,"infected"))!=-1 )
+       	int zombie = INVALID_ENT_REFERENCE;
+       	while ( (zombie=FindEntityByClassname(zombie,"infected"))!=INVALID_ENT_REFERENCE )
         {
     	   if (GetEntProp(zombie, Prop_Send, "m_mobRush")<=0)
     	   {
         	   SetEntProp(zombie, Prop_Send, "m_mobRush", 1);
+        	   if (IsPlayerAlive(client)) command_infected_attack(zombie,client);
         	   num_args -= 1;
         	   if (num_args<=0) return;
     	   }
@@ -2315,4 +2313,41 @@ public void OnEntityDestroyed(int entity)
  	         
     }
 	
+}
+
+void command_infected_attack(const int infected, const int client)
+{
+    L4D2_CommandABot(infected,client,BOT_CMD_ATTACK);
+    SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // this probably does nothing useful
+    DataPack pack;
+    CreateDataTimer(0.1,refresh_rush_client,pack,TIMER_FLAG_NO_MAPCHANGE);
+    pack.WriteCell(EntIndexToEntRef(infected));
+    pack.WriteCell(EntIndexToEntRef(client));
+    pack.WriteCell(0);
+}
+
+// CommandABot command may get overwritten, spam it a couple times to be safe.
+Action refresh_rush_client(Handle timer, DataPack pack)
+{
+    pack.Reset();
+    int entref_zombie = pack.ReadCell();
+    if (!IsValidEntRef(entref_zombie)) return Plugin_Stop;
+    int entref_client = pack.ReadCell();
+    if (!IsValidEntRef(entref_client)) return Plugin_Stop;
+    int client = EntRefToEntIndex(entref_client);
+    if (!IsValidClient(client) || !IsPlayerAlive(client)) return Plugin_Stop;
+    int infected = EntRefToEntIndex(entref_zombie);
+    L4D2_CommandABot(infected,client,BOT_CMD_ATTACK); // rush client if it makes sense for zombie to know that's the alert source.
+    SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // this probably does nothing useful
+    int repeats = pack.ReadCell();
+    repeats += 1;
+    if (repeats<5)
+    {
+        DataPack pack2;
+        CreateDataTimer(0.5,refresh_rush_client,pack2,TIMER_FLAG_NO_MAPCHANGE);
+        pack2.WriteCell(entref_zombie);
+        pack2.WriteCell(entref_client);
+        pack2.WriteCell(repeats);
+    }
+    return Plugin_Stop;
 }
