@@ -884,7 +884,7 @@ stock bool nav_can_spawn_zombies(const int zClass = ZOMBIECLASS_COMMON,
             while ( ((hurt = FindEntityByClassname(hurt, "trigger_hurt")) != INVALID_ENT_REFERENCE) )
             {
                 hit_trigger = false;
-                TR_EnumerateEntitiesSphere(navCenter,50.0,PARTITION_TRIGGER_EDICTS,HitTrigger);
+                TR_EnumerateEntitiesSphere(navCenter,500.0,PARTITION_TRIGGER_EDICTS,HitTrigger);
                 if (hit_trigger) return false;
                 break;
             }
