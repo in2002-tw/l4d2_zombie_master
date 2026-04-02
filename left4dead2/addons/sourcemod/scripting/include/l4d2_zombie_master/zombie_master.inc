@@ -838,6 +838,7 @@ stock void get_zombieclass_name(int ZOMBIECLASS, char name[32])
     }
 }
 
+bool hit_trigger;
 // Check if navArea is legal for zombies. Allow witches to be spawned in weird places
 // You may provide all attributes or automatically get them from navArea.
 stock bool nav_can_spawn_zombies(const int zClass = ZOMBIECLASS_COMMON,
@@ -848,7 +849,6 @@ stock bool nav_can_spawn_zombies(const int zClass = ZOMBIECLASS_COMMON,
     if (navArea!=Address_Null && l4dhooks_updated && L4D_NavArea_IsBlocked(navArea,TEAM_INFECTED,false)) return false;
     if (navAttributeFlags<0) navAttributeFlags = L4D_GetNavArea_AttributeFlags(navArea);
     if (navSpawnAttributes<0) navSpawnAttributes = L4D_GetNavArea_SpawnAttributes(navArea);
-    //if (navSpawnAttributes&NAV_SPAWN_EMPTY && navSpawnAttributes&NAV_SPAWN_NO_MOBS && navSpawnAttributes&NAV_SPAWN_NOTHREAT) return false;
     //if (navSpawnAttributes&NAV_SPAWN_EMPTY && navSpawnAttributes&NAV_SPAWN_NOTHREAT) return false;
     if (zClass!=ZOMBIECLASS_WITCH)
     {
@@ -864,15 +864,36 @@ stock bool nav_can_spawn_zombies(const int zClass = ZOMBIECLASS_COMMON,
     if (navSpawnAttributes & NAV_SPAWN_CHECKPOINT) return false;
     if (navSpawnAttributes & NAV_SPAWN_ESCAPE_ROUTE) return true;
     if (navSpawnAttributes & NAV_SPAWN_OBSCURED || navSpawnAttributes & NAV_SPAWN_IGNORE_VISIBILITY) return true;
+    if (navArea!=Address_Null && navSize[0]==0.0 && navSize[1]==0.0)
+    {
+        L4D_GetNavAreaCenter(navArea,navCenter);
+        L4D_GetNavAreaSize(navArea,navSize);
+    }
+    if (navSpawnAttributes&NAV_SPAWN_EMPTY && navSpawnAttributes&NAV_SPAWN_NO_MOBS && navSpawnAttributes&NAV_SPAWN_NOTHREAT)
+    {
+        int hurt = INVALID_ENT_REFERENCE; // Look for trigger hurt to prevent spawning zombies that will die.
+        if (l4dhooks_updated)
+        {
+            while( (hurt = L4D_FindEntityByClassnameWithin(hurt,"trigger_hurt",navCenter,500.0)) != INVALID_ENT_REFERENCE )
+            {
+                return false;
+            }
+        }
+        else
+        {
+            while ( ((hurt = FindEntityByClassname(hurt, "trigger_hurt")) != INVALID_ENT_REFERENCE) )
+            {
+                hit_trigger = false;
+                TR_EnumerateEntitiesSphere(navCenter,50.0,PARTITION_TRIGGER_EDICTS,HitTrigger);
+                if (hit_trigger) return false;
+                break;
+            }
+        }
+    }
     if (navSpawnAttributes & NAV_SPAWN_RESCUE_CLOSET)
     {
         if (l4dhooks_updated) // Verify info_survivor_rescue
         {
-            if (navSize[0]==0.0 && navSize[1]==0.0)
-            {
-                L4D_GetNavAreaCenter(navArea,navCenter);
-                L4D_GetNavAreaSize(navArea,navSize);
-            }
             float abs_x = FloatAbs(navSize[0]);
             float abs_y = FloatAbs(navSize[1]);
             if (abs_x>0.0 || abs_y>0.0)
@@ -889,6 +910,31 @@ stock bool nav_can_spawn_zombies(const int zClass = ZOMBIECLASS_COMMON,
         return false;
     }
     return true;
+}
+
+// trigger_hurt detection callback
+bool HitTrigger(int entity, int &hit) // return true to continue enumerating, or false to stop
+{
+    //if (entity<=0 || !IsValidEntity(entity)) return true;
+    static char classname[64];
+    GetEntityClassname(entity,classname,sizeof(classname));
+    //LogMessage("HitTrigger %d %s", entity, classname);
+    if (strcmp(classname,"trigger_hurt",false)==0)
+    {
+        hit_trigger = true;
+        return false;
+    }
+    return true;	
+}
+
+// Filter to only consider trigger_hurt entities
+public bool FilterTriggerHurt(int entity, int contentsMask)
+{
+    if (entity <= 0 || !IsValidEntity(entity)) return false; 
+    static char className[64];
+    GetEntityClassname(entity, className, sizeof(className));
+    LogMessage("FilterTriggerHurt %s", className);
+    return strcmp(className,"trigger_hurt")==0;
 }
 
 // True to allow the current entity to be hit, otherwise false.
