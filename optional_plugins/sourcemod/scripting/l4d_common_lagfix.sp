@@ -1,13 +1,14 @@
 #include <sourcemod>
-#include <left4dhooks>
+#include <sdktools>
+#include <sdkhooks>
 
-#define PLUGIN_NAME			    "l4d_common_cache"
+#define PLUGIN_NAME			    "l4d_common_lagfix"
 #define PLUGIN_VERSION 			"1.00"
 #define CONFIG_FILENAME         PLUGIN_NAME
 
 public Plugin myinfo =
 {
-	name = "[L4D1/L4D2] Common Cache",
+	name = "[L4D1/L4D2] Common Lagfix",
 	author = "gvazdas, Silvers",
 	description = "Reduce lag due to dynamic load of materials for Common Infected on Linux servers.",
 	version = PLUGIN_VERSION,
@@ -27,7 +28,7 @@ ConVar g_hCvarCycles;
 public void OnPluginStart()
 {
 	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_PostNoCopy);
-	g_hCvarCycles = CreateConVar("l4d_common_cache","5","How many times to repeat cycle. 0 to disable plugin",FCVAR_NOTIFY,true,0.0,true,100.0);
+	g_hCvarCycles = CreateConVar("l4d_common_lagfix","5","How many times to repeat cycle. 0 to disable plugin",FCVAR_NOTIFY,true,0.0,true,100.0);
 }
 
 public void OnMapEnd()
@@ -46,8 +47,8 @@ public void OnMapStart()
 void LoadModels()
 {
 	// StringTable data
-	int table = INVALID_STRING_TABLE;
-	if( table == INVALID_STRING_TABLE ) table = FindStringTable("modelprecache");
+	//int table = INVALID_STRING_TABLE;
+	int table = FindStringTable("modelprecache");
 	int total = GetStringTableNumStrings(table);
 	static char sTemp[PLATFORM_MAX_PATH];
 	delete g_AllModels;
@@ -139,7 +140,6 @@ void CycleModels(int userid)
     if (!IsValidEntRef(entref_infected))
     {
         static float vPos[3];
-        //if( !L4D_GetRandomPZSpawnPosition(client,0,5,vPos) ) GetClientAbsOrigin(client,vPos);
         GetClientAbsOrigin(client,vPos);
         vPos[2] += 120.0;
         int infected = CreateEntityByName("infected");
