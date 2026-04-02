@@ -864,13 +864,13 @@ stock bool nav_can_spawn_zombies(const int zClass = ZOMBIECLASS_COMMON,
     if (navSpawnAttributes & NAV_SPAWN_CHECKPOINT) return false;
     if (navSpawnAttributes & NAV_SPAWN_ESCAPE_ROUTE) return true;
     if (navSpawnAttributes & NAV_SPAWN_OBSCURED || navSpawnAttributes & NAV_SPAWN_IGNORE_VISIBILITY) return true;
-    if (navArea!=Address_Null && navSize[0]==0.0 && navSize[1]==0.0)
-    {
-        L4D_GetNavAreaCenter(navArea,navCenter);
-        L4D_GetNavAreaSize(navArea,navSize);
-    }
     if (navSpawnAttributes&NAV_SPAWN_EMPTY && navSpawnAttributes&NAV_SPAWN_NO_MOBS && navSpawnAttributes&NAV_SPAWN_NOTHREAT)
     {
+        if (navArea!=Address_Null && navSize[0]==0.0 && navSize[1]==0.0)
+        {
+            L4D_GetNavAreaCenter(navArea,navCenter);
+            L4D_GetNavAreaSize(navArea,navSize);
+        }
         int hurt = INVALID_ENT_REFERENCE; // Look for trigger hurt to prevent spawning zombies that will die.
         if (l4dhooks_updated)
         {
@@ -894,6 +894,11 @@ stock bool nav_can_spawn_zombies(const int zClass = ZOMBIECLASS_COMMON,
     {
         if (l4dhooks_updated) // Verify info_survivor_rescue
         {
+            if (navArea!=Address_Null && navSize[0]==0.0 && navSize[1]==0.0)
+            {
+                L4D_GetNavAreaCenter(navArea,navCenter);
+                L4D_GetNavAreaSize(navArea,navSize);
+            }
             float abs_x = FloatAbs(navSize[0]);
             float abs_y = FloatAbs(navSize[1]);
             if (abs_x>0.0 || abs_y>0.0)
