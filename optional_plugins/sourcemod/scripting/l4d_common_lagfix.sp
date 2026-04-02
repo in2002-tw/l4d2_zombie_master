@@ -3,32 +3,31 @@
 #include <sdkhooks>
 
 #define PLUGIN_NAME			    "l4d_common_lagfix"
-#define PLUGIN_VERSION 			"1.00"
+#define PLUGIN_VERSION 			"1.01"
 #define CONFIG_FILENAME         PLUGIN_NAME
+#define DEBUG 0
 
 public Plugin myinfo =
 {
 	name = "[L4D1/L4D2] Common Lagfix",
-	author = "gvazdas, Silvers",
+	author = "gvazdas, SilverShot",
 	description = "Reduce lag due to dynamic load of materials for Common Infected on Linux servers.",
 	version = PLUGIN_VERSION,
-	url = "https://knockout.chat/user/3022"
+	url = "https://forums.alliedmods.net/showthread.php?p=2843590, https://knockout.chat/user/3022"
 }
-
-#define MAXENTITIES                   2048
-#define DEBUG 0
 
 ArrayList g_AllModels; // all infected models
 bool g_bClientsCached[MAXPLAYERS+1] = {true,...}; // check if already cached for client
 int g_iModel[MAXPLAYERS+1]; // track model in cycle for client
-int g_iCycle[MAXPLAYERS+1] = {-1,...}; // track model in cycle for client. -1 for not in cycle
+int g_iCycle[MAXPLAYERS+1] = {-1,...}; // track cycle for client. -1 indicates they are not in cycle
 int g_iInfectedRef[MAXPLAYERS+1]; // track infected entity assigned to client
-ConVar g_hCvarCycles;
+ConVar g_hCvarCycles, g_hCvarGibs;
 
 public void OnPluginStart()
 {
 	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_PostNoCopy);
-	g_hCvarCycles = CreateConVar("l4d_common_lagfix","5","How many times to repeat cycle. 0 to disable plugin",FCVAR_NOTIFY,true,0.0,true,100.0);
+	g_hCvarCycles = CreateConVar("l4d_common_lagfix","5","How many times to repeat cycle. 0 to disable plugin.",FCVAR_NOTIFY,true,0.0,true,100.0);
+	g_hCvarGibs = CreateConVar("l4d_common_lagfix_gibs","0","Include gib models in cycle. Probably not needed.",FCVAR_NOTIFY,true,0.0,true,1.0);
 }
 
 public void OnMapEnd()
@@ -46,8 +45,6 @@ public void OnMapStart()
 
 void LoadModels()
 {
-	// StringTable data
-	//int table = INVALID_STRING_TABLE;
 	int table = FindStringTable("modelprecache");
 	int total = GetStringTableNumStrings(table);
 	static char sTemp[PLATFORM_MAX_PATH];
@@ -56,11 +53,10 @@ void LoadModels()
 	for( int i = 0; i < total; i++ )
 	{
 		ReadStringTable(table, i, sTemp, sizeof(sTemp)); // "_w_ models appear to be gib related, i dont think they have this lag issue."
-		if( strncmp(sTemp,"models/infected/common",22) == 0 && StrContains(sTemp,"_w_",false)<0 )
-		//if( strncmp(sTemp,"models/infected/common",22) == 0 )
+		if( strncmp(sTemp,"models/infected/common",22) == 0 && (g_hCvarGibs.BoolValue || StrContains(sTemp,"_w_",false)<0) )
 		{
-			g_AllModels.PushString(sTemp);
-		}
+        	g_AllModels.PushString(sTemp);
+        }
 	}
 	#if DEBUG
 	LogMessage("modelprecache: %d models", g_AllModels.Length);
@@ -87,7 +83,7 @@ public void OnClientPutInServer(int client) // player_spawn doesn't always happe
     g_iCycle[client] = -1; // not cycling
     g_iModel[client] = 0;
     if (g_hCvarCycles.IntValue<=0) return;
-    CreateTimer(6.0,Timer_CycleModels,GetClientUserId(client),TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(6.0,Timer_CycleModels,GetClientUserId(client),TIMER_FLAG_NO_MAPCHANGE); // takes about 6 seconds to actually be put in game
 }
 
 void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
@@ -99,8 +95,8 @@ void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 	#if DEBUG
 	LogMessage("Event_PlayerSpawn %d %f", client, GetEngineTime());
 	#endif
-	if(g_bClientsCached[client] || g_iCycle[client]>=0) return; // skip if already cycling
-	CreateTimer(0.1,Timer_CycleModels,GetClientUserId(client),TIMER_FLAG_NO_MAPCHANGE);
+	if(g_bClientsCached[client] || g_iCycle[client]>=0) return; // skip if already cached or busy cycling
+	CreateTimer(0.1,Timer_CycleModels,GetClientUserId(client),TIMER_FLAG_NO_MAPCHANGE); // in game - start cycle immediately
 }
 
 Action Timer_CycleModels(Handle timer, int userid)
@@ -112,7 +108,7 @@ Action Timer_CycleModels(Handle timer, int userid)
     if(g_bClientsCached[client] || g_iCycle[client]>=0) return Plugin_Stop;
     g_iModel[client] = 0;
     g_iCycle[client] = 0;
-    RequestFrame(CycleModels,GetClientUserId(client));
+    RequestFrame(CycleModels,userid);
     return Plugin_Stop;
 }
 
@@ -121,7 +117,7 @@ void CycleModels(int userid)
     int client = GetClientOfUserId(userid);
     if (!IsValidClient(client))
     {
-        cleanup_infected();
+        cleanup_infected(); // client disappeared suddenly, find and delete loose infected entities.
         return;
     }
     int entref_infected = g_iInfectedRef[client];
@@ -142,6 +138,11 @@ void CycleModels(int userid)
         static float vPos[3];
         GetClientAbsOrigin(client,vPos);
         vPos[2] += 120.0;
+        if (vPos[0]==0.0 && vPos[1]==0.0 && vPos[2]==0.0) // avoid server crashing exploit
+        {
+            g_iCycle[client] = -1;
+            return;
+        }
         int infected = CreateEntityByName("infected");
         if (!IsValidEntity_Safe(infected))
         {
@@ -173,7 +174,7 @@ void CycleModels(int userid)
     LogMessage("%d %d %d %s", client, g_iCycle[client], g_iModel[client], model);
     #endif
     g_iModel[client] += 1;
-    if (g_iModel[client]>=g_AllModels.Length)
+    if (g_iModel[client]>=g_AllModels.Length) // if last model - begin new cycle.
     {
         g_iModel[client] = 0;
         g_iCycle[client] += 1;
@@ -200,7 +201,7 @@ void cleanup_infected()
             #endif
             RemoveEntity(g_iInfectedRef[i]);
             g_iInfectedRef[i] = INVALID_ENT_REFERENCE;
-            g_iModel[i] = -1;
+            g_iCycle[i] = -1;
         }
     }
 }
