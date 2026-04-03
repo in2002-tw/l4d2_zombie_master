@@ -339,6 +339,8 @@ public void OnPluginStart()
 	g_hAbilityCooldown = CreateConVar("zm_ability_cooldown", "-1.0", "Set cooldown for all Special abilities. -1.0 to use game defaults.",FCVAR_PROTECTED, true, -1.0, true, 10000.0);
 	g_hAbilityCooldown.AddChangeHook(ConVarChanged_Cvars);
 	
+	g_hCursed = CreateConVar("zm_cursed", "0", "Enable dumb stuff.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
+	
 	GetCvars();
 
 	g_iAliveSurvivors = -1;
@@ -1230,8 +1232,34 @@ public void OnEntityCreated(int entity, const char[] classname)
         	if (live_zombie_arr[ZOMBIECLASS_COMMON]>0) return;
         	if (strcmp(classname,"infected",false)==0) CountCommons(null,false);
     	}
+    	//case 't':
+    	//{
+        //	if (specials_frozen && strcmp(classname,"tank",false)==0)
+        //	{
+        //	//if (specials_frozen && strcmp(classname,"tank",false)==0)
+        //	//{
+        //    	SilentTank(entity);
+        //    	RequestFrame(SilentTank,EntIndexToEntRef(entity));
+        //	//}
+        //	}
+    	//}
 	}
 }
+
+//void SilentTank(int entref)
+//{
+//    if (!IsValidEntRef(entref)) return;
+    //SetEntProp(entref,Prop_Data,"m_nNextThinkTick",-1);
+    //int nextTick = GetGameTickCount() + 1000;
+    //SetEntProp(entref, Prop_Data, "m_nNextThinkTick", -1);
+    //SetVariantString("idle"); 
+    //AcceptEntityInput(entref, "SetAnimation");
+    //SetVariantString("1"); 
+    //AcceptEntityInput(entref, "SetCommentaryStatueMode");
+    //RequestFrame(SilentTank,entref);
+//}
+
+
 
 public void OnLibraryRemoved(const char[] name)
 {
@@ -2341,7 +2369,7 @@ Action refresh_rush_client(Handle timer, DataPack pack)
     SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // this probably does nothing useful
     int repeats = pack.ReadCell();
     repeats += 1;
-    if (repeats<5)
+    if (repeats<10)
     {
         DataPack pack2;
         CreateDataTimer(0.5,refresh_rush_client,pack2,TIMER_FLAG_NO_MAPCHANGE);

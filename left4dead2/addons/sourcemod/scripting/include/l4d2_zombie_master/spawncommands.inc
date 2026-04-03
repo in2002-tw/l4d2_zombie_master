@@ -268,7 +268,11 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
                //if (hInfectedAttackSurvivorTeam) SDKCall(hInfectedAttackSurvivorTeam,zombie);
                SetEntProp(zombie, Prop_Send, "m_mobRush", 1);
            }
-           
+           if (g_hCursed.BoolValue)
+           {
+               SetEntPropFloat(zombie,Prop_Send,"m_flModelScale",GetRandomFloat(0.5,2.0)); 
+               ChangeEdictState(zombie);
+           }
            if (type[0]!=0 || price_angry) DispatchKeyValue(zombie, "targetname", "zm_unit_uncommon");
            else DispatchKeyValue(zombie, "targetname", "zm_unit_common");
            Spawner_NotifySpawned(zombie);
@@ -360,8 +364,8 @@ void ZM_Witch(int client,int witch_type, bool free = false, bool flow = false)
 
 	if (IsValidClientZM()) update_t_zm_activity();
 
-	float spawn_pos[3];
-	if (!Spawner_ResolveWitchPosition(flow, spawn_pos))
+	static float spawn_pos[3];
+	if (!Spawner_ResolveWitchPosition(flow,spawn_pos))
 	{
 	    if (zm_allow_spawns && g_iSpawnerMode>1) update_hint("%T", "Spawn failed", zm_client);
 	    return;
@@ -392,6 +396,11 @@ void ZM_Witch(int client,int witch_type, bool free = false, bool flow = false)
        	DispatchKeyValue(witch, "targetname", "zm_unit");
        	Spawner_NotifySpawned(witch);
        	if (!playcount_increased && zm_stage>=ZM_STARTED) increase_playcount(zm_client);
+       	if (g_hCursed.BoolValue)
+       	{
+           	SetEntPropFloat(witch,Prop_Send,"m_flModelScale",GetRandomFloat(0.5,2.0));
+           	ChangeEdictState(witch);
+       	}
 	}
 	else update_hint("%T", "Spawn failed", zm_client);
 
@@ -793,6 +802,11 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
         else update_EMS_HUD();
 
         //L4D2_CommandABot(bot,L4D_GetHighestFlowSurvivor(),BOT_CMD_ATTACK);
+        if (g_hCursed.BoolValue && ZOMBIECLASS==ZOMBIECLASS_JOCKEY)
+        {
+            SetEntPropFloat(bot,Prop_Send,"m_flModelScale",GetRandomFloat(0.5,2.0));
+            ChangeEdictState(bot);
+        }
 
 	}
 	else update_hint("%T", "Spawn failed", zm_client);

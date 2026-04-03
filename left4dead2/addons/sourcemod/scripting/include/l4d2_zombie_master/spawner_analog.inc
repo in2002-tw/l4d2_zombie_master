@@ -242,7 +242,6 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
     }
     else
     {
-        vPos_spawner = vPos;
         if (zClass!=ZOMBIECLASS_WITCH || IsObstructed(vPos_spawner,_,_,ignore_zombies))
         {
             spawner_state = SPAWNER_INVALID;
@@ -837,7 +836,6 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
     if (flow) spawner_state = SPAWNER_DISTANCE;
     else spawner_state = Analog_CanSpawn(ZOMBIECLASS_WITCH);
     outPos = zm_spawner_pos;
-    LogMessage("Analog_ResolveWitchPosition %d", spawner_state);
 
     if (spawner_state != SPAWNER_OK)
     {
@@ -858,7 +856,6 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
         g_bAnalogFlowUsed = true;
         g_iAnalogTargetClient = target_client;
     }
-
     return true;
 }
 

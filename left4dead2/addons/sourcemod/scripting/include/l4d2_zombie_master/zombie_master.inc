@@ -467,7 +467,7 @@ ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer,
        g_hCostCharger, g_hCostTank, g_hCostWitchStatic, g_hCostWitchMoving, g_hCostCommon, g_hCostUncommon, g_hLockSaferoom,
        g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait, g_hPanicRateMultiplier,
        g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons, g_hAllowFreeze,
-       g_hGridSearchRadius, g_hGrid, g_hSpawnerMode, g_hPanicRefill;
+       g_hGridSearchRadius, g_hGrid, g_hSpawnerMode, g_hPanicRefill, g_hCursed;
 
 float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fStopInactivity,g_fSpecialCooldown, g_fPanicRateMultiplier,
 g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout,
@@ -1376,7 +1376,7 @@ bool TraceFilter_Stuck_IgnoreZombies(int entity, int contentsMask, int ignore_en
 }
 
 // IsObstructed checks for ZM spawner (ignore_zombies=false) or to determine if a zombie will be stuck in that position (ignore_zombies=true)
-stock bool IsObstructed(float pos[3], int entity = -1, bool debug=false, bool ignore_zombies = false)
+stock bool IsObstructed(float pos[3], int entity = -1, bool debug=true, bool ignore_zombies = false)
 {
     bool isObstructed = false;
     Handle hullTrace;
@@ -1385,22 +1385,22 @@ stock bool IsObstructed(float pos[3], int entity = -1, bool debug=false, bool ig
 	if (TR_DidHit(hullTrace))
 	{
 		int hitEntity = TR_GetEntityIndex(hullTrace);
+    	if (debug)
+    	{
+		     static char classname[64];
+             GetEntityClassname(hitEntity, classname, sizeof(classname));
+             LogMessage("IsObstructed hit %d %s", hitEntity, classname);
+        }
 		if (hitEntity == 0) // Hit world
 		{
-			int hullSurfaceFlags = TR_GetSurfaceFlags(hullTrace);
-			if (!(hullSurfaceFlags & SURF_NODRAW) && !(hullSurfaceFlags & SURF_HINT) && !(hullSurfaceFlags & SURF_SKIP))
-        			isObstructed = true;
+			//int hullSurfaceFlags = TR_GetSurfaceFlags(hullTrace);
+			//if (!(hullSurfaceFlags & SURF_NODRAW) && !(hullSurfaceFlags & SURF_HINT) && !(hullSurfaceFlags & SURF_SKIP))
+        	//		isObstructed = true;
+        	//isObstructed = hullSurfaceFlags
+        	// try checking both ways? idk what else could be done.
+        	isObstructed = true;
 		}
-		else if (IsValidEntity(hitEntity))
-		{
-		     if (debug)
-		     {
-    		     static char classname[64];
-                 GetEntityClassname(hitEntity, classname, sizeof(classname));
-                 LogMessage("[zm] IsObstructed hit %d %s", hitEntity, classname);
-             }
-             isObstructed = true;
-		}
+		else if (IsValidEntity(hitEntity)) isObstructed = true;
 	}
 	delete hullTrace;
 	//LogMessage("IsObstructed %d %d %.1f %.1f %.1f", isObstructed, entity, pos[0], pos[1], pos[2]);
