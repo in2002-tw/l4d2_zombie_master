@@ -766,7 +766,7 @@ int autocommon_menu_Handler(Menu menu, MenuAction action, int param1, int param2
             	{
                 	if (g_iCostUncommon<0) autocommon_uncommons=false;
                 	else if (g_iCostCommon<0 || valid_uncommon(g_sForceCommon)) autocommon_uncommons=true;
-                	else autocommon_uncommons=~autocommon_uncommons;
+                	else autocommon_uncommons=!autocommon_uncommons;
                 	create_autocommon_menu();
                 	return 0;
             	}

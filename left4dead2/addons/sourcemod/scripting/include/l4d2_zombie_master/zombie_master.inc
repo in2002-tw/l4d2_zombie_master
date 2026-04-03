@@ -2391,8 +2391,6 @@ Action JoinZM(int client, int args)
     
     ChangeClientTeam(client,TEAM_ZM);
     L4D_State_Transition(client, STATE_OBSERVER_MODE);
-    //autocommon_setting = AUTOCOMMON_OFF;
-    //autocommon_uncommons = false;
     if (!g_bAllowFreeze) ZM_specials_frozen = false;
     zm_client = client;
     zm_client_userid = GetClientUserId(zm_client);
