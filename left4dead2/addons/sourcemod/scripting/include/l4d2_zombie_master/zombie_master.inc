@@ -1388,7 +1388,7 @@ bool TraceFilter_Stuck_IgnoreZombies(int entity, int contentsMask, int ignore_en
 }
 
 // IsObstructed checks for ZM spawner (ignore_zombies=false) or to determine if a zombie will be stuck in that position (ignore_zombies=true)
-stock bool IsObstructed(float pos[3], int entity = -1, bool debug=true, bool ignore_zombies = false)
+stock bool IsObstructed(float pos[3], int entity = -1, bool debug=false, bool ignore_zombies = false)
 {
     bool isObstructed = false;
     Handle hullTrace;
