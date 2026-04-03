@@ -241,6 +241,9 @@ stock void get_uncommon_model(char label[16], char model[64])
 #define SOUND_FRANCIS_ZM_FAKE "player/survivor/voice/Biker/WorldSmallTown0311.wav"
 #define SOUND_FRANCIS_ZM_MP3 "zm/francis_zm.mp3"
 
+#define SOUND_ZOEY_ZM_FAKE "player/survivor/voice/teengirl/DLC2Steam01.wav"
+#define SOUND_ZOEY_ZM_MP3 "zm/zoey_zm.mp3"
+
 #define SCENE_SAFETY_TIMEOUT 30.0
 
 // These are played whenever the ZM forces the round to start by slamming the saferoom door open.
@@ -1075,6 +1078,12 @@ Action random_meme(Handle timer = null, bool francis = false)
     		soundFake = SOUND_LOUIS_ZM_FAKE;
     		PathFake = "scenes/manager/takesubmachinegun03.vcd";
 		}
+		else if (!francis && StrContains(model,"survivor_teengirl",false)!=-1)
+		{
+            sound = SOUND_ZOEY_ZM_MP3;
+    		soundFake = SOUND_ZOEY_ZM_FAKE;
+    		PathFake = "scenes/teengirl/dlc2steam01.vcd";
+		}
 		else if (StrContains(model,"survivor_biker",false)!=-1)
 		{
             sound = SOUND_FRANCIS_ZM_MP3;
@@ -1340,6 +1349,7 @@ bool TraceFilter_Spawner(int entity, int contentsMask, int ignore_entity)
 	}
 	if (entity>MaxClients)
 	{
+    	if (GetEntProp(entity, Prop_Data, "m_nSolidType")==0) return false;
     	static char class[32];
         GetEntityClassname(entity, class, sizeof(class));
         if (strcmp(class,"infected")==0) return false;

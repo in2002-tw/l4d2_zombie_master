@@ -393,7 +393,6 @@ void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
 
 void ConVarChanged_Cvars_Gamemode(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-    if (strcmp(oldValue,newValue)==0) return;
     if (strcmp(oldValue,"zm_clowns",false)==0 && clown_world_enable) ServerCommand("clown_world_resetcvars");
     load_zm_gamemode();
     on_changed_rules();
