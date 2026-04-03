@@ -1615,6 +1615,8 @@ public void OnMapStart()
            PrecacheSound(SOUND_LOUIS_ZM_MP3);
            PrecacheSound(SOUND_ELLIS_ZM_FAKE);
            PrecacheSound(SOUND_LOUIS_ZM_FAKE);
+           PrecacheSound(SOUND_FRANCIS_ZM_FAKE);
+           PrecacheSound(SOUND_FRANCIS_ZM_MP3);
         //}
         
         //fastdl is necessary otherwise client will hang FOREVER on a black screen.
@@ -1636,6 +1638,9 @@ public void OnMapStart()
             
             //if (lipsync_available) Format(buffer, sizeof(buffer), "sound/%s", SOUND_LOUIS_ZM);
             Format(buffer, sizeof(buffer), "sound/%s", SOUND_LOUIS_ZM_MP3);
+            AddFileToDownloadsTable(buffer); 
+            
+            Format(buffer, sizeof(buffer), "sound/%s", SOUND_FRANCIS_ZM_MP3);
             AddFileToDownloadsTable(buffer); 
         
             //if (lipsync_available)

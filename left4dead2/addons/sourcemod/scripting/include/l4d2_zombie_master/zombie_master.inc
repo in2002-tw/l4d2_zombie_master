@@ -238,6 +238,9 @@ stock void get_uncommon_model(char label[16], char model[64])
 #define VCD_LOUIS_ZM   "scenes/custom/louis_zm.vcd"
 #define SS_LOUIS_ZM    "CustomVoice_Louis_ZM"
 
+#define SOUND_FRANCIS_ZM_FAKE "player/survivor/voice/Biker/WorldSmallTown0311.wav"
+#define SOUND_FRANCIS_ZM_MP3 "zm/francis_zm.mp3"
+
 #define SCENE_SAFETY_TIMEOUT 30.0
 
 // These are played whenever the ZM forces the round to start by slamming the saferoom door open.
@@ -1016,9 +1019,9 @@ Action Timer_KillScene(Handle timer, int sceneRef)
 	return Plugin_Stop;
 }
 
-Action random_meme(Handle timer = null)
+Action random_meme(Handle timer = null, bool francis = false)
 {
-	if (!g_bMemes || meme_delivered || force_started) return Plugin_Stop;
+	if (!g_bMemes || (!francis || meme_delivered) || force_started) return Plugin_Stop;
 	int i;
 	ArrayList listplayers = new ArrayList();
 	for (i = 1; i <= MaxClients; i++)
@@ -1056,7 +1059,7 @@ Action random_meme(Handle timer = null)
         if (actors.FindValue(i)>=0) continue;
         sound = "";
 		GetClientModel(i, model, sizeof(model));
-		if (StrContains(model,"survivor_mechanic",false)!=-1)
+		if (!francis && StrContains(model,"survivor_mechanic",false)!=-1)
 		{
     		//if (lipsync_available) sound = SOUND_ELLIS_ZM;
     		sound = SOUND_ELLIS_ZM_MP3;
@@ -1064,7 +1067,7 @@ Action random_meme(Handle timer = null)
     		soundFake = SOUND_ELLIS_ZM_FAKE;
     		PathFake = "scenes/mechanic/dlc1_communitye20.vcd";
 		}
-		else if (StrContains(model,"survivor_manager",false)!=-1)
+		else if (!francis && StrContains(model,"survivor_manager",false)!=-1)
 		{
     		//if (lipsync_available) sound = SOUND_LOUIS_ZM;
             sound = SOUND_LOUIS_ZM_MP3;
@@ -1072,6 +1075,13 @@ Action random_meme(Handle timer = null)
     		soundFake = SOUND_LOUIS_ZM_FAKE;
     		PathFake = "scenes/manager/takesubmachinegun03.vcd";
 		}
+		else if (StrContains(model,"survivor_biker",false)!=-1)
+		{
+            sound = SOUND_FRANCIS_ZM_MP3;
+    		soundFake = SOUND_FRANCIS_ZM_FAKE;
+    		PathFake = "scenes/biker/worldsmalltown0311.vcd";
+		}
+		
 		if ( sound[0]!=0 && GetRandomFloat(0.0,1.0)>=0.5 ) 
 		{
     		if (DEBUG) LogMessage("[zm] Playing %d %s", i, sound);
@@ -1081,6 +1091,8 @@ Action random_meme(Handle timer = null)
     		EmitSoundToAll(sound,i,SNDCHAN_AUTO,SNDLEVEL_SCREAMING,_,1.0);
     		//if (lipsync_available) PlaySceneOnSurvivor(i, vcdPath);
     		PlaySceneOnSurvivor(i,PathFake);
+    		// Francis response
+    		if (strcmp(sound,SOUND_FRANCIS_ZM_MP3,false)!=0) CreateTimer(GetRandomFloat(4.0,7.0),random_meme,true,TIMER_FLAG_NO_MAPCHANGE);
     		break;
 		}
 	}
