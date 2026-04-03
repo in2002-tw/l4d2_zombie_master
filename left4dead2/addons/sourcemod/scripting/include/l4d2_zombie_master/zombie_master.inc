@@ -1021,7 +1021,7 @@ Action Timer_KillScene(Handle timer, int sceneRef)
 
 Action random_meme(Handle timer = null, bool francis = false)
 {
-	if (!g_bMemes || (!francis || meme_delivered) || force_started) return Plugin_Stop;
+	if (!g_bMemes || (!francis && meme_delivered) || force_started) return Plugin_Stop;
 	int i;
 	ArrayList listplayers = new ArrayList();
 	for (i = 1; i <= MaxClients; i++)
