@@ -8,7 +8,7 @@
 #include <left4dhooks>
 
 #define PLUGIN_NAME			"l4d2_shoot_alert_common"
-#define PLUGIN_VERSION 		"1.89 2026-04-01"
+#define PLUGIN_VERSION 		"2.00 2026-04-02"
 #define CONFIG_FILENAME       PLUGIN_NAME
 
 public Plugin myinfo =
@@ -36,6 +36,7 @@ enum // ty Silvers
 #define TEAM_INFECTED		3
 #define MAXENTITIES        2048
 #define DEBUG              0
+
 #if DEBUG
 int g_iLaser;
 #endif
@@ -479,9 +480,51 @@ void infected_rush_client(const int infected, const int client)
     #if DEBUG
     LogMessage("infected %d rush %d", infected, client);
     #endif
+    if (local[client] || GetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget")==client)
+        command_infected_attack(infected,client);
     SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // this probably does nothing useful
     SetEntProp(infected, Prop_Send, "m_mobRush", 1);
     ignore_infected(infected);
+}
+
+void command_infected_attack(const int infected, const int client)
+{
+    L4D2_CommandABot(infected,client,BOT_CMD_ATTACK);
+    SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // this probably does nothing useful
+    DataPack pack;
+    CreateDataTimer(0.1,refresh_rush_client,pack,TIMER_FLAG_NO_MAPCHANGE);
+    pack.WriteCell(EntIndexToEntRef(infected));
+    pack.WriteCell(EntIndexToEntRef(client));
+    pack.WriteCell(0);
+}
+
+// CommandABot command may get overwritten, spam it a couple times to be safe.
+Action refresh_rush_client(Handle timer, DataPack pack)
+{
+    pack.Reset();
+    int entref_zombie = pack.ReadCell();
+    if (!IsValidEntRef(entref_zombie)) return Plugin_Stop;
+    int entref_client = pack.ReadCell();
+    if (!IsValidEntRef(entref_client)) return Plugin_Stop;
+    int client = EntRefToEntIndex(entref_client);
+    if (!IsValidClient(client) || !IsPlayerAlive(client)) return Plugin_Stop;
+    int infected = EntRefToEntIndex(entref_zombie);
+    L4D2_CommandABot(infected,client,BOT_CMD_ATTACK); // rush client if it makes sense for zombie to know that's the alert source.
+    #if DEBUG
+    LogMessage("L4D2_CommandABot %d %d BOT_CMD_ATTACK", infected, client);
+    #endif
+    SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // this probably does nothing useful
+    int repeats = pack.ReadCell();
+    repeats += 1;
+    if (repeats<5)
+    {
+        DataPack pack2;
+        CreateDataTimer(0.5,refresh_rush_client,pack2,TIMER_FLAG_NO_MAPCHANGE);
+        pack2.WriteCell(entref_zombie);
+        pack2.WriteCell(entref_client);
+        pack2.WriteCell(repeats);
+    }
+    return Plugin_Stop;
 }
 
 void ignore_infected(const int infected)
