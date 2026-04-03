@@ -2116,7 +2116,7 @@ void start_zm_round(bool play_sound = true)
      if (g_bMemes && !meme_delivered)
      {
          float delay = GetRandomFloat(1.0,10.0);
-         CreateTimer(delay,random_meme,TIMER_FLAG_NO_MAPCHANGE);
+         CreateTimer(delay,random_meme,_,TIMER_FLAG_NO_MAPCHANGE);
      }
      infinite_delay_natural_mob();
      CreateTimer(0.1,infinite_delay_natural_mob,TIMER_FLAG_NO_MAPCHANGE);
