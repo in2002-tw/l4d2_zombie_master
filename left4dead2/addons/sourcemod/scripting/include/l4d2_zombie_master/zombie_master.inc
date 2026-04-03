@@ -1101,7 +1101,7 @@ Action random_meme(Handle timer = null, bool francis = false)
     		//if (lipsync_available) PlaySceneOnSurvivor(i, vcdPath);
     		PlaySceneOnSurvivor(i,PathFake);
     		// Francis response
-    		if (strcmp(sound,SOUND_FRANCIS_ZM_MP3,false)!=0) CreateTimer(GetRandomFloat(3.0,6.0),random_meme,true,TIMER_FLAG_NO_MAPCHANGE);
+    		if (strcmp(sound,SOUND_FRANCIS_ZM_MP3,false)!=0) CreateTimer(GetRandomFloat(3.0,4.0),random_meme,true,TIMER_FLAG_NO_MAPCHANGE);
     		break;
 		}
 	}
