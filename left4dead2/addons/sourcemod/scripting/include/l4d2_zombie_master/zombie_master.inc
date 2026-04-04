@@ -1078,7 +1078,7 @@ Action random_meme(Handle timer = null, bool francis = false)
     		soundFake = SOUND_LOUIS_ZM_FAKE;
     		PathFake = "scenes/manager/takesubmachinegun03.vcd";
 		}
-		else if (!francis && StrContains(model,"survivor_teengirl",false)!=-1)
+		else if (!francis && StrContains(model,"survivor_teenangst",false)!=-1)
 		{
             sound = SOUND_ZOEY_ZM_MP3;
     		soundFake = SOUND_ZOEY_ZM_FAKE;
