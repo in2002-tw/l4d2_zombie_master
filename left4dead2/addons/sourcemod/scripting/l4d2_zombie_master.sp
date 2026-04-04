@@ -1642,6 +1642,9 @@ public void OnMapStart()
             AddFileToDownloadsTable(buffer); 
             
             Format(buffer, sizeof(buffer), "sound/%s", SOUND_FRANCIS_ZM_MP3);
+            AddFileToDownloadsTable(buffer);
+            
+            Format(buffer, sizeof(buffer), "sound/%s", SOUND_ZOEY_ZM_MP3);
             AddFileToDownloadsTable(buffer); 
         
             //if (lipsync_available)
