@@ -52,15 +52,14 @@ void toggle_panic(bool state = true, bool overwrite = false, bool free = false)
         return;
     }
     
-    if (DEBUG) LogMessage("[zm] toggle_panic");
-    
     bool actual_state;
     if (overwrite) actual_state = state;
     else actual_state = !panic;
     
+    if (DEBUG) LogMessage("[zm] toggle_panic %d %d %d", actual_state, overwrite, free);
+    
     if ( zm_stage>=ZM_STARTED && actual_state )
     {
-       
        if (!free)
        {
            if ((bank-g_iPanicCost)<0)
@@ -80,7 +79,7 @@ void toggle_panic(bool state = true, bool overwrite = false, bool free = false)
            EmitSoundToClient(zm_client,SOUND_PANIC_ON,_,_,_,_,_,GetRandomInt(90,110));
        panic = true;
        if (g_bPanicRefill) available_zombie_arr[ZOMBIECLASS_COMMON]=max_zombie_arr[ZOMBIECLASS_COMMON];
-       float t_now = GetGameTime()
+       float t_now = GetGameTime();
        if (strcmp(g_sCvarMPGameMode,"zm_clowns",false)==0 && clown_world_enable && (t_now-t_last_panic)>=30.0) ServerCommand("clown_world_randomize");
        t_last_panic = t_now;
        t_last_autocommon = t_last_panic - 5.0; // immediately start spawning autocommon PANIC zombies
@@ -94,7 +93,6 @@ void toggle_panic(bool state = true, bool overwrite = false, bool free = false)
        actual_state = true;
        //infected_panic(hInfectedAttackSurvivorTeam);
        infected_panic(null);
-       
     }
     else
     {
@@ -180,7 +178,6 @@ bool panic_conditions(bool mob_just_spawned=false)
     }
     else return false;
     
-    if ((GetGameTime()-t_round_start)<=10.0) return false;
     if (panic && manual_panic) return false;
     if (script_CommonLimit<=0) return false;
     if (L4D2Direct_GetPendingMobCount()<=0 && !mob_just_spawned && !natural_mob) return false;
@@ -192,7 +189,7 @@ void check_panic(bool mob_spawned = false)
     if (!L4D_IsSurvivalMode() && !ZM_finale_announced)
     {
         float t_now = GetGameTime();
-        if (panic_conditions(mob_spawned)) update_panic();
+        if ( (t_now-t_round_start)>10.0 && (t_now-t_last_panic)>0.0 && panic_conditions(mob_spawned) ) update_panic();
         else if (panic && (t_now-t_last_panic)>=g_fPanicDuration ) toggle_panic(false,true,true);
         else if (!panic)
         {
@@ -351,18 +348,9 @@ MRESReturn DHook_Director_AcceptInput(int pThis, DHookReturn hReturn, DHookParam
 	
 	if (strcmp(inputName,"ForcePanicEvent")==0)
 	{
-	   if (zm_stage<ZM_STARTED)
-	   {
-    	   survival_activated=true;
-	   }
-	   // Called by ZM -- do nothing
-	   if (activator==-1 && caller==-1 && actionId==0)
-	   {
-        	   manual_panic = true;
-        	   return MRES_Ignored;
-	   }
-	   
-	   if (panic && manual_panic) bank += g_iPanicCost;
+	   if (zm_stage<ZM_STARTED) survival_activated=true;
+	   if (activator==-1 && caller==-1 && manual_panic) return MRES_Ignored; // Called by ZM -- do nothing
+	   if (panic && manual_panic) bank += g_iPanicCost; // ZM paid for panic - refund them
 	   manual_panic = false;
 	   update_panic();
 	}

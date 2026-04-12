@@ -339,6 +339,8 @@ public void OnPluginStart()
 	g_hAbilityCooldown = CreateConVar("zm_ability_cooldown", "-1.0", "Set cooldown for all Special abilities. -1.0 to use game defaults.",FCVAR_PROTECTED, true, -1.0, true, 10000.0);
 	g_hAbilityCooldown.AddChangeHook(ConVarChanged_Cvars);
 	
+	g_hNoZMWarn = CreateConVar("zm_nozm_warning", "1.0", "Warn players when there is no ZM.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
+	
 	g_hCursed = CreateConVar("zm_cursed", "0", "Enable dumb stuff.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 	
 	GetCvars();
@@ -861,7 +863,7 @@ Action zm_update(Handle timer = null)
           if (IsValidClientZM()) return Plugin_Continue;
       }
       
-      if ((t_now-t_zm_activity)>=10.0)
+      if (g_hNoZMWarn.BoolValue && (t_now-t_zm_activity)>=10.0)
       {
          if (zm_stage<ZM_END && L4D_IsInIntro()<=0 && (fair_exhausted || zm_stage==ZM_STARTED ))
              PrintToChatAll("[zm] %t", "No ZM");
