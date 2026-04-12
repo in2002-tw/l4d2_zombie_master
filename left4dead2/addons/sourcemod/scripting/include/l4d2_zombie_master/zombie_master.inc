@@ -247,6 +247,9 @@ stock void get_uncommon_model(char label[16], char model[64])
 #define SOUND_NICK_ZM_FAKE "player/survivor/voice/gambler/nickocd02.wav"
 #define SOUND_NICK_ZM_MP3 "zm/nick_zm.mp3"
 
+#define SOUND_COACH_ZM_FAKE "player/survivor/voice/coach/Coach_WorldC4M107.wav"
+#define SOUND_COACH_ZM_MP3 "zm/coach_zm.mp3"
+
 #define SCENE_SAFETY_TIMEOUT 30.0
 
 // These are played whenever the ZM forces the round to start by slamming the saferoom door open.
@@ -1092,6 +1095,12 @@ Action random_meme(Handle timer = null, bool francis = false)
             sound = SOUND_NICK_ZM_MP3;
     		soundFake = SOUND_NICK_ZM_FAKE;
     		PathFake = "scenes/gambler/nickocd02.vcd";
+		}
+		else if (!francis && StrContains(model,"survivor_coach",false)!=-1)
+		{
+            sound = SOUND_COACH_ZM_MP3;
+    		soundFake = SOUND_COACH_ZM_FAKE;
+    		PathFake = "scenes/coach/worldc4m1b07.vcd";
 		}
 		else if (StrContains(model,"survivor_biker",false)!=-1)
 		{
