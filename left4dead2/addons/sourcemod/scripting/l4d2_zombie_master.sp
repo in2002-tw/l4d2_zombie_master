@@ -757,7 +757,7 @@ Action zm_update(Handle timer = null)
            if (strcmp(targetName,"zm_unit")==0)
            {
               GetEntPropVector(entity, Prop_Send, "m_vecOrigin", witch_pos);
-              if (can_any_alive_survivor_see(witch_pos,false))
+              if (can_any_alive_survivor_see_cheap(witch_pos))
               {
                  DispatchKeyValue(entity, "targetname", "zm_unit_spotted");
                  update_hint("%T", "Witch sighted", zm_client);

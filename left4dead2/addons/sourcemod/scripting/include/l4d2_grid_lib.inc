@@ -127,10 +127,12 @@ stock void GridLibLog(const char[] fmt, any ...) {
 // Zombie hull dimensions
 #define GRIDLIB_HULL_MIN_X  -16.0
 #define GRIDLIB_HULL_MIN_Y  -16.0
-#define GRIDLIB_HULL_MIN_Z    0.0
+//#define GRIDLIB_HULL_MIN_Z    0.0
+#define GRIDLIB_HULL_MIN_Z   20.0
 #define GRIDLIB_HULL_MAX_X   16.0
 #define GRIDLIB_HULL_MAX_Y   16.0
-#define GRIDLIB_HULL_MAX_Z   72.0
+//#define GRIDLIB_HULL_MAX_Z   72.0
+#define GRIDLIB_HULL_MAX_Z   60.0
 
 // LOS validation constants
 #define GRIDLIB_LOS_CHECK_HEIGHT  36.0
@@ -626,10 +628,8 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 		closestCell[0], cellPos[0], cellPos[1], cellPos[2], startNavArea);
 
 	int cap = desiredCount;
-	if (cap > maxResults)
-		cap = maxResults;
-	if (cap > 500)
-		cap = 500;
+	if (cap > maxResults) cap = maxResults;
+	if (cap > 500) cap = 500;
 
 	// Collect unfiltered target: over-collect to account for filter rejection
 	int unfilteredTarget = cap * 5;
@@ -1449,12 +1449,10 @@ static bool GridLib_IsObstructed(const float pos[3])
 		}
 		else
 		{
-			// Skip env_physics_blocker (blocktype toggleable at runtime)
-			// and physics props (movable at runtime, handled by spawn-time adjustment)
+			// Skip physics props (movable at runtime, handled by spawn-time adjustment)
 			char className[32];
 			GetEntityClassname(hitEntity, className, sizeof(className));
-			if (!StrEqual(className, "env_physics_blocker") &&
-			    strncmp(className, "prop_physics", 12) != 0 &&
+			if (strncmp(className, "prop_physics", 12) != 0 &&
 			    !StrEqual(className, "prop_car_alarm"))
 				isBlocked = true;
 		}
@@ -1475,16 +1473,26 @@ public bool GridLib_TraceFilter_World(int entity, int contentsMask)
 
 public bool GridLib_TraceFilter_NoPlayers(int entity, int contentsMask)
 {
+	if (GetEntProp(entity, Prop_Data, "m_nSolidType")==0) return false;
+	static char className[32];
+    GetEntityClassname(entity, className, sizeof(className));
+    if (strcmp(className,"infected")==0) return false;
+    if (strcmp(className,"env_player_blocker")==0) return false;
+    if (strcmp(className,"env_physics_blocker")==0) return false;
 	return (entity > MaxClients || entity == 0);
 }
 
 public bool GridLib_TraceFilter_NoPlayersNoPhysicsProps(int entity, int contentsMask)
 {
 	if (entity == 0) return true;
+	if (GetEntProp(entity, Prop_Data, "m_nSolidType")==0) return false;
 	if (entity <= MaxClients) return false;
 	static char className[32];
 	GetEntityClassname(entity, className, sizeof(className));
 	if (strncmp(className, "prop_physics", 12) == 0) return false;
 	if (StrEqual(className, "prop_car_alarm")) return false;
+	if (strcmp(className,"infected")==0) return false;
+    if (strcmp(className,"env_player_blocker")==0) return false;
+    if (strcmp(className,"env_physics_blocker")==0) return false;
 	return true;
 }

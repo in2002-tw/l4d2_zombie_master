@@ -303,11 +303,11 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         GRID_MAX_Z_DIFF, nearbyCells, GRID_MAX_CELLS);
     float ms_find = (GetEngineTime() - t_find) * 1000.0;
     
-    if (cellCount<=1 && g_iSpawnerMode==1 && zm_spawner_state==SPAWNER_OK)
-    {
-        aimPos = zm_spawner_pos;
-        cellCount = GridLib_FindNearbyCells(aimPos, GRID_SEARCH_RADIUS,GRID_MAX_Z_DIFF, nearbyCells, GRID_MAX_CELLS);
-    }
+    //if (cellCount<=1 && g_iSpawnerMode==1 && zm_spawner_state==SPAWNER_OK)
+    //{
+    //    aimPos = zm_spawner_pos;
+    //    cellCount = GridLib_FindNearbyCells(aimPos, GRID_SEARCH_RADIUS,GRID_MAX_Z_DIFF, nearbyCells, GRID_MAX_CELLS);
+    //}
     
     if (cellCount == 0)
     {

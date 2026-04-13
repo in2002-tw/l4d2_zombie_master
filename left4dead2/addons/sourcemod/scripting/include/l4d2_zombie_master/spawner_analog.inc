@@ -274,7 +274,7 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
         bool obscured = ( (navSpawnAttrs & NAV_SPAWN_OBSCURED) || (navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
         if (!obscured)
         {
-            fail = can_any_alive_survivor_see(vPos_spawner,false);
+            fail = can_any_alive_survivor_see_cheap(vPos_spawner);
             if (fail) spawner_state = SPAWNER_SIGHT;
         }
     }
@@ -344,6 +344,14 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
     return SPAWNER_OK;
 }
 
+
+#define MAX_FAILS 50
+int cellfilter_fails = 0;
+void reset_SpawnerCellFilter()
+{
+    cellfilter_fails = 0;
+}
+
 /**
  * GridLib filter callback for spawn cell validation.
  * Returns GRIDLIB_FILTER_KEEP, GRIDLIB_FILTER_DISCARD, or GRIDLIB_FILTER_DISCARD_NAV.
@@ -352,6 +360,10 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
  */
 int SpawnerCellFilter(int cellIdx)
 {
+    
+    if (cellfilter_fails>=MAX_FAILS)
+        return GRIDLIB_FILTER_DISCARD_ALL;
+    
     // Nav-blocked attributes apply to the entire nav area
     if (GridLib_GetCellSpawnAttributes(cellIdx) & GRIDLIB_NAV_BLOCKED_ZOMBIES)
         return GRIDLIB_FILTER_DISCARD_NAV;
@@ -360,8 +372,10 @@ int SpawnerCellFilter(int cellIdx)
     Address navArea;
     bool obstructed;
     if (!GridLib_GetCellData(cellIdx, cellPos, normal, navArea, obstructed))
+    {
         return GRIDLIB_FILTER_DISCARD;
-
+    }
+    
     if (obstructed)
         return GRIDLIB_FILTER_DISCARD;
     
@@ -370,6 +384,8 @@ int SpawnerCellFilter(int cellIdx)
         if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d failed nav attrs", cellIdx);
         return GRIDLIB_FILTER_DISCARD_NAV;
     }
+    
+    cellfilter_fails += 1;
     
     if (g_bLastDoorValid)
     {
@@ -407,7 +423,8 @@ int SpawnerCellFilter(int cellIdx)
     //        return GRIDLIB_FILTER_DISCARD;
     //    }
     //}
-
+    
+    cellfilter_fails = 0;
     return GRIDLIB_FILTER_KEEP;
 }
 
@@ -449,8 +466,9 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
     Spawner_BeginBatchPVS();
 
     float t_gridlib = GetEngineTime();
-    int cells[16];
-    int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 16, SpawnerCellFilter);
+    int cells[1];
+    reset_SpawnerCellFilter();
+    int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 1, SpawnerCellFilter);
     float gridlib_ms = (GetEngineTime() - t_gridlib) * 1000.0;
 
     if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: %d pre-validated candidates (gridlib=%.2f ms)", count, gridlib_ms);
@@ -662,7 +680,7 @@ void Analog_EndSpawn()
 stock bool Analog_ValidatePosition(float pos[3], bool checkLOS = true)
 {
     if (IsObstructed(pos,_,_,g_iSpawnerZombieClass==ZOMBIECLASS_COMMON)) return false;
-    if (checkLOS && can_any_alive_survivor_see(pos, false)) return false;
+    if (checkLOS && can_any_alive_survivor_see_cheap(pos)) return false;
     return true;
 }
 
@@ -704,7 +722,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
                 break;
             if (!L4D_GetRandomPZSpawnPosition(target_client, ZOMBIECLASS_COMMON, tries, randomPos))
                 continue;
-            if (zm_stage < ZM_STARTED && can_any_alive_survivor_see(randomPos, false))
+            if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(randomPos))
                 continue;
             if (valid_last)
             {
@@ -747,6 +765,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         }
         if (try_gridlib)
         {
+            reset_SpawnerCellFilter();
             gridlib_cell_count = GridLib_FindCellsFromClosest(zm_spawner_pos, count, gridlib_cells, 500, SpawnerCellFilter);
             if (gridlib_cell_count > 0) use_gridlib = true;
         }
@@ -808,7 +827,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             {
                 L4D_FindRandomSpot(zm_spawner_navArea, pos);
                 if (valid_last && distance_last_saferoom(pos)<=DISTANCE_LAST_SAFEROOM) pos = zm_spawner_pos;
-                else if (can_any_alive_survivor_see(pos, false) || IsObstructed(pos,_,_,true)) pos = zm_spawner_pos;
+                else if (can_any_alive_survivor_see_cheap(pos) || IsObstructed(pos,_,_,true)) pos = zm_spawner_pos;
             }
             else pos = zm_spawner_pos;
         }
@@ -844,7 +863,7 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
 
         bool fail = false;
         if (!L4D_GetRandomPZSpawnPosition(target_client, ZOMBIECLASS_WITCH, 10, outPos)) fail = true;
-        if (!fail && zm_stage < ZM_STARTED && can_any_alive_survivor_see(outPos, false)) fail = true;
+        if (!fail && zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(outPos)) fail = true;
         if (!fail)
         {
             float flow_survivor_fraction = get_survivor_flow_fraction(target_client);
@@ -883,63 +902,11 @@ bool Analog_ResolveSpecialPosition(int zombieclass, bool flow, float outPos[3])
         if (!L4D_GetRandomPZSpawnPosition(target_client, zombieclass, 10, outPos) || IsObstructed(outPos,_,_,false))
             return false;
 
-        if (zm_stage < ZM_STARTED && can_any_alive_survivor_see(outPos, false))
+        if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(outPos))
             return false;
 
         g_bAnalogFlowUsed = true;
         g_iAnalogTargetClient = target_client;
     }
     return true;
-}
-
-Action check_fog_distance(Handle timer = null)
-{
-    if (DEBUG) LogMessage("[zm] check_fog_distance");
-    float new_fog_distance = FOG_DISTANCE;
-	int fog_controller = -1;
-	while( (fog_controller = FindEntityByClassname(fog_controller, "env_fog_controller")) != INVALID_ENT_REFERENCE )
-	{
-		if (g_DHook_AcceptInput)
-     	{
-           	if (IsValidEntity(fog_controller))
-           	{
-           	   if (DEBUG) LogMessage("[zm] Hooking fog_controller g_DHook_AcceptInput");
-           	   DHookEntity(g_DHook_AcceptInput, true, fog_controller, INVALID_FUNCTION, DHook_Fog_AcceptInput);
-           	}
-     	}
-		bool enabled = GetEntProp(fog_controller, Prop_Data, "m_fog.enable") > 0;
-		if (enabled)
-		{
-        		float fog_end = GetEntPropFloat(fog_controller, Prop_Data, "m_fog.end");
-        		float fog_farz = GetEntPropFloat(fog_controller, Prop_Data, "m_fog.farz");
-        		float maxdensity = GetEntPropFloat(fog_controller, Prop_Data, "m_fog.maxdensity");
-        		if (DEBUG) LogMessage("[zm] Found env_fog_controller %d", fog_controller);
-        		if (DEBUG) LogMessage("[zm] end farz maxdensity: %f %f %f", fog_end, fog_farz, maxdensity);
-        		if (maxdensity>=1.0)
-        		{
-            		if (fog_farz<new_fog_distance && fog_farz>0.0) new_fog_distance = fog_farz;
-        		}
-    		
-		}
-	}
-	
-	if (new_fog_distance!=fog_distance)
-	{
-	    fog_distance = new_fog_distance;
-	    CreateTimer(10.0,check_fog_distance,TIMER_FLAG_NO_MAPCHANGE);
-	    CreateTimer(30.0,check_fog_distance,TIMER_FLAG_NO_MAPCHANGE);
-	    CreateTimer(45.0,check_fog_distance,TIMER_FLAG_NO_MAPCHANGE);
-	    CreateTimer(60.0,check_fog_distance,TIMER_FLAG_NO_MAPCHANGE);
-        LogMessage("[zm] ZM spawner fog distance: %f", fog_distance);
-	}
-	return Plugin_Stop;
-}
-
-MRESReturn DHook_Fog_AcceptInput(int pThis, DHookReturn hReturn, DHookParam hParams)
-{
-	if (DEBUG) LogMessage("[zm] DHook_Fog_AcceptInput");
-	if (!g_bCvarAllow) return MRES_Ignored;
-	check_fog_distance();
-	CreateTimer(2.0,check_fog_distance,TIMER_FLAG_NO_MAPCHANGE);
-	return MRES_Ignored;
 }
