@@ -314,7 +314,7 @@ static int GridRendererProp_ComputeAlpha(int dataIdx, int count, bool isClosest)
 		return 220;
 
 	if (!g_PropAlphaFade)
-		return 150;
+		return 50;
 
 	// Fade from ALPHA_CENTER (nearest) to ALPHA_EDGE (furthest)
 	static const int ALPHA_CENTER = 150;
