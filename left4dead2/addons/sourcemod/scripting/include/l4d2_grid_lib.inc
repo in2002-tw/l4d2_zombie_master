@@ -123,6 +123,7 @@ stock void GridLibLog(const char[] fmt, any ...) {
 
 // Team definitions
 #define GRIDLIB_TEAM_SURVIVOR 2
+#define GRIDLIB_TEAM_INFECTED		3
 
 // Zombie hull dimensions
 #define GRIDLIB_HULL_MIN_X  -16.0
@@ -397,6 +398,7 @@ stock int GridLib_FindNearbyCells(const float position[3],
 
 	int resultCount = 0;
 	int scanned = 0;
+	Address master_navArea = Address_Null;
 	float filterCallTimeAccum = 0.0;
 	for (int i = 0; i < candidateCount && resultCount < maxResults; i++, scanned++)
 	{
@@ -419,6 +421,10 @@ stock int GridLib_FindNearbyCells(const float position[3],
 					GridLibLog("[GridLib] FindNearbyCells: cell %d nav %s blacklisted, skipping", cellIdx, navKey);
 					continue;
 				}
+			}
+			else
+			{
+    			continue; // invalid nav areas should be skipped
 			}
 
 			float tFilter = GetEngineTime();
@@ -444,9 +450,23 @@ stock int GridLib_FindNearbyCells(const float position[3],
 				GridLibLog("[GridLib] FindNearbyCells: cell %d DISCARD", cellIdx);
 				continue;
 			}
+			if (master_navArea!=Address_Null && master_navArea!=cell.navArea)
+			{
+    			if (!L4D2_NavAreaBuildPath(cell.navArea, master_navArea, searchRadius, GRIDLIB_TEAM_INFECTED, false))
+    			{
+        			GridLibLog("[GridLib] FindNearbyCells: cell %d NavAreaBuildPath failed", cellIdx);
+    				continue;
+    			}
+    			if (!L4D2_NavAreaBuildPath(master_navArea, cell.navArea, searchRadius, GRIDLIB_TEAM_INFECTED, false))
+    			{
+        			GridLibLog("[GridLib] FindNearbyCells: cell %d NavAreaBuildPath failed", cellIdx);
+    				continue;
+    			}
+			}
 			GridLibLog("[GridLib] FindNearbyCells: cell %d KEEP (dist=%.0f)", cellIdx, selected[0]);
+			if (master_navArea==Address_Null) master_navArea = cell.navArea;
 		}
-
+        
 		results[resultCount++] = cellIdx;
 	}
 
