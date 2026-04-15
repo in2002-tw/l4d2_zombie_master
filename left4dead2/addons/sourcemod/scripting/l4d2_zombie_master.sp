@@ -32,7 +32,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.06 2026-03-30"
+#define PLUGIN_VERSION 			"0.9.07 2026-04-14"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -90,11 +90,14 @@ public Plugin myinfo =
 // 22. new cvar: zm_notanks
 // 23. L4D_NavArea_IsBlocked implemented.
 // 24. New admin menu.
-// 25. Activity detection now sees chat messages.
-// 26. New models for uncommons.
+// 25. Activity detection for ZM offer now sees chat messages.
+// 26. More model variety for uncommon infected.
 // 27. Majority of code moved to /include
 // 28. Major spawner overhaul: GridLib implemented
 // 29. Some game logic related checks were referencing GetEngineTime and not GameTime.Whoops!
+// 30. Spawner memory.
+// 31. PVS (Potentially Visible Set) added to survivor visiblity checks for performance.
+// 32. 
 
 // TO DO LIST:
 // 5. Gas station tornado (done by zyiks, not implemented)
@@ -107,7 +110,7 @@ public Plugin myinfo =
 // 41. Special context interact: delete, move, attack nearest
 // 42. Panic Trap
 // 47. Witches in survivor closets
-// 50. Random pz can spawn in saferoom :) nice valve
+// 50. Random pz can spawn in saferoom :)
 // 51. Find out why commons get auto culled on finale start. Can avoid culling if they are attacking other infected...
 // 52. Smoker, Charger stupid behavior after ability fail.
 // 57. Frozen tanks should be in stasis to prevent music // EFL_DORMANT Entity_Flags
@@ -115,7 +118,6 @@ public Plugin myinfo =
 // 60. Survivors still keep teleporting and falling to their death.
 // 62. Fun command: z_mute_infected no yelling or growling, allowing to stealth attack survivors.
 // 64. Crouched frozen specials should stay crouched.
-// 67. Fix obstruction shit
 
 // Idle tank: 1. TankBehavior NOT STARTED  ( 0xAD39A30 ) 
 // Attacking Tank: 2. TankAttack STARTED  ( 0xD410FB0 ) 

@@ -2417,6 +2417,9 @@ Action JoinZM(int client, int args)
     
     remove_all_ZM_glows();
     
+    if (!g_bGrid) g_iSpawnerMode = 0;
+    else g_iSpawnerMode = g_hSpawnerMode.IntValue;
+    
     ChangeClientTeam(client,TEAM_ZM);
     L4D_State_Transition(client, STATE_OBSERVER_MODE);
     if (!g_bAllowFreeze) ZM_specials_frozen = false;
