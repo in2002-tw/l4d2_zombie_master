@@ -391,6 +391,7 @@ int    g_iBatchSurvivorClients[MAXPLAYERS+1];
 float  g_fBatchSurvivorPos[MAXPLAYERS+1][3];
 float  g_fBatchTime;
 
+#define GRID_BUDGET_MS 20.0
 #define GRID_SEARCH_RADIUS  150.0
 #define GRID_MAX_Z_DIFF     100.0
 #define GRID_MAX_CELLS      25

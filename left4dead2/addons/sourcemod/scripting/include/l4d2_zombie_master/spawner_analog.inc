@@ -468,7 +468,7 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
     float t_gridlib = GetEngineTime();
     int cells[1];
     reset_SpawnerCellFilter();
-    int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 1, SpawnerCellFilter);
+    int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 1, SpawnerCellFilter, GRID_BUDGET_MS);
     float gridlib_ms = (GetEngineTime() - t_gridlib) * 1000.0;
 
     if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: %d pre-validated candidates (gridlib=%.2f ms)", count, gridlib_ms);

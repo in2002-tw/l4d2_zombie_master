@@ -274,6 +274,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     }
 
     float t_start = GetEngineTime();
+    bool over_budget = false;
     static float aimPos[3];
     //if (g_iSpawnerMode==1 && zm_spawner_state==SPAWNER_OK) aimPos = zm_spawner_pos;
     //else
@@ -300,7 +301,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     float t_find = GetEngineTime();
     int nearbyCells[GRID_MAX_CELLS];
     int cellCount = GridLib_FindNearbyCells(aimPos, GRID_SEARCH_RADIUS,
-        GRID_MAX_Z_DIFF, nearbyCells, GRID_MAX_CELLS);
+        GRID_MAX_Z_DIFF, nearbyCells, GRID_MAX_CELLS, _, GRID_BUDGET_MS);
     float ms_find = (GetEngineTime() - t_find) * 1000.0;
     
     //if (cellCount<=1 && g_iSpawnerMode==1 && zm_spawner_state==SPAWNER_OK)
@@ -348,8 +349,14 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         float pos[3], normal[3];
         Address navArea;
         bool obstructed;
+        
+        if (!over_budget && ((GetEngineTime()-t_start)*1000.0)>=GRID_BUDGET_MS)
+        {
+            LogMessage("Grid_TimerUpdate over %1.f ms budget at %d/%d cells", GRID_BUDGET_MS, i, cellCount);
+            over_budget = true;
+        }
 
-        if (!GridLib_GetCellData(nearbyCells[i], pos, normal, navArea, obstructed))
+        if (over_budget || !GridLib_GetCellData(nearbyCells[i], pos, normal, navArea, obstructed))
         {
             cellValid[i] = false;
             continue;
