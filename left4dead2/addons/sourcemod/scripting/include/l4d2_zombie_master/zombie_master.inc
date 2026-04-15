@@ -960,6 +960,7 @@ stock bool FilterSpawner(int entity, int mask, int self)
 	if (!IsValidEntity(entity)) return false;
 	if (entity==self) return false;
 	if (GetEntProp(entity,Prop_Data,"m_iHealth")>0) return false;
+	if (IsValidClient(entity) && !IsPlayerAlive(entity)) return false;
 	static char class[32];
 	GetEntityClassname(entity, class, sizeof(class));
 	if (strcmp(class,"func_playerinfected_clip")==0) return false;

@@ -249,18 +249,15 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3])
    {
        static float saferoom_pos[3];
        L4D_GetEntityWorldSpaceCenter(g_iLockedDoor,saferoom_pos);
-       saferoom_pos[2] -= 10.0;
        if (GetVectorDistance(saferoom_pos,vecPos)<=fog_distance)
        {
             int door = EntRefToEntIndex(g_iLockedDoor);
-            int filter_client = -1;
-            if (IsValidClientZM()) filter_client = zm_client;
-            Handle trace = TR_TraceRayFilterEx(testPoints[1],saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,filter_client);
-            visible = TR_DidHit(trace) && TR_GetEntityIndex(trace)==door;
+            Handle trace = TR_TraceRayFilterEx(testPoints[1],saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,door);
+            visible = !TR_DidHit(trace);
             delete trace;
             if (visible) return true;
-            trace = TR_TraceRayFilterEx(testPoints[2],saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,filter_client);
-            visible = TR_DidHit(trace) && TR_GetEntityIndex(trace)==door;
+            trace = TR_TraceRayFilterEx(testPoints[2],saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,door);
+            visible = !TR_DidHit(trace);
             delete trace;
             if (visible) return true;
         }
@@ -275,7 +272,10 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3])
 
            // PVS pre-filter: if position is not in this survivor's PVS, skip raytraces
            if (!PVS_CheckOriginInPVS(vecPos, g_BatchSurvivorPVS[s]))
+           {
+               if (DEBUG_SPAWNER) LogMessage("PVS pre-filter %d skipping raytraces", s);
                continue;
+           }
                
            // l4dhooks does not validate client indices
            if (!IsValidClient(g_iBatchSurvivorClients[s])) continue;
@@ -284,9 +284,9 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3])
        }
        return false;
    }
-   else LogMessage("PERF WARNING: can_any_alive_survivor_see_cheap not using PVS");
+   //else LogMessage("PERF WARNING: can_any_alive_survivor_see_cheap not using PVS");
    
-   testPoints[0] = vecPos;
+   //testPoints[0] = vecPos;
 
    float pos[3];
    bool skipList[MAXPLAYERS+1] = {true, ...};
@@ -311,7 +311,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3])
    {
        if (skipList[i]) continue;
        if (L4D2_IsVisibleToPlayer(i, TEAM_SURVIVOR, 3, 0, testPoints[1])) return true;
-       if (L4D2_IsVisibleToPlayer(i, TEAM_SURVIVOR, 3, 0, testPoints[0])) return true;
+       //if (L4D2_IsVisibleToPlayer(i, TEAM_SURVIVOR, 3, 0, testPoints[0])) return true;
        if (L4D2_IsVisibleToPlayer(i, TEAM_SURVIVOR, 3, 0, testPoints[2])) return true;
    }
 
