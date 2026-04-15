@@ -308,6 +308,7 @@ stock void GridLib_SetExcludeObstructed(bool enable)
  * @param filter        Optional filter callback. When provided, cells are tested
  *                      closest-first during selection. Rejected cells are skipped
  *                      and the search continues to find the next closest passing cell.
+ * @param budget_ms     Allowed CPU budget in miliseconds; exit early when exceeded.
  * @return              Number of cells found (sorted by distance, closest first)
  */
 stock int GridLib_FindNearbyCells(const float position[3],
@@ -315,10 +316,13 @@ stock int GridLib_FindNearbyCells(const float position[3],
                                    float maxZDiff,
                                    int[] results,
                                    int maxResults,
-                                   GridLibCellFilter filter = INVALID_FUNCTION)
+                                   GridLibCellFilter filter = INVALID_FUNCTION,
+                                   float budget_ms = 20.0)
 {
 	if (!g_IsReady || g_GridCells == null)
 		return 0;
+    
+    float tStart_ms = GetEngineTime() * 1000.0;
 
 	// Static candidate list - allocated once, reused across calls
 	// Each entry: [0] = distance, [1] = cellIndex (as float)
@@ -468,6 +472,13 @@ stock int GridLib_FindNearbyCells(const float position[3],
 		}
         
 		results[resultCount++] = cellIdx;
+		
+		if ( (GetEngineTime()*1000.0-tStart_ms) >= budget_ms)
+		{
+    		GridLibLog("[GridLib] FindNearbyCells: %.1f ms budget exceeded, %d/%d cells", budget_ms, i, candidateCount);
+    		break;
+		}
+		
 	}
 
 	float filterMs = (filter != INVALID_FUNCTION) ? (GetEngineTime() - filterT0) * 1000.0 : 0.0;
