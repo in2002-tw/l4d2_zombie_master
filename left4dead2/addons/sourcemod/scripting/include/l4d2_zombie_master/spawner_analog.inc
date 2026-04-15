@@ -766,7 +766,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         if (try_gridlib)
         {
             reset_SpawnerCellFilter();
-            gridlib_cell_count = GridLib_FindCellsFromClosest(zm_spawner_pos, count, gridlib_cells, 500, SpawnerCellFilter);
+            gridlib_cell_count = GridLib_FindCellsFromClosest(zm_spawner_pos, count, gridlib_cells, 500, SpawnerCellFilter, GRID_BUDGET_MS);
             if (gridlib_cell_count > 0) use_gridlib = true;
         }
     }

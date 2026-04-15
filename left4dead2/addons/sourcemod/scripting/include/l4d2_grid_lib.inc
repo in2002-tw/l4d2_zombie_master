@@ -611,13 +611,15 @@ stock int GridLib_GetCellsForNavArea(Address navArea, int[] results, int maxResu
  * @param maxResults    Maximum size of results array
  * @param filter        Optional filter callback. When provided, cells are tested
  *                      during BFS collection. Rejected cells are skipped.
+ * @param budget_ms     Allowed CPU budget in miliseconds; exit early when exceeded.
  * @return              Number of cells found
  */
 stock int GridLib_FindCellsFromClosest(const float position[3],
                                        int desiredCount,
                                        int[] results,
                                        int maxResults,
-                                       GridLibCellFilter filter = INVALID_FUNCTION)
+                                       GridLibCellFilter filter = INVALID_FUNCTION,
+                                       float budget_ms = 20.0)
 {
 	GridLibLog("[GridLib] FindCellsFromClosest: pos=(%.0f,%.0f,%.0f) desired=%d maxResults=%d filter=%s",
 		position[0], position[1], position[2], desiredCount, maxResults,
@@ -629,6 +631,8 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 			g_IsReady, g_GridCells != null, g_NavAreaCells != null);
 		return 0;
 	}
+	
+	float tStart_ms = GetEngineTime() * 1000.0;
 
 	// Find the single closest cell
 	int closestCell[1];
@@ -797,6 +801,13 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 
 		if (filter != INVALID_FUNCTION)
 		{
+			
+			if ((GetEngineTime()*1000.0-tStart_ms)>=budget_ms)
+            {
+                LogMessage("GridLib_FindCellsFromClosest over %1.f ms budget at %d/%d cells", budget_ms, i, candidateCount);
+                break;
+            }
+			
 			// Check nav area blacklist first (O(1) lookup)
 			Address navArea = view_as<Address>(RoundToFloor(candidates[i][2]));
 			if (navArea != Address_Null)
