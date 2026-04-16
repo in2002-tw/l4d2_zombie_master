@@ -34,8 +34,8 @@ void Spawner_Update()
         update_grid = true;
     if ( (g_iSpawnerMode<2 || !g_bGrid) && (t_now-t_last_spawner_update)>=g_fUpdateRate )
         update_analog = true;
-    if (update_analog) Analog_CanSpawn(ZOMBIECLASS_BOOMER, false);
     if (update_grid) Grid_Update();
+    if (update_analog) Analog_CanSpawn(ZOMBIECLASS_BOOMER, false);
 }
 
 // --- Position resolution ---

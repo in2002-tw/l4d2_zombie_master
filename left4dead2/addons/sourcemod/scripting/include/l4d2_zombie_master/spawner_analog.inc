@@ -286,11 +286,12 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
     if (fail && draw && spawner_state>SPAWNER_NAV && get_spawner_target_survivor(false,SPAWNER_DISTANCE)<0) // check other candidates
     {
         float newPos[3];
-        if (!skip_gridlib && g_bGridReady && g_iSpawnerMode>0 && g_GridHasValidCell)
+        if (!skip_gridlib && g_bGridReady && g_iSpawnerMode>0 && g_GridHasValidCell && can_ZM_see(g_GridClosestValidPos))
         {
             newPos = g_GridClosestValidPos;
-            if (Analog_CanSpawnPos(newPos,zClass,false,false,true)==SPAWNER_OK)
-                fail = false;
+            fail = false;
+            //if (Analog_CanSpawnPos(newPos,zClass,false,false,true)==SPAWNER_OK)
+            //    fail = false;
         }
         if (fail && spawner_last_valid)
         {
@@ -753,71 +754,78 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
 
     if (count > 1 && g_bGrid && GridLib_IsReady())
     {
-        bool try_gridlib = true;
-        if (zm_spawner_navArea)
+        if (g_iSpawnerMode>0 && g_GridValidCellCount>=count && GetVectorDistance(g_GridClosestValidPos,zm_spawner_pos)<150.0)
         {
-            float navSize[3];
-            L4D_GetNavAreaSize(zm_spawner_navArea, navSize);
-            if (navSize[0] < 32.0) navSize[0] = 32.0;
-            if (navSize[1] < 32.0) navSize[1] = 32.0;
-            float count_navmesh = (navSize[0] * navSize[1]) / AREA_COMMON + 1.0;
-            try_gridlib = count_navmesh < count || count_navmesh > (4.0 * count);
+            for (int c = 0; c < count; c++)
+            {
+                gridlib_cells[c] = g_GridCellIndices[c];
+            }
+            use_gridlib = true;
+            gridlib_cell_count = g_GridValidCellCount;
         }
-        if (try_gridlib)
+        else
         {
-            reset_SpawnerCellFilter();
-            gridlib_cell_count = GridLib_FindCellsFromClosest(zm_spawner_pos, count, gridlib_cells, 500, SpawnerCellFilter, GRID_BUDGET_MS);
-            if (gridlib_cell_count > 0) use_gridlib = true;
+            bool try_gridlib = true;
+            if (zm_spawner_navArea)
+            {
+                float navSize[3];
+                L4D_GetNavAreaSize(zm_spawner_navArea, navSize);
+                if (navSize[0] < 32.0) navSize[0] = 32.0;
+                if (navSize[1] < 32.0) navSize[1] = 32.0;
+                float count_navmesh = (navSize[0] * navSize[1]) / AREA_COMMON + 1.0;
+                try_gridlib = count_navmesh < count || count_navmesh > (4.0 * count);
+            }
+            if (try_gridlib)
+            {
+                reset_SpawnerCellFilter();
+                gridlib_cell_count = GridLib_FindCellsFromClosest(zm_spawner_pos, count, gridlib_cells, 500, SpawnerCellFilter, GRID_BUDGET_MS);
+                if (gridlib_cell_count > 0) use_gridlib = true;
+            }
         }
     }
 
-    // Build survivor PVS data for gridlib visibility filtering
-    if (use_gridlib)
-    {
-        Spawner_BeginBatchPVS();
-        if (!g_bBatchPVSActive) use_gridlib = false;
-    }
+    Spawner_BeginBatchPVS();
     int resolved = 0;
     static float pos[3];
     for (int i = 0; i < count && resolved < maxOut; i++)
     {
 
         bool fallback_original_navmesh = false;
-        if (use_gridlib)
+        if (use_gridlib && i<gridlib_cell_count)
         {
-            int cellIdx = gridlib_cells[i % gridlib_cell_count];
+            int cellIdx = gridlib_cells[i];
             static float cellNormal[3];
             Address cellNavArea;
             bool cellObstructed;
             if (!GridLib_GetCellData(cellIdx, pos, cellNormal, cellNavArea, cellObstructed))
-                continue;
-            if (cellObstructed || IsObstructed(pos,_,_,true))
-                continue;
+                fallback_original_navmesh = true;
+            else if (cellObstructed)
+                fallback_original_navmesh = true;
 
-            // PVS + single ray trace visibility check
-            if (g_iBatchSurvivorCount > 0)
-            {
-                bool actuallyVisible = false;
-                static float cellEye[3];
-                cellEye[0] = pos[0];
-                cellEye[1] = pos[1];
-                cellEye[2] = pos[2] + 36.0;
-                for (int s = 0; s < g_iBatchSurvivorCount; s++)
-                {
-                    if (!PVS_CheckOriginInPVS(pos,g_BatchSurvivorPVS[s]))
-                        continue;
-                    Handle trace = TR_TraceRayFilterEx(cellEye, g_fBatchSurvivorPos[s],
-                        MASK_VISIBLE, RayType_EndPoint, FilterSpawner, -1);
-                    bool hit = TR_DidHit(trace);
-                    delete trace;
-                    if (!hit)
-                    {
-                        actuallyVisible = true;
-                        break;
-                    }
-                }
-                if (actuallyVisible) continue;
-            }
+            //// PVS + single ray trace visibility check
+            //if (g_iBatchSurvivorCount > 0)
+            //{
+            //    bool actuallyVisible = false;
+            //    static float cellEye[3];
+            //    cellEye[0] = pos[0];
+            //    cellEye[1] = pos[1];
+            //    cellEye[2] = pos[2] + 36.0;
+            //    for (int s = 0; s < g_iBatchSurvivorCount; s++)
+            //    {
+            //        if (!PVS_CheckOriginInPVS(pos,g_BatchSurvivorPVS[s]))
+            //            continue;
+            //        Handle trace = TR_TraceRayFilterEx(cellEye, g_fBatchSurvivorPos[s],
+            //            MASK_VISIBLE, RayType_EndPoint, FilterSpawner, -1);
+            //        bool hit = TR_DidHit(trace);
+            //        delete trace;
+            //        if (!hit)
+            //        {
+            //            actuallyVisible = true;
+            //            break;
+            //        }
+            //    }
+            //    if (actuallyVisible) continue;
+            //}
         }
         else fallback_original_navmesh = true;
 

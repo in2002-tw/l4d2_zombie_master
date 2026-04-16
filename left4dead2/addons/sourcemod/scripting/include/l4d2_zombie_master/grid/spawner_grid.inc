@@ -31,6 +31,7 @@ void Grid_Cleanup()
     }
     g_GridCellCount = 0;
     g_GridHasValidCell = false;
+    g_GridValidCellCount = 0;
     if (g_bGridReady)
     {
         GridRenderer_Cleanup();
@@ -51,6 +52,7 @@ void Grid_OnEnabled(int client)
     if (g_iSpawnerMode==2) g_hGridTimer = CreateTimer(GRID_UPDATE_RATE, Grid_TimerUpdate, GetClientUserId(client), TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
     g_GridCellCount = 0;
     g_GridHasValidCell = false;
+    g_GridValidCellCount = 0;
 }
 
 void Grid_OnDisabled(int client)
@@ -62,6 +64,7 @@ void Grid_OnDisabled(int client)
     }
     g_GridCellCount = 0;
     g_GridHasValidCell = false;
+    g_GridValidCellCount = 0;
     if (client > 0 && client <= MaxClients)
         GridRenderer_OnClientDisabled(client);
 }
@@ -268,6 +271,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         {
             g_GridCellCount = 0;
             g_GridHasValidCell = false;
+            g_GridValidCellCount = 0;
             GridRenderer_HideAll(client);
         }
         return Plugin_Continue;
@@ -300,8 +304,12 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     // Find nearby cells
     float t_find = GetEngineTime();
     int nearbyCells[GRID_MAX_CELLS];
-    int cellCount = GridLib_FindNearbyCells(aimPos, GRID_SEARCH_RADIUS,
-        GRID_MAX_Z_DIFF, nearbyCells, GRID_MAX_CELLS, _, GRID_BUDGET_MS);
+    
+    //int cellCount = GridLib_FindNearbyCells(aimPos, GRID_SEARCH_RADIUS,
+    //    GRID_MAX_Z_DIFF, nearbyCells, GRID_MAX_CELLS, _, GRID_BUDGET_MS);
+    
+    int cellCount = GridLib_FindCellsFromClosest(aimPos, GRID_MAX_CELLS, nearbyCells,GRID_MAX_CELLS,_,GRID_BUDGET_MS);
+    
     float ms_find = (GetEngineTime() - t_find) * 1000.0;
     
     //if (cellCount<=1 && g_iSpawnerMode==1 && zm_spawner_state==SPAWNER_OK)
@@ -316,6 +324,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
             GridRenderer_HideAll(client);
         g_GridCellCount = 0;
         g_GridHasValidCell = false;
+        g_GridValidCellCount = 0;
         if (g_iSpawnerMode==2) zm_spawner_state = SPAWNER_INVALID;
         return Plugin_Continue;
     }
@@ -337,6 +346,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
     bool cellValid[GRID_MAX_CELLS];
     int closestValidIdx = -1;
+    g_GridValidCellCount = 0;
     float closestDist = 999999.0;
     Address closestNavArea;
 
@@ -369,6 +379,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
         if (cellValid[i])
         {
+            g_GridValidCellCount += 1;
             float dist = GetVectorDistance(aimPos, pos);
             if (closestValidIdx == -1 || dist < closestDist)
             {
