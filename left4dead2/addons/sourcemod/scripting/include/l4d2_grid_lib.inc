@@ -612,6 +612,7 @@ stock int GridLib_GetCellsForNavArea(Address navArea, int[] results, int maxResu
  * @param filter        Optional filter callback. When provided, cells are tested
  *                      during BFS collection. Rejected cells are skipped.
  * @param budget_ms     Allowed CPU budget in miliseconds; exit early when exceeded.
+ * @param discard_obstructed Skip obstructed cells?
  * @return              Number of cells found
  */
 stock int GridLib_FindCellsFromClosest(const float position[3],
@@ -619,7 +620,8 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
                                        int[] results,
                                        int maxResults,
                                        GridLibCellFilter filter = INVALID_FUNCTION,
-                                       float budget_ms = 20.0)
+                                       float budget_ms = 20.0,
+                                       bool discard_obstructed = true)
 {
 	GridLibLog("[GridLib] FindCellsFromClosest: pos=(%.0f,%.0f,%.0f) desired=%d maxResults=%d filter=%s",
 		position[0], position[1], position[2], desiredCount, maxResults,
@@ -708,7 +710,7 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 		{
 			GridCell cell;
 			g_GridCells.GetArray(areaCells[i], cell, sizeof(GridCell));
-			if (cell.isObstructed)
+			if (cell.isObstructed && discard_obstructed)
 				continue;
 
 			// Skip nav-blocked cells (saferooms, checkpoints, etc.)
@@ -805,6 +807,7 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 			if ((GetEngineTime()*1000.0-tStart_ms)>=budget_ms)
             {
                 LogMessage("GridLib_FindCellsFromClosest over %1.f ms budget at %d/%d cells", budget_ms, i, candidateCount);
+                filterAbort = true;
                 break;
             }
 			

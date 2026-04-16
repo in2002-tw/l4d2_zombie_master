@@ -123,9 +123,18 @@ static bool Grid_CheckObstruction(int idx, float pos[3], bool obstructed)
     {
         if (!Grid_TryPhysPropRescue(idx, pos))
         {
-            g_GridMs_obstruct += (GetEngineTime() - t) * 1000.0;
-            g_GridN_obstructed++;
-            return false;
+            if (!obstruction_rescue_hull_up(pos,_,ZOMBIECLASS_BOOMER))
+            {
+                g_GridMs_obstruct += (GetEngineTime() - t) * 1000.0;
+                g_GridN_obstructed++;
+                return false;
+            }
+            else
+            {
+                g_GridValidPositions[idx] = pos;
+                g_GridOverridePositions[idx] = pos;
+                g_GridHasOverride[idx] = true;
+            }
         }
     }
 
@@ -218,7 +227,7 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
     if (!Grid_CheckDistance(pos, navArea))
         return false;
     
-    // Obstruction (includes physics prop rescue)
+    // Obstruction (includes z rescue)
     if (!Grid_CheckObstruction(idx, pos, obstructed))
         return false;
 
@@ -296,7 +305,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     //int cellCount = GridLib_FindNearbyCells(aimPos, GRID_SEARCH_RADIUS,
     //    GRID_MAX_Z_DIFF, nearbyCells, GRID_MAX_CELLS, _, GRID_BUDGET_MS);
     
-    int cellCount = GridLib_FindCellsFromClosest(aimPos, GRID_MAX_CELLS, nearbyCells,GRID_MAX_CELLS,_,GRID_BUDGET_MS);
+    int cellCount = GridLib_FindCellsFromClosest(aimPos, GRID_MAX_CELLS, nearbyCells,GRID_MAX_CELLS,_,GRID_BUDGET_MS,false);
     
     float ms_find = (GetEngineTime() - t_find) * 1000.0;
     
@@ -393,6 +402,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
             zm_spawner_state = SPAWNER_OK;
             zm_spawner_navArea = closestNavArea;
         }
+        g_GridValidCellIdx = closestValidIdx;
     }
     else
     {
@@ -501,6 +511,7 @@ bool Grid_ResolveWitchPosition(bool flow, float outPos[3])
         return false;
 
     outPos = g_GridClosestValidPos;
+    Grid_InvalidateClosestValid();
     return true;
 }
 
@@ -523,7 +534,27 @@ bool Grid_ResolveSpecialPosition(int zombieclass, bool flow, float outPos[3])
         return false;
 
     outPos = g_GridClosestValidPos;
+    Grid_InvalidateClosestValid();
     return true;
+}
+
+// A grid cell will (probably) become red during this frame due to obstruction by a freshly spawned unit. Update relevant data to reflect this.
+void Grid_InvalidateClosestValid()
+{
+    g_GridHasValidCell = false;
+    g_GridValidFlags[g_GridValidCellIdx] = false;
+    if (g_GridValidCellCount<=1) return; // no more green cells
+    for (int i = 0; i < g_GridValidCellCount; i++)
+    {
+        if (g_GridValidFlags[i])
+        {
+            g_GridValidCellIdx = i;
+            if (g_GridHasOverride[i]) g_GridClosestValidPos = g_GridOverridePositions[i];
+            else g_GridClosestValidPos = g_GridValidPositions[i];
+            g_GridHasValidCell = true;
+            return;
+        }
+    }
 }
 
 // ==========================================================================

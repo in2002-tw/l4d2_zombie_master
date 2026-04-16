@@ -38,8 +38,12 @@ void Spawner_CacheSurvivorData()
 		{
     		GetClientEyePosition(i, eyePos);
     		cluster = PVS_GetClusterForOrigin(eyePos);
-    		if (cluster<0) g_BatchSurvivorPVS[g_iBatchSurvivorCount] = "";
-    		else PVS_GetForCluster(cluster, g_BatchSurvivorPVS[g_iBatchSurvivorCount]);
+    		if (cluster<0) g_BatchSurvivorValidPVS[g_iBatchSurvivorCount] = false;
+    		else
+    		{
+        		g_BatchSurvivorValidPVS[g_iBatchSurvivorCount] = true;
+        		PVS_GetForCluster(cluster, g_BatchSurvivorPVS[g_iBatchSurvivorCount]);
+    		}
 		}
 		g_iBatchSurvivorClients[g_iBatchSurvivorCount] = i;
 		g_SurvNavAreaComputed[g_iBatchSurvivorCount] = false;
@@ -290,8 +294,9 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3])
        {
            if (GetVectorDistance(g_fBatchSurvivorPos[s],vecPos) >= fog_distance) continue;
 
+           //LogMessage("%d %s", s, g_BatchSurvivorPVS[s]);
            // PVS pre-filter: if position is not in this survivor's PVS, skip raytraces
-           if (g_BatchSurvivorPVS[s][0]==0 || !PVS_CheckOriginInPVS(vecPos, g_BatchSurvivorPVS[s]))
+           if (!g_BatchSurvivorValidPVS[s] || !PVS_CheckOriginInPVS(vecPos, g_BatchSurvivorPVS[s]))
            {
                if (DEBUG_SPAWNER) LogMessage("PVS pre-filter %d skipping raytraces", s);
                continue;

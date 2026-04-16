@@ -217,15 +217,15 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
             
             bool OOB = nav_xy_OOB(vPos_spawner,navCenter,navSize); // are we out of bounds for the navmesh?
             bool obstruction_checked = false;
-            if (OOB) // If navmesh is outside expected xy: try center,center-up,random,random-up
+            if (OOB) // If navmesh is outside expected xy: try up,center,center-up,random,random-up
             {
-                fail = !try_adjusting_obstructed_pos(vPos_spawner,zClass,navArea,navCenter,
+                fail = !try_adjusting_obstructed_pos(vPos_spawner,_,zClass,navArea,navCenter,
                                              false,        true,true,         true,true);
                 obstruction_checked = true;
             }
             if (!fail && !obstruction_checked && IsObstructed(vPos_spawner,_,_,ignore_zombies)) // Navmesh xy is good, but we are obstructed. Try moving up.
             {
-                fail = !try_adjusting_obstructed_pos(vPos_spawner,zClass,navArea,navCenter,
+                fail = !try_adjusting_obstructed_pos(vPos_spawner,_,zClass,navArea,navCenter,
                                              true,!obstruction_checked,!obstruction_checked,!obstruction_checked,!obstruction_checked);
                 
             }
@@ -289,6 +289,7 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
         if (!skip_gridlib && g_bGridReady && g_iSpawnerMode>0 && g_GridHasValidCell && can_ZM_see(g_GridClosestValidPos))
         {
             newPos = g_GridClosestValidPos;
+            Grid_InvalidateClosestValid();
             fail = false;
             //if (Analog_CanSpawnPos(newPos,zClass,false,false,true)==SPAWNER_OK)
             //    fail = false;
@@ -377,8 +378,8 @@ int SpawnerCellFilter(int cellIdx)
         return GRIDLIB_FILTER_DISCARD;
     }
     
-    if (obstructed)
-        return GRIDLIB_FILTER_DISCARD;
+    //if (obstructed)
+    //    return GRIDLIB_FILTER_DISCARD;
     
     if (!nav_can_spawn_zombies(g_iSpawnerZombieClass,navArea))
     {
@@ -396,8 +397,11 @@ int SpawnerCellFilter(int cellIdx)
             return GRIDLIB_FILTER_DISCARD;
     }
     
-    if (IsObstructed(cellPos,_,_,g_iSpawnerZombieClass==ZOMBIECLASS_COMMON)) // my obstruction checks can be more restrictive
-        return GRIDLIB_FILTER_DISCARD;
+    //if (IsObstructed(cellPos,_,_,g_iSpawnerZombieClass==ZOMBIECLASS_COMMON))
+    //{ // my obstruction checks can be more restrictive
+    //    if (!obstruction_rescue_hull_up(cellPos,_,g_iSpawnerZombieClass))
+    //        return GRIDLIB_FILTER_DISCARD;
+    //}
     
     if (IsValidClientZM() && !can_ZM_see(cellPos)) // Check if ZM can actually see that location.
         return GRIDLIB_FILTER_DISCARD;
@@ -514,6 +518,12 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
         //    LogMessage("[zm] FindNearbyValidSpawnCell: cell %d zm_client LOS", i);
         //    continue;
         //}
+        
+        if (IsObstructed(cellPos,_,_,zClass==ZOMBIECLASS_COMMON))
+        {
+            if (!obstruction_rescue_hull_up(cellPos,_,zClass))
+                return false;
+        }
 
         if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: valid cell %d at (%.0f,%.0f,%.0f)", i, cellPos[0], cellPos[1], cellPos[2]);
         outPos = cellPos;
@@ -782,7 +792,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         if (try_gridlib)
         {
             reset_SpawnerCellFilter();
-            gridlib_cell_count = GridLib_FindCellsFromClosest(zm_spawner_pos, count, gridlib_cells, 500, SpawnerCellFilter, GRID_BUDGET_MS);
+            gridlib_cell_count = GridLib_FindCellsFromClosest(zm_spawner_pos, count, gridlib_cells, 500, SpawnerCellFilter, GRID_BUDGET_MS, false);
             if (gridlib_cell_count > 0) use_gridlib = true;
         }
         
@@ -802,8 +812,11 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             bool cellObstructed;
             if (!GridLib_GetCellData(cellIdx, pos, cellNormal, cellNavArea, cellObstructed))
                 fallback_original_navmesh = true;
-            else if (cellObstructed)
-                fallback_original_navmesh = true;
+            if (IsObstructed(pos,_,_,true))
+            {
+                if (!obstruction_rescue_hull_up(pos,_,ZOMBIECLASS_COMMON))
+                    fallback_original_navmesh = true;
+            }
 
             //// PVS + single ray trace visibility check
             //if (g_iBatchSurvivorCount > 0)
@@ -838,7 +851,12 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             {
                 L4D_FindRandomSpot(zm_spawner_navArea, pos);
                 if (valid_last && distance_last_saferoom(pos)<=DISTANCE_LAST_SAFEROOM) pos = zm_spawner_pos;
-                else if (can_any_alive_survivor_see_cheap(pos) || IsObstructed(pos,_,_,true)) pos = zm_spawner_pos;
+                else if (can_any_alive_survivor_see_cheap(pos)) pos = zm_spawner_pos;
+                else if (IsObstructed(pos,_,_,true))
+                {
+                    if (!obstruction_rescue_hull_up(pos,_,ZOMBIECLASS_COMMON))
+                        pos = zm_spawner_pos;
+                }
             }
             else pos = zm_spawner_pos;
         }

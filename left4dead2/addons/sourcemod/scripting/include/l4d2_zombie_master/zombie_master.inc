@@ -387,6 +387,7 @@ Address g_pEngineServer = Address_Null;
 bool   g_bBatchPVSActive = false; // is PVS batch valid?
 bool   g_bBatchActive = false; // is survivor batch valid?
 int    g_iBatchSurvivorCount = 0;
+bool   g_BatchSurvivorValidPVS[MAXPLAYERS+1]; // avoiding char non sense
 char   g_BatchSurvivorPVS[MAXPLAYERS+1][PVS_BUFFER_SIZE];
 int    g_iBatchSurvivorClients[MAXPLAYERS+1];
 float  g_fBatchSurvivorPos[MAXPLAYERS+1][3];
@@ -421,6 +422,7 @@ int    g_GridCellCount;
 int    g_GridValidCellCount;
 float  g_GridClosestValidPos[3];
 bool   g_GridHasValidCell;
+int    g_GridValidCellIdx;
 
 // Physics prop position overrides (runtime-adjusted positions on top of props)
 float  g_GridOverridePositions[GRID_MAX_CELLS][3];
@@ -1413,22 +1415,24 @@ bool TraceFilter_Stuck_IgnoreZombies(int entity, int contentsMask, int ignore_en
 }
 
 // IsObstructed checks for ZM spawner (ignore_zombies=false) or to determine if a zombie will be stuck in that position (ignore_zombies=true)
+int g_iObstructingEntity;
 stock bool IsObstructed(float pos[3], int entity = -1, bool debug=false, bool ignore_zombies = false)
 {
     bool isObstructed = false;
+    g_iObstructingEntity = -1;
     Handle hullTrace;
     if (ignore_zombies) hullTrace = TR_TraceHullFilterEx(pos,pos,HULL_MINS,HULL_MAXS,MASK_NPCSOLID,TraceFilter_Stuck_IgnoreZombies,entity);
     else hullTrace = TR_TraceHullFilterEx(pos,pos,HULL_MINS,HULL_MAXS,MASK_NPCSOLID,TraceFilter_Spawner,entity);
 	if (TR_DidHit(hullTrace))
 	{
-		int hitEntity = TR_GetEntityIndex(hullTrace);
+		g_iObstructingEntity = TR_GetEntityIndex(hullTrace);
     	if (debug)
     	{
 		     static char classname[64];
-             GetEntityClassname(hitEntity, classname, sizeof(classname));
-             LogMessage("IsObstructed hit %d %s", hitEntity, classname);
+             GetEntityClassname(g_iObstructingEntity, classname, sizeof(classname));
+             LogMessage("IsObstructed hit %d %s", g_iObstructingEntity, classname);
         }
-		if (hitEntity == 0) // Hit world
+		if (g_iObstructingEntity == 0) // Hit world
 		{
 			//int hullSurfaceFlags = TR_GetSurfaceFlags(hullTrace);
 			//if (!(hullSurfaceFlags & SURF_NODRAW) && !(hullSurfaceFlags & SURF_HINT) && !(hullSurfaceFlags & SURF_SKIP))
@@ -1437,7 +1441,7 @@ stock bool IsObstructed(float pos[3], int entity = -1, bool debug=false, bool ig
         	// try checking both ways? idk what else could be done.
         	isObstructed = true;
 		}
-		else if (IsValidEntity(hitEntity)) isObstructed = true;
+		else if (IsValidEntity(g_iObstructingEntity)) isObstructed = true;
 	}
 	delete hullTrace;
 	//LogMessage("IsObstructed %d %d %.1f %.1f %.1f", isObstructed, entity, pos[0], pos[1], pos[2]);
@@ -1507,12 +1511,68 @@ stock float GetPhysicsPropTopZ(int entity, const float pos[3])
     return topZ;
 }
 
+// Attempt to rescue obstruction by moving vPos upwards.
+// Supply entity that should be ignored if needed.
+// We check the hull of the obstructing entity and set vPos[2] to the max height of the obstructing entity.
+// Do not rescue if obstruction is player, infected or witch to prevent vertical stacking abuse.
+// return: true if rescue was successful.
+bool obstruction_rescue_hull_up(float vPos[3], int entity = -1, int zClass = ZOMBIECLASS_BOOMER)
+{
+    bool rescued = false;
+    int memory = g_iObstructingEntity; // IsObstructed will overwrite g_iObstructingEntity... i am an idiot sandwich
+    static float newPos[3];
+    if (g_iObstructingEntity>0)
+    {
+        static char className[8];
+        GetEntityClassname(g_iObstructingEntity,className,sizeof(className));
+        switch (className[0])
+        {
+            case 'i':
+            {
+                if (strcmp(className,"infected",false)==0) return false;
+            }
+            case 'w':
+            {
+                if (strcmp(className,"witch",false)==0) return false;
+            }
+            case 'p':
+            {
+                if (strcmp(className,"player",false)==0) return false;
+            }
+        }
+        static float vPos_obstructing[3], vMaxs[3];
+        GetEntPropVector(g_iObstructingEntity, Prop_Send, "m_vecMaxs", vMaxs);
+        GetEntPropVector(g_iObstructingEntity, Prop_Send, "m_vecOrigin", vPos_obstructing);
+        newPos = vPos;
+        newPos[2] = vPos_obstructing[2] + vMaxs[2] + 1.0;
+        if (!IsObstructed(newPos,entity,_,zClass==ZOMBIECLASS_COMMON))
+        {
+            vPos = newPos;
+            rescued = true;
+        }
+        g_iObstructingEntity = memory;
+    }
+    else if (g_iObstructingEntity==0) // hit world - unclear how much we should move up
+    {
+        newPos = vPos;
+        newPos[2] += HULL_DZ_MIN_STRICT;
+        if (!IsObstructed(newPos,entity,_,zClass==ZOMBIECLASS_COMMON))
+        {
+            vPos = newPos;
+            rescued = true;
+        }
+        g_iObstructingEntity = memory;
+    }
+    return rescued;
+}
+
 // for known obstructed pos, try adjusting position slightly
 // optional: navArea and center for try_center, try_random
 // optional: zClass to determine if ignore_zombies is used for relaxed obstruction checks
+// optional: entity to ignore
 // true on success, false on failure
 // future: make this more useful
-stock bool try_adjusting_obstructed_pos(float pos[3], int zClass = ZOMBIECLASS_BOOMER,
+stock bool try_adjusting_obstructed_pos(float pos[3], int entity = -1, int zClass = ZOMBIECLASS_BOOMER,
                                         Address navArea=Address_Null, float center[3]={0.0,0.0,0.0},
                                         bool try_up = true,
                                         bool try_center = true, bool try_center_up = true,
@@ -1522,27 +1582,21 @@ stock bool try_adjusting_obstructed_pos(float pos[3], int zClass = ZOMBIECLASS_B
     float new_pos[3];
     if (try_up)
     {
-        new_pos = pos; new_pos[2] += HULL_DZ_MIN_STRICT;
-        if (!IsObstructed(new_pos,_,_,ignore_zombies))
-        {
-            pos = new_pos;
-            return true;
-        }
+        if (obstruction_rescue_hull_up(pos,entity,zClass)) return true;
     }
     
     if (try_center && center[0]!=0.0 && center[1]!=0.0)
     {
-        if (!IsObstructed(center,_,_,ignore_zombies))
+        if (!IsObstructed(center,entity,_,ignore_zombies))
         {
             pos = center;
             return true;
         }
         else if (try_center_up)
         {
-            new_pos = center; new_pos[2] += HULL_DZ_MIN_STRICT;
-            if (!IsObstructed(new_pos,_,_,ignore_zombies))
+            if (obstruction_rescue_hull_up(center,entity,zClass))
             {
-                pos = new_pos;
+                pos = center;
                 return true;
             }
         }
@@ -1551,15 +1605,14 @@ stock bool try_adjusting_obstructed_pos(float pos[3], int zClass = ZOMBIECLASS_B
     if (try_random && navArea!=Address_Null)
     {
         L4D_FindRandomSpot(navArea,new_pos);
-        if (!IsObstructed(new_pos,_,_,ignore_zombies))
+        if (!IsObstructed(new_pos,entity,_,ignore_zombies))
         {
             pos = new_pos;
             return true;
         }
         else if (try_random_up)
         {
-            new_pos[2] += HULL_DZ_MIN_STRICT;
-            if (!IsObstructed(new_pos,_,_,ignore_zombies))
+            if (obstruction_rescue_hull_up(new_pos,entity,zClass))
             {
                 pos = new_pos;
                 return true;
@@ -2025,7 +2078,7 @@ Action ZMControlSI(int client, int args)
          
          if (zClass==ZOMBIECLASS_TANK)
          {
-             if (IsObstructed(vOrigin,entity,_,true)) try_adjusting_obstructed_pos(vOrigin,ZOMBIECLASS_TANK,_,_,true,false,false,false,false);
+             if (IsObstructed(vOrigin,entity,_,true)) try_adjusting_obstructed_pos(vOrigin,entity,ZOMBIECLASS_TANK,_,_,true,false,false,false,false);
              L4D_ReplaceTank(entity,zm_client);
          }
          else L4D_TakeOverZombieBot(zm_client,entity);
