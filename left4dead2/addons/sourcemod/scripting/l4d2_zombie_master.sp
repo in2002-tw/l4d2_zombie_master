@@ -891,7 +891,7 @@ Action zm_update(Handle timer = null)
 
 Action zm_new_round(Handle timer = null)
 {
-    g_bBatchPVSActive = false;
+    invalidate_survivor_cache();
     if (!g_bCvarAllow)
     {
         zm_stage = ZM_END;
@@ -1462,7 +1462,7 @@ public Action evtPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     
     if(GetClientTeam(victim)!=TEAM_INFECTED)
     {
-        if (GetClientTeam(victim)==TEAM_SURVIVOR) g_bBatchPVSActive = false; // nullify precached PVS
+        if (GetClientTeam(victim)==TEAM_SURVIVOR) invalidate_survivor_cache();
         return Plugin_Continue;
     }
     
@@ -1740,7 +1740,7 @@ public void OnMapStart()
 public void OnMapEnd()
 {
 	if (DEBUG) LogMessage("[zm] OnMapEnd");
-	g_bBatchPVSActive = false;
+	invalidate_survivor_cache();
 	Spawner_Cleanup();
 	if (GridLib_IsReady()) GridLib_Cleanup();
 	if (!g_bCvarAllow) return;
@@ -1837,7 +1837,7 @@ void evtRoundEnd(Event event, const char[] name, bool dontBroadcast)
 	
 	if (DEBUG) LogMessage("[zm] evtRoundEnd");
     
-    g_bBatchPVSActive = false;
+    invalidate_survivor_cache();
     if (!g_bCvarAllow)
     {
         zm_stage = ZM_END;

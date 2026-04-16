@@ -12,50 +12,70 @@
 
 bool DEBUG_SPAWNER = false;
 
-// Batch PVS state for accelerated visibility checks in GridLib filter callbacks.
-// Call Spawner_BeginBatchPVS() before a batch.
+// Batch PVS state for accelerated visibility checks in GridLib filter callbacks + other survivor data.
+// Call before a batch.
 /**
- * Pre-compute PVS data for all alive survivors. Call before a batch of
+ * Pre-compute data for all alive survivors. Call before a batch of
  * can_any_alive_survivor_see_cheap() calls (e.g. inside a GridLib filter).
  * PVS buffers are built once here and reused for every cell check.
- * Survivor death, map end and round end events automatically set 
+ * Survivor death, map end and round end events automatically reset. 
  */
-void Spawner_BeginBatchPVS()
+void Spawner_CacheSurvivorData()
 {
-	if (Is_PVS_Valid()) return;
+	if (Is_Survivor_Cache_Valid()) return;
 	g_bBatchPVSActive = false;
+	g_bBatchActive = false;
 	g_iBatchSurvivorCount = 0;
-	if (hCheckOriginInPVS == null) return;
 	static float eyePos[3];
+	int cluster;
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (!IsClientInGame(i) || GetClientTeam(i) != TEAM_SURVIVOR || !IsPlayerAlive(i))
 			continue;
 		GetClientAbsOrigin(i, g_fBatchSurvivorPos[g_iBatchSurvivorCount]);
-		GetClientEyePosition(i, eyePos);
-		int cluster = PVS_GetClusterForOrigin(eyePos);
-		if (cluster < 0) continue;
-		PVS_GetForCluster(cluster, g_BatchSurvivorPVS[g_iBatchSurvivorCount]);
+		g_CachedSurvFlow[g_iBatchSurvivorCount] = L4D2Direct_GetFlowDistance(i);
+		if (hCheckOriginInPVS!=null)
+		{
+    		GetClientEyePosition(i, eyePos);
+    		cluster = PVS_GetClusterForOrigin(eyePos);
+    		if (cluster<0) g_BatchSurvivorPVS[g_iBatchSurvivorCount] = "";
+    		else PVS_GetForCluster(cluster, g_BatchSurvivorPVS[g_iBatchSurvivorCount]);
+		}
 		g_iBatchSurvivorClients[g_iBatchSurvivorCount] = i;
+		g_SurvNavAreaComputed[g_iBatchSurvivorCount] = false;
 		g_iBatchSurvivorCount++;
 	}
-	g_bBatchPVSActive = g_iBatchSurvivorCount>0;
-	if (g_bBatchPVSActive) g_fBatchTime = GetGameTime();
-	if (DEBUG_SPAWNER) LogMessage("[zm] BeginBatchPVS: %d survivors, active=%d", g_iBatchSurvivorCount, g_bBatchPVSActive);
+	g_bBatchActive = g_iBatchSurvivorCount>0;
+	g_bBatchPVSActive = g_bBatchActive && hCheckOriginInPVS!=null;
+	if (g_bBatchActive) g_fBatchTime = GetGameTime();
+	if (DEBUG_SPAWNER) LogMessage("[zm] Spawner_CacheSurvivorData: %d survivors, active=%d, PVS_active=%d",g_iBatchSurvivorCount,g_bBatchActive,g_bBatchPVSActive);
 }
 
-// Check if a recent PVS batch is still valid.
-bool Is_PVS_Valid()
+void invalidate_survivor_cache()
 {
-    if (g_bBatchPVSActive)
+    g_bBatchPVSActive = false;
+    g_bBatchActive = false;
+    g_iBatchSurvivorCount = 0;
+}
+
+// Check if a survivor data batch is still valid.
+bool Is_Survivor_Cache_Valid()
+{
+    if (g_bBatchActive)
     {
         if ( g_iAliveSurvivors!=g_iBatchSurvivorCount || (GetGameTime()-g_fBatchTime)>PVS_VALID_TIME)
         {
-            g_bBatchPVSActive = false;
-            g_iBatchSurvivorCount = 0;
+            invalidate_survivor_cache();
         }
     }
     //LogMessage("Is_PVS_Valid %d %d", g_bBatchPVSActive, g_iBatchSurvivorCount);
+    return g_bBatchActive;
+}
+
+// Check if PVS cache is valid
+bool Is_PVS_Valid()
+{
+    if (g_bBatchPVSActive) Is_Survivor_Cache_Valid();
     return g_bBatchPVSActive;
 }
 
@@ -263,7 +283,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3])
         }
    }
    
-   Spawner_BeginBatchPVS();
+   Spawner_CacheSurvivorData();
    if (Is_PVS_Valid())
    {
        for (int s = 0; s < g_iBatchSurvivorCount; s++)
@@ -271,7 +291,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3])
            if (GetVectorDistance(g_fBatchSurvivorPos[s],vecPos) >= fog_distance) continue;
 
            // PVS pre-filter: if position is not in this survivor's PVS, skip raytraces
-           if (!PVS_CheckOriginInPVS(vecPos, g_BatchSurvivorPVS[s]))
+           if (g_BatchSurvivorPVS[s][0]==0 || !PVS_CheckOriginInPVS(vecPos, g_BatchSurvivorPVS[s]))
            {
                if (DEBUG_SPAWNER) LogMessage("PVS pre-filter %d skipping raytraces", s);
                continue;

@@ -377,19 +377,24 @@ Handle fq_timer = INVALID_HANDLE;
 Handle ems_hud_timer = INVALID_HANDLE;
 bool recordpos = true; // for tank stutter fix
 
-// PVS (Potentially Visible Set) engine calls
+// Spawner_CacheSurvivorData: PVS (Potentially Visible Set) engine calls + survivor position an
 Handle hGetClusterForOrigin = null;
 Handle hGetPVSForCluster = null;
 Handle hCheckOriginInPVS = null;
 Address g_pEngineServer = Address_Null;
 #define PVS_BUFFER_SIZE 8192
-#define PVS_VALID_TIME 0.05 // seconds
-bool   g_bBatchPVSActive = false;
+#define PVS_VALID_TIME 0.09 // seconds (gametime)
+bool   g_bBatchPVSActive = false; // is PVS batch valid?
+bool   g_bBatchActive = false; // is survivor batch valid?
 int    g_iBatchSurvivorCount = 0;
 char   g_BatchSurvivorPVS[MAXPLAYERS+1][PVS_BUFFER_SIZE];
 int    g_iBatchSurvivorClients[MAXPLAYERS+1];
 float  g_fBatchSurvivorPos[MAXPLAYERS+1][3];
 float  g_fBatchTime;
+float   g_CachedSurvFlow[MAXPLAYERS+1];
+Address g_CachedSurvNavArea[MAXPLAYERS+1];
+bool    g_SurvNavAreaComputed[MAXPLAYERS+1];
+float   g_GridEffectiveMinDist;
 
 #define GRID_BUDGET_MS 20.0
 #define GRID_SEARCH_RADIUS  150.0
@@ -420,14 +425,6 @@ bool   g_GridHasValidCell;
 // Physics prop position overrides (runtime-adjusted positions on top of props)
 float  g_GridOverridePositions[GRID_MAX_CELLS][3];
 bool   g_GridHasOverride[GRID_MAX_CELLS];
-
-// Validation context - set before the cell loop, read by helpers
-float   g_GridCachedSurvPos[MAXPLAYERS+1][3];
-float   g_GridCachedSurvFlow[MAXPLAYERS+1];
-int     g_GridCachedSurvCount;
-float   g_GridEffectiveMinDist;
-Address g_GridCachedSurvNavArea[MAXPLAYERS+1];
-bool    g_GridSurvNavAreaComputed[MAXPLAYERS+1];
 
 // Per-update timing accumulators (reset each tick, read by perf log)
 float  g_GridMs_obstruct;
@@ -684,9 +681,6 @@ void GetCvars()
     }
     
     g_fAbilityCooldown = g_hAbilityCooldown.FloatValue;
-
-    g_iSpawnerMode = g_hSpawnerMode.IntValue;
-    if (!g_bGrid) g_iSpawnerMode = 0;
 }
 
 Action ZM_MOTD(int client, int args)

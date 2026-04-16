@@ -464,7 +464,7 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
     //g_SpawnerFilterRadius = radius;
     g_iSpawnerZombieClass = zClass;
     g_bLastDoorValid = IsValidEntity(lastdoor);
-    Spawner_BeginBatchPVS();
+    Spawner_CacheSurvivorData();
 
     float t_gridlib = GetEngineTime();
     int cells[1];
@@ -752,40 +752,43 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
     int gridlib_cell_count = 0;
     bool use_gridlib = false;
 
+    int resolved = 0;
+
     if (count > 1 && g_bGrid && GridLib_IsReady())
     {
-        if (g_iSpawnerMode>0 && g_GridValidCellCount>=count && GetVectorDistance(g_GridClosestValidPos,zm_spawner_pos)<150.0)
+        if (g_iSpawnerMode>0 && g_GridValidCellCount>=count && GetVectorDistance(g_GridClosestValidPos,zm_spawner_pos)<150.0
+            && L4D2_NavAreaTravelDistance(g_GridClosestValidPos,zm_spawner_pos,false)<150.0)
         {
-            for (int c = 0; c < count; c++)
-            {
-                gridlib_cells[c] = g_GridCellIndices[c];
-            }
-            use_gridlib = true;
-            gridlib_cell_count = g_GridValidCellCount;
+            //for (int c = 0; c < count; c++)
+            //{
+            //    gridlib_cells[c] = g_GridCellIndices[c];
+            //}
+            //use_gridlib = true;
+            //gridlib_cell_count = g_GridValidCellCount;
+            resolved = Grid_ResolveCommonPositions(count,flow,angry,hint,outPositions,maxOut);
+            return resolved;
         }
-        else
+        
+        bool try_gridlib = true;
+        if (zm_spawner_navArea)
         {
-            bool try_gridlib = true;
-            if (zm_spawner_navArea)
-            {
-                float navSize[3];
-                L4D_GetNavAreaSize(zm_spawner_navArea, navSize);
-                if (navSize[0] < 32.0) navSize[0] = 32.0;
-                if (navSize[1] < 32.0) navSize[1] = 32.0;
-                float count_navmesh = (navSize[0] * navSize[1]) / AREA_COMMON + 1.0;
-                try_gridlib = count_navmesh < count || count_navmesh > (4.0 * count);
-            }
-            if (try_gridlib)
-            {
-                reset_SpawnerCellFilter();
-                gridlib_cell_count = GridLib_FindCellsFromClosest(zm_spawner_pos, count, gridlib_cells, 500, SpawnerCellFilter, GRID_BUDGET_MS);
-                if (gridlib_cell_count > 0) use_gridlib = true;
-            }
+            float navSize[3];
+            L4D_GetNavAreaSize(zm_spawner_navArea, navSize);
+            if (navSize[0] < 32.0) navSize[0] = 32.0;
+            if (navSize[1] < 32.0) navSize[1] = 32.0;
+            float count_navmesh = (navSize[0] * navSize[1]) / AREA_COMMON + 1.0;
+            try_gridlib = count_navmesh < count || count_navmesh > (4.0 * count);
         }
+        if (try_gridlib)
+        {
+            reset_SpawnerCellFilter();
+            gridlib_cell_count = GridLib_FindCellsFromClosest(zm_spawner_pos, count, gridlib_cells, 500, SpawnerCellFilter, GRID_BUDGET_MS);
+            if (gridlib_cell_count > 0) use_gridlib = true;
+        }
+        
     }
 
-    Spawner_BeginBatchPVS();
-    int resolved = 0;
+    Spawner_CacheSurvivorData();
     static float pos[3];
     for (int i = 0; i < count && resolved < maxOut; i++)
     {

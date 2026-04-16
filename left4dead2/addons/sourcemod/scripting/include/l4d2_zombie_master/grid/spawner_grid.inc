@@ -73,31 +73,15 @@ void Grid_OnDisabled(int client)
 // Validation helpers
 // ==========================================================================
 
-static void Grid_CacheSurvivorData()
-{
-    g_GridCachedSurvCount = 0;
-    g_GridEffectiveMinDist = g_fSpawnMinDistance;
-    if (zm_stage < ZM_STARTED) g_GridEffectiveMinDist *= 2.0;
-    for (int s = 1; s <= MaxClients; s++)
-    {
-        if (!IsClientInGame(s) || !IsPlayerAlive(s) || GetClientTeam(s) != TEAM_SURVIVOR) continue;
-        GetClientAbsOrigin(s, g_GridCachedSurvPos[g_GridCachedSurvCount]);
-        g_GridCachedSurvFlow[g_GridCachedSurvCount] = L4D2Direct_GetFlowDistance(s);
-        g_GridCachedSurvCount++;
-    }
-    for (int i = 0; i < g_GridCachedSurvCount; i++)
-        g_GridSurvNavAreaComputed[i] = false;
-}
-
 static Address Grid_GetSurvivorNavArea(int survIdx)
 {
-    if (!g_GridSurvNavAreaComputed[survIdx])
+    if (!g_SurvNavAreaComputed[survIdx])
     {
-        g_GridCachedSurvNavArea[survIdx] = L4D_GetNearestNavArea(
-            g_GridCachedSurvPos[survIdx], 300.0, false, false, true, TEAM_SURVIVOR);
-        g_GridSurvNavAreaComputed[survIdx] = true;
+        g_CachedSurvNavArea[survIdx] = L4D_GetNearestNavArea(
+            g_fBatchSurvivorPos[survIdx], 300.0, false, false, true, TEAM_SURVIVOR);
+        g_SurvNavAreaComputed[survIdx] = true;
     }
-    return g_GridCachedSurvNavArea[survIdx];
+    return g_CachedSurvNavArea[survIdx];
 }
 
 static bool Grid_TryPhysPropRescue(int idx, float pos[3])
@@ -152,8 +136,11 @@ static bool Grid_CheckObstruction(int idx, float pos[3], bool obstructed)
 static bool Grid_CheckDistance(float pos[3], Address navArea)
 {
     float t = GetEngineTime();
-
-    if (g_GridEffectiveMinDist <= 0.0 || g_GridCachedSurvCount == 0)
+    
+    g_GridEffectiveMinDist = g_fSpawnMinDistance;
+    if (zm_stage < ZM_STARTED) g_GridEffectiveMinDist *= 2.0;
+    
+    if (g_GridEffectiveMinDist <= 0.0 || g_iBatchSurvivorCount == 0)
     {
         g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
         return true;
@@ -164,16 +151,16 @@ static bool Grid_CheckDistance(float pos[3], Address navArea)
     int closestSurvByVec = -1;
     float closestVecDist = 999999.0;
 
-    for (int s = 0; s < g_GridCachedSurvCount; s++)
+    for (int s = 0; s < g_iBatchSurvivorCount; s++)
     {
         // Tier 1: flow distance
-        float flowDiff = FloatAbs(cellFlow - g_GridCachedSurvFlow[s]);
-        if (cellFlow > 0.0 && g_GridCachedSurvFlow[s] > 0.0
+        float flowDiff = FloatAbs(cellFlow - g_CachedSurvFlow[s]);
+        if (cellFlow > 0.0 && g_CachedSurvFlow[s] > 0.0
             && flowDiff >= g_GridEffectiveMinDist)
             continue;
 
         // Tier 2: vector distance
-        float vecDist = GetVectorDistance(pos, g_GridCachedSurvPos[s]);
+        float vecDist = GetVectorDistance(pos, g_fBatchSurvivorPos[s]);
         if (vecDist >= g_GridEffectiveMinDist)
             continue;
 
@@ -216,11 +203,8 @@ static bool Grid_CheckDistance(float pos[3], Address navArea)
 
 static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstructed)
 {
-    // 1. Obstruction (includes physics prop rescue)
-    if (!Grid_CheckObstruction(idx, pos, obstructed))
-        return false;
-
-    // 2. Nav area attributes
+    
+    // Nav area attributes
     float t = GetEngineTime();
     if (!nav_can_spawn_zombies(false, navArea))
     {
@@ -229,8 +213,16 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
         return false;
     }
     g_GridMs_nav += (GetEngineTime() - t) * 1000.0;
+    
+    // Distance to survivors + last saferoom
+    if (!Grid_CheckDistance(pos, navArea))
+        return false;
+    
+    // Obstruction (includes physics prop rescue)
+    if (!Grid_CheckObstruction(idx, pos, obstructed))
+        return false;
 
-    // 3. Survivor line of sight
+    // Survivor line of sight
     t = GetEngineTime();
     if (can_any_alive_survivor_see_cheap(pos))
     {
@@ -239,10 +231,6 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
         return false;
     }
     g_GridMs_los += (GetEngineTime() - t) * 1000.0;
-
-    // 4. Distance to survivors + last saferoom
-    if (!Grid_CheckDistance(pos, navArea))
-        return false;
 
     g_GridN_valid++;
     return true;
@@ -331,8 +319,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
     // Prepare validation context
     float t_validate = GetEngineTime();
-    Spawner_BeginBatchPVS();
-    Grid_CacheSurvivorData();
+    Spawner_CacheSurvivorData();
 
     g_GridMs_obstruct = 0.0;
     g_GridMs_nav = 0.0;
@@ -379,7 +366,6 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
         if (cellValid[i])
         {
-            g_GridValidCellCount += 1;
             float dist = GetVectorDistance(aimPos, pos);
             if (closestValidIdx == -1 || dist < closestDist)
             {
@@ -429,7 +415,9 @@ Action Grid_TimerUpdate(Handle timer, int userid)
             g_GridN_nav, g_GridN_los, g_GridN_dist,
             ms_find, ms_validate, g_GridMs_obstruct, g_GridMs_nav,
             g_GridMs_los, g_GridMs_dist, ms_render);
-
+    
+    g_GridValidCellCount = g_GridN_valid;
+    
     return Plugin_Continue;
 }
 
