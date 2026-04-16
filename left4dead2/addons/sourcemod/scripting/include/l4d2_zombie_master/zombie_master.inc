@@ -681,6 +681,7 @@ void GetCvars()
         }
         if (g_bGrid!=g_hGrid.BoolValue) SetConVarBool(g_hGrid,g_bGrid);
     }
+    if (!g_bGrid) g_iSpawnerMode = 0;
     
     g_fAbilityCooldown = g_hAbilityCooldown.FloatValue;
 }
