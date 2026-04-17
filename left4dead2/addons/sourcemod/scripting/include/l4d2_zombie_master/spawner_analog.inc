@@ -250,13 +250,18 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
     }
     if (!fail || draw) // nav area travel distance is expensive, skip if not needed
     {
-        min_distance = min_distance_to_survivors(vPos_spawner,draw);
+        min_distance = min_distance_to_survivors(vPos_spawner,draw,_,navArea);
         if (min_distance>=0.0 && draw) latest_distance = min_distance;
         if (zm_stage<ZM_STARTED && spawner_nearest_survivor>0) min_distance *= 2.0;
         if (min_distance>=0.0 && g_fSpawnMinDistance>0.0 && min_distance<g_fSpawnMinDistance)
         {
             if (!fail) spawner_state = SPAWNER_DISTANCE;
             fail = true;
+            if (latest_distance<150.0 && draw) // trigger flow
+            {
+                if (draw) update_ZM_spawner(vPos,vPos_spawner,spawner_state,draw);
+                return spawner_state;
+            }
         }
     }
     if (!fail || spawner_state>SPAWNER_NAV) // if OK or BLUE, check for last saferoom abuse.
@@ -291,8 +296,6 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
             newPos = g_GridClosestValidPos;
             Grid_InvalidateClosestValid();
             fail = false;
-            //if (Analog_CanSpawnPos(newPos,zClass,false,false,true)==SPAWNER_OK)
-            //    fail = false;
         }
         if (fail && spawner_last_valid)
         {
@@ -851,6 +854,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             {
                 L4D_FindRandomSpot(zm_spawner_navArea, pos);
                 if (valid_last && distance_last_saferoom(pos)<=DISTANCE_LAST_SAFEROOM) pos = zm_spawner_pos;
+                else if (g_fSpawnMinDistance>0.0 && min_distance_to_survivors(pos,false,g_fSpawnMinDistance,zm_spawner_navArea)<g_fSpawnMinDistance) pos = zm_spawner_pos;
                 else if (can_any_alive_survivor_see_cheap(pos)) pos = zm_spawner_pos;
                 else if (IsObstructed(pos,_,_,true))
                 {

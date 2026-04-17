@@ -16,7 +16,7 @@
 // Snake22, Mark9013100
 // HUGE THANKS for scripting help: HarryPotter, xerox8521, Forgetest, little_froy, Lux, Marttt, Bacardi, Silvers
 // HUGE THANKS TO Reagy and IronBar for hosting the Knockout Left 4 Dead 2 Server
-// Custom Ellis and Louis sounds: zyiks and Skerion
+// Sentence-mixed survivor voice lines: Skerion, Ellis voice line by zyiks
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -32,7 +32,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.07 2026-04-14"
+#define PLUGIN_VERSION 			"0.9.08 2026-04-16"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -1462,7 +1462,7 @@ public Action evtPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     
     if(GetClientTeam(victim)!=TEAM_INFECTED)
     {
-        if (GetClientTeam(victim)==TEAM_SURVIVOR) invalidate_survivor_cache();
+        if (GetClientTeam(victim)==TEAM_SURVIVOR) invalidate_survivor_cache(true);
         return Plugin_Continue;
     }
     
@@ -2063,9 +2063,10 @@ void evtPlayerSpawned(Event event, const char[] name, bool dontBroadcast)
        if (zm_timer==INVALID_HANDLE) zm_update();
    	   request_update_glow(client);
    	   if (!IsPlayerAlive(client)) return;
-   	   if (g_bLockSaferoom && L4D_IsInIntro()>0 && GetClientTeam(client)==TEAM_SURVIVOR)
+   	   if (GetClientTeam(client)==TEAM_SURVIVOR)
    	   {
-       	   freeze_player(client);
+       	   if (g_bLockSaferoom && L4D_IsInIntro()>0) freeze_player(client);
+       	   invalidate_survivor_cache(true);
    	   }
    	   else if (GetClientTeam(client)==TEAM_INFECTED)
    	   {

@@ -55,8 +55,16 @@ void Spawner_CacheSurvivorData()
 	if (DEBUG_SPAWNER) LogMessage("[zm] Spawner_CacheSurvivorData: %d survivors, active=%d, PVS_active=%d",g_iBatchSurvivorCount,g_bBatchActive,g_bBatchPVSActive);
 }
 
-void invalidate_survivor_cache()
+// Allow game events, namely survivor death and spawn, to reset cached survivor data.
+// optional bool refresh: cache new survivor data immediately if a batch is actively being used for something.
+void invalidate_survivor_cache(bool refresh = false)
 {
+    if (refresh && g_bBatchActive)
+    {
+        g_bBatchActive = false;
+        Spawner_CacheSurvivorData();
+        return;
+    }
     g_bBatchPVSActive = false;
     g_bBatchActive = false;
     g_iBatchSurvivorCount = 0;
@@ -344,77 +352,158 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3])
 }
 
 /**
- * Find the minimum distance from a position to any alive survivor.
- * Computes both raw vector distance and NavMesh travel distance in both directions,
- * then returns the larger of the two (conservative estimate). Also checks distance
- * to saferoom doors. Returns -1.0 if no valid path or survivor exists.
+ * Find the travel distance from pos to any alive survivor or first saferoom door.
  *
  * @param pos           The world position to measure from
  * @param store_client  If true, store the nearest survivor client index in spawner_nearest_survivor. For flow spawns.
- * @param min_distance  Safe distance to spawn. Feeds to fast any_alive_survivors_in_radius() call which can exit early returning min_distance.
+ * @param safe_distance  Safe distance to spawn zombies. We exit early if there are no entities to consider within a sphere of this radius.
  * @return              Minimum distance to survivors, or -1.0 if no valid measurement
  */
-float min_distance_to_survivors(float pos[3], bool store_client=false, float min_distance = -1.0)
+float min_distance_to_survivors(float pos[3], bool store_client=false, float safe_distance = -1.0, Address navArea = Address_Null)
 {
-   if (DEBUG) LogMessage("[zm] min_distance_to_survivors");
-   // d_min is the final value. nav distance and vector distance are calculated independently, and then we think.
-   // -1.0 are invalid values, we will deal with them later
-   float d_nav_temp, d_raw_temp;
-   float d_min = -1.0;
-   float d_nav = -1.0;
-   float d_raw = -1.0;
-   float pos2[3];
-   if (store_client) spawner_nearest_survivor = -1;
-   // Is there at least one survivor close enough? If not, end early.
-   bool hit = true;
-   if (min_distance<0.0) min_distance = (g_fSpawnMinDistance<150.0) ? 150.0 : g_fSpawnMinDistance; // 150.0 for "survivor being targeted" detection
-   if (l4dhooks_updated) hit = any_alive_survivors_in_radius(pos,min_distance);
-   if (!hit) return min_distance+1.0;
-    if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor)) // Check first saferoom
+    if (store_client) spawner_nearest_survivor = -1;
+    if (safe_distance<0.0) safe_distance = (g_fSpawnMinDistance<150.0) ? 150.0 : g_fSpawnMinDistance; // 150.0 for "survivor being targeted" detection
+    
+    bool include_saferoom = zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor);
+    static float pos_saferoom[3], pos_closest[3];
+    float vector_distance_saferoom;
+    float min_distance = -1.0; // nav travel distance
+    float min_vector_distance = -1.0; // vector distance
+    float min_flow_diff = -1.0;
+    bool hit = false; // is there anything closer than "too close"?
+    
+    float flow_pos = L4D_GetFlowFromPoint(pos);
+    
+    if (include_saferoom) // Check first saferoom
     {
-         L4D_GetEntityWorldSpaceCenter(g_iLockedDoor,pos2);
-         d_raw_temp = GetVectorDistance(pos,pos2);
-         if (d_raw<0.0 || d_raw_temp<d_raw) d_raw = d_raw_temp;
-         d_nav_temp = L4D2_NavAreaTravelDistance(pos,pos2,false);
-         if (d_nav_temp>=0.0 && (d_nav<0.0 || d_nav_temp<d_nav)) d_nav = d_nav_temp;
+         GetEntPropVector(g_iLockedDoor,Prop_Send,"m_vecOrigin",pos_saferoom);
+         vector_distance_saferoom = GetVectorDistance(pos,pos_saferoom);
+         if (vector_distance_saferoom<=safe_distance) hit = true;
+         else include_saferoom = false;
     }
-
-   int i = INVALID_ENT_REFERENCE;
-   for(i = 1; i <= MaxClients; i++)
-   {
-        if (!IsClientInGame(i) || !IsPlayerAlive(i) || GetClientTeam(i)!=TEAM_SURVIVOR) continue;
-        L4D_GetEntityWorldSpaceCenter(i,pos2);
-        d_raw_temp = GetVectorDistance(pos,pos2);
-        if (d_raw<0.0 || d_raw_temp<d_raw)
+    if (!hit) hit = !l4dhooks_updated || any_alive_survivors_in_radius(pos,safe_distance);
+    if (!hit) return safe_distance+1.0; // no entities to consider - expensive computation can be skipped.
+   
+    Spawner_CacheSurvivorData();
+    
+    float flowDiff, vecDist;
+    for (int s = 0; s < g_iBatchSurvivorCount; s++) // Find closest survivor
+    {
+        // Vector distance
+        vecDist = GetVectorDistance(pos, g_fBatchSurvivorPos[s]);
+        if (vecDist > safe_distance)
+            continue;
+        
+        // If flow of point is <=0.0 we have no useful info about potential travel distance.
+        // Then let's check if two nav areas can be connected at all.
+        // Then we need to calculate the goddamn nav travel distance immediately.
+        
+        // Flow distance
+        flowDiff = FloatAbs(flow_pos - g_CachedSurvFlow[s]);
+        LogMessage("flow_pos %f flowDiff %d %f", flow_pos, g_iBatchSurvivorClients[s], flowDiff);
+        if (min_flow_diff<0.0 || flowDiff<min_flow_diff)
         {
-            d_raw = d_raw_temp;
-            if (store_client) spawner_nearest_survivor = i;
+            spawner_nearest_survivor = g_iBatchSurvivorClients[s];
+            pos_closest = g_fBatchSurvivorPos[s];
+            min_vector_distance = vecDist;
         }
-
-        d_nav_temp = L4D2_NavAreaTravelDistance(pos,pos2,false); // can return -1.0 for no path
-        if (d_nav_temp>=0.0 && (d_nav<0.0 || d_nav_temp<d_nav))
+        
+        // BuildPath will connect centers (or origins) of two navmeshes so distance should be larger to account for large navmeshes.
+        //Address survNav = Grid_GetSurvivorNavArea(closestSurvByVec);
+        //if (survNav != Address_Null && navArea != Address_Null
+        //    && !L4D2_NavAreaBuildPath(navArea, survNav, g_GridEffectiveMinDist, TEAM_INFECTED, false))
+        //    tooClose = false;
+        
+    }
+    
+    // Compare to first saferoom
+    if (include_saferoom)
+    {
+        flowDiff = FloatAbs(flow_pos - L4D_GetFlowFromPoint(pos_saferoom));
+        if (min_flow_diff<0.0 || flowDiff<min_flow_diff)
         {
-            d_nav = d_nav_temp;
-            if (store_client) spawner_nearest_survivor = i;
-            if (d_nav<150.0) return d_nav;
+            pos_closest = pos_saferoom;
+            min_vector_distance = vector_distance_saferoom;
         }
-
-        // If round has started, check if survivors might appear here soon.
-        if (zm_stage==ZM_STARTED)
-        {
-            d_nav_temp = L4D2_NavAreaTravelDistance(pos2,pos,false);
-            if (d_nav_temp>=0.0 && (d_nav<0.0 || d_nav_temp<d_nav))
-            {
-                d_nav = d_nav_temp;
-                if (store_client) spawner_nearest_survivor = i;
-            }
-        }
-        if (d_nav<150.0 && d_raw<150.0 && d_nav<min_distance && d_raw<min_distance) break; // targeting survivor
-   }
-
-    if (d_nav>=0.0) d_min = d_nav>d_raw ? d_nav : d_raw;
-    return d_min;
+    }
+    
+    // All computation DONE. Now we make a decision.
+    
+    if (min_vector_distance<0.0 || min_vector_distance>safe_distance) return safe_distance+1.0;
+    
+    min_distance = L4D2_NavAreaTravelDistance(pos_closest,pos,false); // can return -1.0
+    if (min_distance>=0.0 && min_distance<=safe_distance) return min_distance;
+    
+    if (zm_stage==ZM_STARTED) // If round has started, don't allow zombie spawns if a survivor is about to appear
+    {
+        float dist2 = L4D2_NavAreaTravelDistance(pos,pos_closest,false);
+        if (dist2>=0.0 && ( min_distance<0.0 || dist2<min_distance )) min_distance = dist2; 
+    }
+    
+    return min_distance;
 }
+
+//float min_distance_to_survivors_old(float pos[3], bool store_client=false, float min_distance = -1.0)
+//{
+//   if (DEBUG) LogMessage("[zm] min_distance_to_survivors");
+//   // d_min is the final value. nav distance and vector distance are calculated independently, and then we think.
+//   // -1.0 are invalid values, we will deal with them later
+//   float d_nav_temp, d_raw_temp;
+//   float d_min = -1.0;
+//   float d_nav = -1.0;
+//   float d_raw = -1.0;
+//   float pos2[3];
+//   if (store_client) spawner_nearest_survivor = -1;
+//   // Is there at least one survivor close enough? If not, end early.
+//   bool hit = true;
+//   if (min_distance<0.0) min_distance = (g_fSpawnMinDistance<150.0) ? 150.0 : g_fSpawnMinDistance; // 150.0 for "survivor being targeted" detection
+//   if (l4dhooks_updated) hit = any_alive_survivors_in_radius(pos,min_distance);
+//   if (!hit) return min_distance+1.0;
+//    if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor)) // Check first saferoom
+//    {
+//         L4D_GetEntityWorldSpaceCenter(g_iLockedDoor,pos2);
+//         d_raw_temp = GetVectorDistance(pos,pos2);
+//         if (d_raw<0.0 || d_raw_temp<d_raw) d_raw = d_raw_temp;
+//         d_nav_temp = L4D2_NavAreaTravelDistance(pos,pos2,false);
+//         if (d_nav_temp>=0.0 && (d_nav<0.0 || d_nav_temp<d_nav)) d_nav = d_nav_temp;
+//    }
+//
+//   int i = INVALID_ENT_REFERENCE;
+//   for(i = 1; i <= MaxClients; i++)
+//   {
+//        if (!IsClientInGame(i) || !IsPlayerAlive(i) || GetClientTeam(i)!=TEAM_SURVIVOR) continue;
+//        L4D_GetEntityWorldSpaceCenter(i,pos2);
+//        d_raw_temp = GetVectorDistance(pos,pos2);
+//        if (d_raw<0.0 || d_raw_temp<d_raw)
+//        {
+//            d_raw = d_raw_temp;
+//            if (store_client) spawner_nearest_survivor = i;
+//        }
+//
+//        d_nav_temp = L4D2_NavAreaTravelDistance(pos,pos2,false); // can return -1.0 for no path
+//        if (d_nav_temp>=0.0 && (d_nav<0.0 || d_nav_temp<d_nav))
+//        {
+//           d_nav = d_nav_temp;
+//            if (store_client) spawner_nearest_survivor = i;
+//            if (d_nav<150.0) return d_nav;
+//        }
+//
+//        // If round has started, check if survivors might appear here soon.
+//        if (zm_stage==ZM_STARTED)
+//        {
+//            d_nav_temp = L4D2_NavAreaTravelDistance(pos2,pos,false);
+//            if (d_nav_temp>=0.0 && (d_nav<0.0 || d_nav_temp<d_nav))
+//            {
+//                d_nav = d_nav_temp;
+//                if (store_client) spawner_nearest_survivor = i;
+//            }
+//        }
+//        if (d_nav<150.0 && d_raw<150.0 && d_nav<min_distance && d_raw<min_distance) break; // targeting survivor
+//   }
+//
+//    if (d_nav>=0.0) d_min = d_nav>d_raw ? d_nav : d_raw;
+//    return d_min;
+//}
 
 // Special TraceFilter: pass through entities with hp except alive survivors.
 stock bool FilterSpawner_HitSurvivors(int entity, int mask, int self)
