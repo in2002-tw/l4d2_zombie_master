@@ -73,17 +73,6 @@ void Grid_OnDisabled(int client)
 // Validation helpers
 // ==========================================================================
 
-static Address Grid_GetSurvivorNavArea(int survIdx)
-{
-    if (!g_SurvNavAreaComputed[survIdx])
-    {
-        g_CachedSurvNavArea[survIdx] = L4D_GetNearestNavArea(
-            g_fBatchSurvivorPos[survIdx], 300.0, false, false, true, TEAM_SURVIVOR);
-        g_SurvNavAreaComputed[survIdx] = true;
-    }
-    return g_CachedSurvNavArea[survIdx];
-}
-
 static bool Grid_TryPhysPropRescue(int idx, float pos[3])
 {
     int hitProp = -1;
@@ -185,7 +174,7 @@ static bool Grid_CheckDistance(float pos[3], Address navArea)
     // Tier 3: bounded NavMesh path check for closest survivor only
     if (tooClose && closestSurvByVec >= 0)
     {
-        Address survNav = Grid_GetSurvivorNavArea(closestSurvByVec);
+        Address survNav = GetCachedSurvivorNavArea(closestSurvByVec);
         if (survNav != Address_Null && navArea != Address_Null
             && !L4D2_NavAreaBuildPath(navArea, survNav, g_GridEffectiveMinDist, TEAM_INFECTED, false))
             tooClose = false;
@@ -210,6 +199,8 @@ static bool Grid_CheckDistance(float pos[3], Address navArea)
     return true;
 }
 
+// Run min_distance_to_survivors with store_client set to True until a valid survivor is hit with the grid cells. Then call the rest with
+// This will allow flow spawns to function as intended.
 static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstructed)
 {
     
@@ -224,8 +215,24 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
     g_GridMs_nav += (GetEngineTime() - t) * 1000.0;
     
     // Distance to survivors + last saferoom
-    if (!Grid_CheckDistance(pos, navArea))
+    t = GetEngineTime();
+    //if (!Grid_CheckDistance(pos, navArea))
+    //    return false;
+    float distLast = distance_last_saferoom(pos);
+    if (distLast > 0.0 && distLast <= DISTANCE_LAST_SAFEROOM)
+    {
+        g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
         return false;
+    }
+    float min_distance = min_distance_to_survivors(pos,g_iSpawnerMode==2,_,navArea);
+    if (min_distance>=0.0 && g_iSpawnerMode==2) latest_distance = min_distance;
+    if (zm_stage < ZM_STARTED) min_distance *= 2.0;
+    if (g_fSpawnMinDistance>0.0 && min_distance>=0.0 && min_distance<=g_fSpawnMinDistance)
+    {
+        g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
+        return false;
+    }
+    g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
     
     // Obstruction (includes z rescue)
     if (!Grid_CheckObstruction(idx, pos, obstructed))
@@ -260,9 +267,13 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
     if (!GridLib_IsReady())
         return Plugin_Continue;
-
+    
+    g_iGridTargetClient = -1;
+    
     // Hide grid when menu is closed or flow survivor glow is active
-    if (zm_menu_state == ZM_MENU_CLOSED || g_bFlowSurvivorGlowActive)
+    if (zm_menu_state == ZM_MENU_CLOSED ||
+       (g_iSpawnerMode<2 && get_spawner_target_survivor(false,_)>0) ||
+       (g_iSpawnerMode==2 && Analog_CanSpawn(_,false,true)==SPAWNER_FLOW) )
     {
         if (g_GridCellCount > 0)
         {
@@ -272,8 +283,8 @@ Action Grid_TimerUpdate(Handle timer, int userid)
             GridRenderer_HideAll(client);
         }
         return Plugin_Continue;
-    }
-
+    } 
+    
     float t_start = GetEngineTime();
     bool over_budget = false;
     static float aimPos[3];
@@ -383,6 +394,23 @@ Action Grid_TimerUpdate(Handle timer, int userid)
                 closestNavArea = navArea;
             }
         }
+        else if (g_iSpawnerMode==2)
+        {
+            int target = get_spawner_target_survivor(false,_);
+            if (target>0)
+            {
+                g_iGridTargetClient = target;
+                if (g_iGlowList[target]==INVALID_ENT_REFERENCE && IsValidClientZM() && L4D2_GetSurvivorVictim(zm_client)!=target)
+                {
+                    CreateZMGlow(target,false,true);
+                }
+                closestValidIdx = -1;
+                cellCount = 0;
+                GridRenderer_HideAll(client);
+                break;
+            }
+        }
+        
     }
 
     float ms_validate = (GetEngineTime() - t_validate) * 1000.0;
@@ -458,7 +486,7 @@ int Grid_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
     float[] outPositions, int maxOut)
 {
     // Flow spawns delegate to analog (grid is aim-based only)
-    if (flow)
+    if ( flow || (!g_GridHasValidCell && g_iGridTargetClient>0) || (get_spawner_target_survivor(false,_)>0) )
     {
         Grid_BeginSpawn();
         g_bGridHint = hint;
@@ -494,7 +522,7 @@ int Grid_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
 
 bool Grid_ResolveWitchPosition(bool flow, float outPos[3])
 {
-    if (flow)
+    if ( flow || (!g_GridHasValidCell && g_iGridTargetClient>0) || (get_spawner_target_survivor(false,_)>0) )
     {
         Grid_BeginSpawn();
         g_bGridHint = true;
@@ -517,7 +545,7 @@ bool Grid_ResolveWitchPosition(bool flow, float outPos[3])
 
 bool Grid_ResolveSpecialPosition(int zombieclass, bool flow, float outPos[3])
 {
-    if (flow)
+    if ( flow || (!g_GridHasValidCell && g_iGridTargetClient>0) || (get_spawner_target_survivor(false,_)>0) )
     {
         Grid_BeginSpawn();
         g_bGridHint = true;

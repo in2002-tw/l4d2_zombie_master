@@ -470,7 +470,7 @@ char g_sCvarMPGameMode[32];
 bool zm_use_notify = false;
 // Notify ZM about being able to spawn zombies automatically by looking at survivors.
 bool zm_flow_notify = false; // "Flow hint"
-bool g_bFlowSurvivorGlowActive = false; // True when a flow survivor glow entity exists
+//bool g_bFlowSurvivorGlowActive = false; // True when a flow survivor glow entity exists
 // Notify ZM about maximum Tank discount.
 bool zm_discount_notify = false; // "Max tank discount"
 

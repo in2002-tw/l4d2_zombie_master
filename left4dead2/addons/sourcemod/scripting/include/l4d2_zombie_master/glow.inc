@@ -140,7 +140,7 @@ Action OnTransmitZM_FlowSurvivor(int entity, int client)
        	if (parent>=0 && parent<MAXENTITIES) g_iGlowList[parent] = INVALID_ENT_REFERENCE;
        	AcceptEntityInput(entity, "StopGlowing");
         NextFrame_Remove(EntIndexToEntRef(entity));
-        g_bFlowSurvivorGlowActive = false;
+        //g_bFlowSurvivorGlowActive = false;
    	}
    	if (client==zm_client) return Plugin_Continue;
     return Plugin_Handled;
@@ -215,10 +215,10 @@ void CreateZMGlow(int target, bool red = false, bool flow = false)
 	AcceptEntityInput(glow, "SetParent", target);
 	SetVariantString("!activator");
 	AcceptEntityInput(glow, "SetAttached", target);
-    g_iGlowList[target] = EntIndexToEntRef(glow);
+     g_iGlowList[target] = EntIndexToEntRef(glow);
 	if (flow)
 	{
-		g_bFlowSurvivorGlowActive = true;
+		//g_bFlowSurvivorGlowActive = true;
 		SDKHook(glow, SDKHook_SetTransmit, OnTransmitZM_FlowSurvivor);
 	}
 	else SDKHook(glow, SDKHook_SetTransmit, OnTransmitZM);

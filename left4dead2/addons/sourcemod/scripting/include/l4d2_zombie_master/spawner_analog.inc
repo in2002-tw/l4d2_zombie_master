@@ -89,11 +89,12 @@ stock bool nav_xy_OOB(float pos[3], float center[3], float size[3])
  * Main spawn validation orchestrator - from ZM client.
  * @param zClass  Specify internal zombie_master zombieclass. Witches have relaxed nav checks, commons have relaxed obstruction checks.
  * @param hint   If true, show HUD hints explaining why spawning is blocked
+ * @param look_only Exit early, check if ZM is looking at a survivor to trigger flow.
  * @return       SPAWNER_OK, -> GREEN
  *               SPAWNER_INVALID, SPAWNER_NAV -> RED
  *               SPAWNER_DISTANCE, SPAWNER_SIGHT, or SPAWNER_OTHER -> BLUE
  */
-int Analog_CanSpawn(int zClass=ZOMBIECLASS_BOOMER, bool hint = true)
+int Analog_CanSpawn(int zClass=ZOMBIECLASS_BOOMER, bool hint = true, bool look_only = false)
 {
     if (DEBUG) LogMessage("[zm] Analog_CanSpawn");
 	if (!IsValidClientZM()) return SPAWNER_INVALID;
@@ -137,6 +138,7 @@ int Analog_CanSpawn(int zClass=ZOMBIECLASS_BOOMER, bool hint = true)
 	}
 	else GetClientAbsOrigin(zm_client,vPos);
 	delete trace;
+	if (look_only) return SPAWNER_INVALID;
     int spawner_state = Analog_CanSpawnPos(vPos,zClass,hint,true);
     if (spawner_state==SPAWNER_OK && !zm_allow_spawns)
 	{
@@ -250,7 +252,10 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
     }
     if (!fail || draw) // nav area travel distance is expensive, skip if not needed
     {
+        float t = GetEngineTime();
         min_distance = min_distance_to_survivors(vPos_spawner,draw,_,navArea);
+        float t_ms = (GetEngineTime()-t)*1000.0;
+        if (t_ms>1.0) LogMessage("min_distance_to_survivors took %f ms", t_ms);
         if (min_distance>=0.0 && draw) latest_distance = min_distance;
         if (zm_stage<ZM_STARTED && spawner_nearest_survivor>0) min_distance *= 2.0;
         if (min_distance>=0.0 && g_fSpawnMinDistance>0.0 && min_distance<g_fSpawnMinDistance)
