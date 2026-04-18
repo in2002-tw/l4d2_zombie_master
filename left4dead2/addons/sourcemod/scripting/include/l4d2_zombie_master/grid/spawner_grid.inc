@@ -131,73 +131,73 @@ static bool Grid_CheckObstruction(int idx, float pos[3], bool obstructed)
     return true;
 }
 
-static bool Grid_CheckDistance(float pos[3], Address navArea)
-{
-    float t = GetEngineTime();
-    
-    g_GridEffectiveMinDist = g_fSpawnMinDistance;
-    if (zm_stage < ZM_STARTED) g_GridEffectiveMinDist *= 2.0;
-    
-    if (g_GridEffectiveMinDist <= 0.0 || g_iBatchSurvivorCount == 0)
-    {
-        g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
-        return true;
-    }
-
-    float cellFlow = L4D_GetFlowFromPoint(pos);
-    bool tooClose = false;
-    int closestSurvByVec = -1;
-    float closestVecDist = 999999.0;
-
-    for (int s = 0; s < g_iBatchSurvivorCount; s++)
-    {
-        // Tier 1: flow distance
-        float flowDiff = FloatAbs(cellFlow - g_CachedSurvFlow[s]);
-        if (cellFlow > 0.0 && g_CachedSurvFlow[s] > 0.0
-            && flowDiff >= g_GridEffectiveMinDist)
-            continue;
-
-        // Tier 2: vector distance
-        float vecDist = GetVectorDistance(pos, g_fBatchSurvivorPos[s]);
-        if (vecDist >= g_GridEffectiveMinDist)
-            continue;
-
-        // Both too close - track closest survivor for potential NavMesh rescue
-        tooClose = true;
-        if (vecDist < closestVecDist)
-        {
-            closestVecDist = vecDist;
-            closestSurvByVec = s;
-        }
-    }
-
-    // Tier 3: bounded NavMesh path check for closest survivor only
-    if (tooClose && closestSurvByVec >= 0)
-    {
-        Address survNav = GetCachedSurvivorNavArea(closestSurvByVec);
-        if (survNav != Address_Null && navArea != Address_Null
-            && !L4D2_NavAreaBuildPath(navArea, survNav, g_GridEffectiveMinDist, TEAM_INFECTED, false))
-            tooClose = false;
-    }
-
-    // Last saferoom distance check
-    if (!tooClose)
-    {
-        float distLast = distance_last_saferoom(pos);
-        if (distLast > 0.0 && distLast <= DISTANCE_LAST_SAFEROOM)
-            tooClose = true;
-    }
-
-    if (tooClose)
-    {
-        g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
-        g_GridN_dist++;
-        return false;
-    }
-
-    g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
-    return true;
-}
+//static bool Grid_CheckDistance(float pos[3], Address navArea)
+//{
+//    float t = GetEngineTime();
+//    
+//    g_GridEffectiveMinDist = g_fSpawnMinDistance;
+//    if (zm_stage < ZM_STARTED) g_GridEffectiveMinDist *= 2.0;
+//    
+//    if (g_GridEffectiveMinDist <= 0.0 || g_iBatchSurvivorCount == 0)
+//    {
+//        g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
+//        return true;
+//    }
+//
+//    float cellFlow = L4D_GetFlowFromPoint(pos);
+//    bool tooClose = false;
+//    int closestSurvByVec = -1;
+//    float closestVecDist = 999999.0;
+//
+//    for (int s = 0; s < g_iBatchSurvivorCount; s++)
+//    {
+//        // Tier 1: flow distance
+//        float flowDiff = FloatAbs(cellFlow - g_CachedSurvFlow[s]);
+//        if (cellFlow > 0.0 && g_CachedSurvFlow[s] > 0.0
+//            && flowDiff >= g_GridEffectiveMinDist)
+//            continue;
+//
+//        // Tier 2: vector distance
+//        float vecDist = GetVectorDistance(pos, g_fBatchSurvivorPos[s]);
+//        if (vecDist >= g_GridEffectiveMinDist)
+//            continue;
+//
+//        // Both too close - track closest survivor for potential NavMesh rescue
+//        tooClose = true;
+//        if (vecDist < closestVecDist)
+//        {
+//            closestVecDist = vecDist;
+//            closestSurvByVec = s;
+//        }
+//    }
+//
+//    // Tier 3: bounded NavMesh path check for closest survivor only
+//    if (tooClose && closestSurvByVec >= 0)
+//    {
+//        Address survNav = GetCachedSurvivorNavArea(closestSurvByVec);
+//        if (survNav != Address_Null && navArea != Address_Null
+//            && !L4D2_NavAreaBuildPath(navArea, survNav, g_GridEffectiveMinDist, TEAM_INFECTED, false))
+//            tooClose = false;
+//    }
+//
+//    // Last saferoom distance check
+//    if (!tooClose)
+//    {
+//        float distLast = distance_last_saferoom(pos);
+//        if (distLast > 0.0 && distLast <= DISTANCE_LAST_SAFEROOM)
+//            tooClose = true;
+//    }
+//
+//    if (tooClose)
+//    {
+//        g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
+//        g_GridN_dist++;
+//        return false;
+//    }
+//
+//    g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
+//    return true;
+//}
 
 // Run min_distance_to_survivors with store_client set to True until a valid survivor is hit with the grid cells. Then call the rest with
 // This will allow flow spawns to function as intended.
@@ -225,7 +225,7 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
         return false;
     }
     float min_distance = min_distance_to_survivors(pos,g_iSpawnerMode==2,_,navArea);
-    if (min_distance>=0.0 && g_iSpawnerMode==2) latest_distance = min_distance;
+    if (min_distance>=0.0 && g_iSpawnerMode==2) latest_distance = min_distance; // to trigger flow
     if (zm_stage < ZM_STARTED) min_distance *= 2.0;
     if (g_fSpawnMinDistance>0.0 && min_distance>=0.0 && min_distance<=g_fSpawnMinDistance)
     {

@@ -395,7 +395,7 @@ float  g_fBatchTime;
 float   g_CachedSurvFlow[MAXPLAYERS+1];
 Address g_CachedSurvNavArea[MAXPLAYERS+1];
 bool    g_SurvNavAreaComputed[MAXPLAYERS+1];
-float   g_GridEffectiveMinDist;
+//float   g_GridEffectiveMinDist;
 
 #define GRID_BUDGET_MS 20.0
 #define GRID_SEARCH_RADIUS  150.0

@@ -364,11 +364,11 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3])
 }
 
 /**
- * Find the smallest travel distance from pos to any alive survivor or first saferoom door.
+ * Find the smallest travel distance from pos to any alive survivor or first saferoom door. The result may trigger flow.
  *
  * @param pos           The world position to measure from
  * @param store_client  If true, store the nearest survivor client index in spawner_nearest_survivor. For flow spawns.
- * @param safe_distance  Safe distance to spawn zombies. We exit early if there are no entities to consider within a sphere of this radius.
+ * @param safe_distance  Safe distance. Ignore everything more distant than this. We exit early if there are no entities to consider within a sphere of this radius.
  * @param navArea  optional pre-computed navArea of pos. If not provided will be computed during the call.
  * @return              Minimum distance to survivors, or -1.0 if no valid measurement
  */
@@ -386,7 +386,7 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float saf
     
     float nearest_flowDiff = -1.0;
     int nearest_flow_survivor = -1;
-    static float nearest_flow_pos[3];
+    //static float nearest_flow_pos[3];
     float nearest_flow_vecDist;
     
     bool hit = false; // is there anything closer than "too close"?
@@ -394,7 +394,7 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float saf
     {
          GetEntPropVector(g_iLockedDoor,Prop_Send,"m_vecOrigin",pos_saferoom);
          vector_distance_saferoom = GetVectorDistance(pos,pos_saferoom);
-         if (vector_distance_saferoom<=safe_distance) hit = true;
+         if (vector_distance_saferoom<safe_distance) hit = true;
          else include_saferoom = false;
     }
     if (!hit) hit = !l4dhooks_updated || any_alive_survivors_in_radius(pos,safe_distance);
@@ -411,19 +411,24 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float saf
     for (int s = 0; s < g_iBatchSurvivorCount; s++) // Check alive survivors
     {
         vecDist = GetVectorDistance(pos, g_fBatchSurvivorPos[s]); // Vector distance
-        if (vecDist > safe_distance)
+        if (vecDist >= safe_distance)
             continue;
         
-        if (flow_pos>0.0 && g_CachedSurvFlow[s]>0.0)
+        if (flow_pos>=0.0 && g_CachedSurvFlow[s]>=0.0)
         {
             // Flow is useful - find smallest flow diff survivor, check nav travel distance only for the closest one.
             flowDiff = FloatAbs(flow_pos - g_CachedSurvFlow[s]);
-            if (flowDiff > safe_distance) continue;
+            if (flowDiff<vecDist) flowDiff = vecDist; // vector distance better captures travel distance
             //LogMessage("flow_pos %f flowDiff %d %f", flow_pos, g_iBatchSurvivorClients[s], flowDiff);
             if (nearest_flowDiff<0.0 || flowDiff<nearest_flowDiff)
             {
                 nearest_flow_survivor = g_iBatchSurvivorClients[s];
-                nearest_flow_pos = g_fBatchSurvivorPos[s];
+                if ( (flowDiff<150.0 || !store_client) && flowDiff<g_fSpawnMinDistance ) // exit early or trigger flow
+                {
+                    if (store_client && nearest_flow_survivor>0) spawner_nearest_survivor = nearest_flow_survivor;
+                    return flowDiff;
+                }
+                //nearest_flow_pos = g_fBatchSurvivorPos[s];
                 nearest_flow_vecDist = vecDist;
                 nearest_flowDiff = flowDiff;
             }
@@ -431,17 +436,19 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float saf
         else if (navArea != Address_Null)
         {
             // Flow is useless - calculate nav travel distance now, we have no choice.
+            if (min_distance>=0.0 && vecDist>min_distance) continue; // smaller distance already found
             survNav = GetCachedSurvivorNavArea(s);
             if (survNav == Address_Null) continue;
             //L4D_GetNavAreaSize(survNav,navSize2);
             //extended_distance = safe_distance + navSize1[0] + navSize1[1] + navSize2[0] + navSize2[1];
-            if (!L4D2_NavAreaBuildPath(navArea,survNav,safe_distance*2.0,TEAM_INFECTED,false)) continue; // no connection
-            navDist = L4D2_NavAreaTravelDistance(pos,g_fBatchSurvivorPos[s],false); // from pos to survivor
+            if (!L4D2_NavAreaBuildPath(navArea,survNav,safe_distance,TEAM_INFECTED,false)) continue; // no connection
+            //navDist = L4D2_NavAreaTravelDistance(pos,g_fBatchSurvivorPos[s],false); // from pos to survivor
+            navDist = vecDist;
             if ( navDist>=0.0 && (min_distance<0.0 || navDist<min_distance) )
             {
                 min_distance = navDist;
                 if (store_client) spawner_nearest_survivor = g_iBatchSurvivorClients[s];
-                if (min_distance<=150.0 && min_distance<g_fSpawnMinDistance) return min_distance; // trigger flow
+                if ( (min_distance<150.0 || !store_client) && min_distance<g_fSpawnMinDistance) return min_distance; // trigger flow or exit early
                 min_vector_distance = vecDist;
             }
             //if (zm_stage==ZM_STARTED)
@@ -455,7 +462,6 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float saf
             //        min_vector_distance = vecDist;
             //    }
             //}
-
         }
         else continue;
     }
@@ -464,15 +470,16 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float saf
     if (include_saferoom)
     {
         bool check_nav = false; // if flow values are good, we can delay nav travel distance calculation
-        if (flow_pos>0.0)
+        if (flow_pos>=0.0)
         {
             float flow_saferoom = L4D_GetFlowFromPoint(pos_saferoom);
-            if (flow_saferoom>0.0)
+            if (flow_saferoom>=0.0)
             {
                 flowDiff = FloatAbs(flow_pos-flow_saferoom);
+                if (flowDiff<vector_distance_saferoom) flowDiff = vector_distance_saferoom;
                 if (nearest_flowDiff<0.0 || flowDiff<nearest_flowDiff)
                 {
-                    nearest_flow_pos = pos_saferoom;
+                    //nearest_flow_pos = pos_saferoom;
                     nearest_flow_vecDist = vector_distance_saferoom;
                     nearest_flowDiff = flowDiff;
                 }
@@ -483,42 +490,56 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float saf
         
         if (check_nav) // Flow is useless - calculate nav travel distance now.
         {
-            navDist = L4D2_NavAreaTravelDistance(pos,pos_saferoom,false); // from pos to nearest position
-            if ( navDist>=0.0 && (min_distance<0.0 || navDist<min_distance) )
+            vecDist = vector_distance_saferoom;
+            if (min_distance<0.0 || vecDist<min_distance)
             {
-                min_distance = navDist;
-                if (store_client && nearest_flow_survivor>0) spawner_nearest_survivor = nearest_flow_survivor;
-                if (min_distance<=150.0 && min_distance<g_fSpawnMinDistance) return min_distance; // trigger flow
-                min_vector_distance = vector_distance_saferoom;
+                Address navArea_saferoom = L4D_GetNearestNavArea(pos_saferoom, 300.0, false, false, true, TEAM_INFECTED);
+                if (navArea_saferoom != Address_Null && L4D2_NavAreaBuildPath(navArea,navArea_saferoom,safe_distance,TEAM_INFECTED,false))
+                {
+                    //navDist = L4D2_NavAreaTravelDistance(pos,pos_saferoom,false); // from pos to nearest position
+                    navDist = vecDist;
+                    if ( navDist>=0.0 && (min_distance<0.0 || navDist<min_distance) )
+                    {
+                        min_distance = navDist;
+                        if (store_client && nearest_flow_survivor>0) spawner_nearest_survivor = nearest_flow_survivor;
+                        if ( (min_distance<150.0 || !store_client) && min_distance<g_fSpawnMinDistance) return min_distance; // trigger flow or exit early
+                        min_vector_distance = vecDist;
+                    }
+                }
             }
         }
     }
     
-    // Check if nearest flow position is closer than current known closest position by nav distance.
+    // Check if nearest flow position is closer than closest position by nav distance.
     if (nearest_flowDiff>=0.0 && nearest_flowDiff<safe_distance)
     {
-        navDist = L4D2_NavAreaTravelDistance(pos,nearest_flow_pos,false); // from pos to nearest position
-        if ( navDist>=0.0 && (min_distance<0.0 || navDist<min_distance) )
-        {
-            min_distance = navDist;
-            if (store_client && nearest_flow_survivor>0) spawner_nearest_survivor = nearest_flow_survivor;
-            if (min_distance<=150.0 && min_distance<g_fSpawnMinDistance) return min_distance; // trigger flow
-            min_vector_distance = nearest_flow_vecDist;
-        }
-        //if (zm_stage==ZM_STARTED)
+        //navDist = L4D2_NavAreaTravelDistance(pos,nearest_flow_pos,false); // from pos to nearest position
+        //Address nearest_flow_navArea = L4D_GetNearestNavArea(nearest_flow_pos, 300.0, false, false, true, TEAM_INFECTED);
+        //if (nearest_flow_navArea != Address_Null && L4D2_NavAreaBuildPath(navArea,nearest_flow_navArea,safe_distance,TEAM_INFECTED,false))
         //{
-        //    navDist = L4D2_NavAreaTravelDistance(nearest_flow_pos,pos,false); // from nearest position to pos
-        //    if ( navDist>=0.0 && (min_distance<0.0 || navDist<min_distance) )
-        //    {
-        //        min_distance = navDist;
-        //        if (store_client && nearest_flow_survivor>0) spawner_nearest_survivor = nearest_flow_survivor;
-        //        if (min_distance<=150.0 && min_distance<g_fSpawnMinDistance) return min_distance; // trigger flow
-        //        min_vector_distance = nearest_flow_vecDist;
-        //    }
+            navDist = nearest_flowDiff;
+            if ( navDist>=0.0 && (min_distance<0.0 || navDist<min_distance) )
+            {
+                min_distance = navDist;
+                if (store_client && nearest_flow_survivor>0) spawner_nearest_survivor = nearest_flow_survivor;
+                if (min_distance<150.0 && min_distance<g_fSpawnMinDistance) return min_distance; // trigger flow
+                min_vector_distance = nearest_flow_vecDist;
+            }
+            //if (zm_stage==ZM_STARTED)
+            //{
+            //    navDist = L4D2_NavAreaTravelDistance(nearest_flow_pos,pos,false); // from nearest position to pos
+            //    if ( navDist>=0.0 && (min_distance<0.0 || navDist<min_distance) )
+            //    {
+            //        min_distance = navDist;
+            //        if (store_client && nearest_flow_survivor>0) spawner_nearest_survivor = nearest_flow_survivor;
+            //        if (min_distance<=150.0 && min_distance<g_fSpawnMinDistance) return min_distance; // trigger flow
+            //        min_vector_distance = nearest_flow_vecDist;
+            //    }
+            //}
         //}
     }
     
-    if (min_vector_distance>min_distance) min_distance = min_vector_distance;
+    if (min_distance>=0.0 && min_vector_distance>min_distance) min_distance = min_vector_distance;
     if (min_distance<0.0) return safe_distance+1.0;
     return min_distance;
 }
