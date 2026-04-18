@@ -427,15 +427,15 @@ int SpawnerCellFilter(int cellIdx)
     //    return GRIDLIB_FILTER_DISCARD;
     //}
 
-    //if (g_fSpawnMinDistance > 0.0)
-    //{
-    //    float minDist = min_distance_to_survivors(cellPos, _, g_fSpawnMinDistance);
-    //    if (minDist >= 0.0 && minDist < g_fSpawnMinDistance)
-    //    {
-    //        if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d too close (%.0f)", cellIdx, minDist);
-    //        return GRIDLIB_FILTER_DISCARD;
-    //    }
-    //}
+    if (g_fSpawnMinDistance > 0.0)
+    {
+        float minDist = min_distance_to_survivors(cellPos, _, g_fSpawnMinDistance, navArea);
+        if (minDist >= 0.0 && minDist < g_fSpawnMinDistance)
+        {
+            if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d too close (%.0f)", cellIdx, minDist);
+            return GRIDLIB_FILTER_DISCARD;
+        }
+    }
     
     cellfilter_fails = 0;
     return GRIDLIB_FILTER_KEEP;
