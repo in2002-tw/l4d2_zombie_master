@@ -414,7 +414,7 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float saf
         if (vecDist >= safe_distance)
             continue;
         
-        if (flow_pos>=0.0 && g_CachedSurvFlow[s]>=0.0)
+        if (flow_pos>0.0 && g_CachedSurvFlow[s]>0.0)
         {
             // Flow is useful - find smallest flow diff survivor, check nav travel distance only for the closest one.
             flowDiff = FloatAbs(flow_pos - g_CachedSurvFlow[s]);
@@ -470,10 +470,10 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float saf
     if (include_saferoom)
     {
         bool check_nav = false; // if flow values are good, we can delay nav travel distance calculation
-        if (flow_pos>=0.0)
+        if (flow_pos>0.0)
         {
             float flow_saferoom = L4D_GetFlowFromPoint(pos_saferoom);
-            if (flow_saferoom>=0.0)
+            if (flow_saferoom>0.0)
             {
                 flowDiff = FloatAbs(flow_pos-flow_saferoom);
                 if (flowDiff<vector_distance_saferoom) flowDiff = vector_distance_saferoom;
