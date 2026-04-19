@@ -62,6 +62,8 @@
 #define HULL_DX_STRICT 16.0
 #define HULL_DZ_MIN_STRICT 20.0
 #define HULL_DZ_MAX_STRICT 50.0
+
+// TraceHull for obstruction
 static float HULL_MINS[3] = {-HULL_DX_STRICT,-HULL_DX_STRICT,HULL_DZ_MIN_STRICT};
 static float HULL_MAXS[3] = {HULL_DX_STRICT,HULL_DX_STRICT,HULL_DZ_MAX_STRICT};
 
@@ -72,6 +74,10 @@ static float HULL_MAXS[3] = {HULL_DX_STRICT,HULL_DX_STRICT,HULL_DZ_MAX_STRICT};
 #define HULL_DX 20.0
 #define HULL_DZ 40.0
 #define HULL_DDZ 80.0
+
+// TraceHull to determine if ZM is looking at survivor through walls
+static float HULL_MINS_LOOK[3] = {-HULL_DX,-HULL_DX,-HULL_DZ};
+static float HULL_MAXS_LOOK[3] = {HULL_DX,HULL_DX,HULL_DZ};
 
 #define WITCH_STATIC 0
 #define WITCH_MOVING 1
@@ -2287,10 +2293,15 @@ void update_ZM_looktarget(bool draw = true)
    int target = GetClientAimTarget(zm_client, true);
    if (!IsValidClient(target) || target==zm_client)
    {
-       float vAngles[3],vOrigin[3];
+       static float vAngles[3],vOrigin[3],vForward[3],vEnd[3];
        GetClientEyePosition(zm_client,vOrigin);
        GetClientEyeAngles(zm_client,vAngles);
-       Handle trace = TR_TraceRayFilterEx(vOrigin,vAngles,MASK_SHOT,RayType_Infinite,TraceFilter_Looktarget,_,TRACE_ENTITIES_ONLY);
+       GetAngleVectors(vAngles,vForward,NULL_VECTOR,NULL_VECTOR);
+       vEnd[0] = vOrigin[0] + (vForward[0] * 10000.0);
+       vEnd[1] = vOrigin[1] + (vForward[1] * 10000.0);
+       vEnd[2] = vOrigin[2] + (vForward[2] * 10000.0);
+       //Handle trace = TR_TraceRayFilterEx(vOrigin,vAngles,MASK_SHOT,RayType_Infinite,TraceFilter_Looktarget,_,TRACE_ENTITIES_ONLY);
+       Handle trace = TR_TraceHullFilterEx(vOrigin,vEnd,HULL_MINS_LOOK,HULL_MAXS_LOOK,MASK_SHOT,TraceFilter_Looktarget,zm_client,TRACE_ENTITIES_ONLY);
        if(TR_DidHit(trace)) target = TR_GetEntityIndex(trace);
        delete trace;
    }
