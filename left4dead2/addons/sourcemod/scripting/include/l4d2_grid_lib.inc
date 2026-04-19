@@ -850,7 +850,7 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 		resultCount, filterCalls, candidateCount, collectMs, filterMs,
 		resultCount > 0 ? candidates[0][0] : 0.0,
 		resultCount > 0 ? candidates[resultCount - 1][0] : 0.0);
-	if (filterMs > 5.0)
+	if (filterMs > 10.0)
 		LogMessage("[GridLib] WARNING: FindCellsFromClosest filter took %.1f ms (filterCalls=%d, candidates=%d)",
 			filterMs, filterCalls, candidateCount);
 
