@@ -100,20 +100,13 @@ void PrepSDKCall()
 	g_pEngineServer = GameConfGetAddress(hGameData, "engine_ptr");
 	if (g_pEngineServer != Address_Null)
 	{
-		LogMessage("[zm] Engine server pointer: %x", g_pEngineServer);
-
 		// GetClusterForOrigin(Vector const&) → int
 		StartPrepSDKCall(SDKCall_Raw);
 		PrepSDKCall_SetVirtual(GameConfGetOffset(hGameData, "IVEngineServer::GetClusterForOrigin"));
 		PrepSDKCall_AddParameter(SDKType_Vector, SDKPass_ByRef);
 		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
 		hGetClusterForOrigin = EndPrepSDKCall();
-		if (hGetClusterForOrigin != null) LogMessage("[zm] SDKCall ready: GetClusterForOrigin");
-		else
-		{
-    		g_bGrid = false;
-    		LogMessage("[zm] WARNING: Failed to create GetClusterForOrigin SDKCall");
-        }
+		if (hGetClusterForOrigin==null) LogMessage("[zm] WARNING: Failed to create GetClusterForOrigin SDKCall");
 
 		// GetPVSForCluster(int cluster, int pvslength, unsigned char* outputpvs) → int
 		StartPrepSDKCall(SDKCall_Raw);
@@ -123,12 +116,7 @@ void PrepSDKCall()
 		PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);
 		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
 		hGetPVSForCluster = EndPrepSDKCall();
-		if (hGetPVSForCluster != null) LogMessage("[zm] SDKCall ready: GetPVSForCluster");
-		else
-		{
-    		g_bGrid = false;
-    		LogMessage("[zm] WARNING: Failed to create GetPVSForCluster SDKCall");
-        }
+		if (hGetPVSForCluster==null) LogMessage("[zm] WARNING: Failed to create GetPVSForCluster SDKCall");
 		// CheckOriginInPVS(Vector const&, unsigned char const*, int) → bool
 		StartPrepSDKCall(SDKCall_Raw);
 		PrepSDKCall_SetVirtual(GameConfGetOffset(hGameData, "IVEngineServer::CheckOriginInPVS"));
@@ -137,18 +125,9 @@ void PrepSDKCall()
 		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
 		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
 		hCheckOriginInPVS = EndPrepSDKCall();
-		if (hCheckOriginInPVS != null) LogMessage("[zm] SDKCall ready: CheckOriginInPVS");
-		else
-		{
-    		g_bGrid = false;
-    		LogMessage("[zm] WARNING: Failed to create CheckOriginInPVS SDKCall");
-		}
+		if (hCheckOriginInPVS == null) LogMessage("[zm] WARNING: Failed to create CheckOriginInPVS SDKCall");
 	}
-	else
-	{
-		g_bGrid = false;
-		LogMessage("[zm] WARNING: Could not find engine server pointer, PVS checks disabled");
-	}
+	else LogMessage("[zm] WARNING: Could not find engine server pointer, PVS checks disabled");	
 
 	delete hGameData;
 }

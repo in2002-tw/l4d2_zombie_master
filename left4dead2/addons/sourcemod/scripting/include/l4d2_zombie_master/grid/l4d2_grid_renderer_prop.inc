@@ -94,12 +94,12 @@ stock void GridRendererProp_Init()
 	if (GridRendererProp_PrecacheAssets())
 	{
 		g_PropModelPrecached = true;
-		LogMessage("[GridRenderer Prop] Model precached: %s", GRIDRENDERERPROP_MODEL);
+		if (DEBUG) LogMessage("[GridRenderer Prop] Model precached: %s", GRIDRENDERERPROP_MODEL);
 	}
 	else
 	{
 		g_PropModelPrecached = false;
-		LogError("[GridRenderer Prop] Failed to precache model! Backend will be unavailable.");
+		if (DEBUG) LogError("[GridRenderer Prop] Failed to precache model! Backend will be unavailable.");
 	}
 }
 
@@ -411,7 +411,7 @@ static void GridRendererProp_CreatePool(int client)
 		g_PropPool[client].assignedCell[i] = -1;
 	g_PropPool[client].initialized = true;
 
-	LogMessage("[GridRenderer Prop] Created pool for client %d: %d entities", client, created);
+	if (DEBUG) LogMessage("[GridRenderer Prop] Created pool for client %d: %d entities", client, created);
 }
 
 /**
@@ -422,8 +422,8 @@ static void GridRendererProp_DestroyPool(int client)
 	if (!g_PropPool[client].initialized)
 		return;
 
-	LogMessage("[zm] GridRendererProp_DestroyPool: client=%d, entities=%d",
-		client, g_PropPool[client].totalAllocated);
+	if (DEBUG) LogMessage("[zm] GridRendererProp_DestroyPool: client=%d, entities=%d",
+		                  client, g_PropPool[client].totalAllocated);
 
 	for (int i = 0; i < g_PropPool[client].totalAllocated; i++)
 	{

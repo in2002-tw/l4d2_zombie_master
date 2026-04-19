@@ -56,7 +56,7 @@
 stock void GridRenderer_Init()
 {
 	GridRendererProp_Init();
-	LogMessage("[GridRenderer] Initialized (prop_dynamic)");
+	if (DEBUG) LogMessage("[GridRenderer] Initialized (prop_dynamic)");
 }
 
 /**

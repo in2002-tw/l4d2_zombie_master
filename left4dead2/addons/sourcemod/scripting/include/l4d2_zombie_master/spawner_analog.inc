@@ -257,12 +257,12 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
         float t_ms = (GetEngineTime()-t)*1000.0;
         if (t_ms>1.0) LogMessage("min_distance_to_survivors took %f ms", t_ms);
         if (min_distance>=0.0 && draw) latest_distance = min_distance;
-        if (zm_stage<ZM_STARTED && spawner_nearest_survivor>0) min_distance *= 2.0;
+        if (zm_stage<ZM_STARTED) min_distance *= 2.0; // allow spawns close to saferoom before round start
         if (min_distance>=0.0 && g_fSpawnMinDistance>0.0 && min_distance<g_fSpawnMinDistance)
         {
             if (!fail) spawner_state = SPAWNER_DISTANCE;
             fail = true;
-            if (latest_distance<150.0 && draw) // trigger flow
+            if (latest_distance<150.0 && draw && spawner_nearest_survivor>0) // trigger flow
             {
                 if (draw) update_ZM_spawner(vPos,vPos_spawner,spawner_state,draw);
                 return spawner_state;
@@ -746,7 +746,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             if (valid_last)
             {
                 min_distance_last = distance_last_saferoom(randomPos);
-                if (min_distance_last>0.0 && min_distance_last<=DISTANCE_LAST_SAFEROOM)
+                if (min_distance_last>0.0 && min_distance_last<DISTANCE_LAST_SAFEROOM)
                     continue;
             }
             if (!expected_angry)
@@ -858,7 +858,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             if (zm_spawner_navArea && count > 1)
             {
                 L4D_FindRandomSpot(zm_spawner_navArea, pos);
-                if (valid_last && distance_last_saferoom(pos)<=DISTANCE_LAST_SAFEROOM) pos = zm_spawner_pos;
+                if (valid_last && distance_last_saferoom(pos)<DISTANCE_LAST_SAFEROOM) pos = zm_spawner_pos;
                 else if (g_fSpawnMinDistance>0.0 && min_distance_to_survivors(pos,false,g_fSpawnMinDistance,zm_spawner_navArea)<g_fSpawnMinDistance) pos = zm_spawner_pos;
                 else if (can_any_alive_survivor_see_cheap(pos)) pos = zm_spawner_pos;
                 else if (IsObstructed(pos,_,_,true))

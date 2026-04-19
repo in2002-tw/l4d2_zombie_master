@@ -646,13 +646,13 @@ void spawn_free_angry_zombies(int victim, int count, bool refund = true)
 }
 
 /**
- * RequestFrame callback that resets a special infected's ability cooldown to zero.
+ * RequestFrame callback that resets a special infected's ability cooldown
  * Applied after spawning to fix spitter ability delay.
  */
 void OnNextFrame_ZeroCooldown(int entity)
 {
     if (!IsValidClient(entity)) return;
-    L4D2_SetCustomAbilityCooldown(entity,0.0);
+    L4D2_SetCustomAbilityCooldown(entity,1.0);
 }
 
 /**
@@ -770,7 +770,7 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
 
             active_looktarget = true;
             add_available_zombie(ZOMBIECLASS,-1);
-            L4D2_SetCustomAbilityCooldown(bot,0.0); //spitter fix
+            L4D2_SetCustomAbilityCooldown(bot,1.0); // 1.0s cooldown to prevent abuse
             RequestFrame(OnNextFrame_ZeroCooldown,bot);
 
             if (ZOMBIECLASS==ZOMBIECLASS_TANK && g_bDiscountTank && first_tank_stage==0)

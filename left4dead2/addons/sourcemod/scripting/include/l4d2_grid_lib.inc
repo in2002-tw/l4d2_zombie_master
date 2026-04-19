@@ -485,7 +485,7 @@ stock int GridLib_FindNearbyCells(const float position[3],
 	float filterCallMs = filterCallTimeAccum * 1000.0;
 	GridLibLog("[GridLib] FindNearbyCells: returning %d/%d candidates (scanned %d, %.2f ms, sort=%.2f ms, filter=%.2f ms)",
 		resultCount, candidateCount, scanned, filterMs, sortMs, filterCallMs);
-	if (filterMs > 5.0)
+	if (filterMs > 10.0)
 		LogMessage("[GridLib] WARNING: filter took %.1f ms (scanned %d/%d, returned %d, sort=%.1f ms, filtercb=%.1f ms, overhead=%.1f ms)",
 			filterMs, scanned, candidateCount, resultCount, sortMs, filterCallMs, filterMs - sortMs - filterCallMs);
 

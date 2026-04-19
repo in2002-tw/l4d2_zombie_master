@@ -219,15 +219,15 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
     //if (!Grid_CheckDistance(pos, navArea))
     //    return false;
     float distLast = distance_last_saferoom(pos);
-    if (distLast > 0.0 && distLast <= DISTANCE_LAST_SAFEROOM)
+    if (distLast > 0.0 && distLast < DISTANCE_LAST_SAFEROOM)
     {
         g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
         return false;
     }
     float min_distance = min_distance_to_survivors(pos,g_iSpawnerMode==2,_,navArea);
     if (min_distance>=0.0 && g_iSpawnerMode==2) latest_distance = min_distance; // to trigger flow
-    if (zm_stage < ZM_STARTED) min_distance *= 2.0;
-    if (g_fSpawnMinDistance>0.0 && min_distance>=0.0 && min_distance<=g_fSpawnMinDistance)
+    if (zm_stage<ZM_STARTED) min_distance *= 2.0; // allow spawns close to saferoom before round start
+    if (g_fSpawnMinDistance>0.0 && min_distance>=0.0 && min_distance<g_fSpawnMinDistance)
     {
         g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
         return false;
@@ -447,7 +447,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     float ms_render = (GetEngineTime() - t_render) * 1000.0;
 
     float elapsed_ms = (GetEngineTime() - t_start) * 1000.0;
-    if (elapsed_ms > 5.0)
+    if (elapsed_ms > 10.0)
         LogMessage("[zm] WARNING: Grid_TimerUpdate took %.1f ms (%d cells: %d valid, %d obstructed, %d nav, %d LOS, %d dist) find=%.1f validate=%.1f [obstruct=%.1f nav=%.1f los=%.1f dist=%.1f] render=%.1f",
             elapsed_ms, cellCount, g_GridN_valid, g_GridN_obstructed,
             g_GridN_nav, g_GridN_los, g_GridN_dist,
