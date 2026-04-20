@@ -435,8 +435,27 @@
                 "windows"        "\x55\x8B\xEC\x83\xEC\x30\x57\x8B\xF9\xE8\x2A\x2A\x2A\x2A\x83\xF8\x04\x0F\x84\x2A\x2A\x2A\x2A\x8B\xCF\xE8\x2A\x2A\x2A\x2A\x84\xC0\x75\x19\x8B\x87\x40\x40\x00\x00\x8B\x90\x08\x01\x00\x00\x8D\x8F"
                 // 55 8B EC 83 EC 30 57 8B F9 E8 ? ? ? ? 83 F8 04 0F 84 ? ? ? ? 8B CF E8 ? ? ? ? 84 C0 75 19 8B 87 40 40 00 00 8B 90 08 01 00 00 8D 8F
             }
-            
-			
+
+            /*
+             * TerrorNavArea::IsPotentiallyVisibleToTeam(int team) -> bool
+             */
+            "TerrorNavArea::IsPotentiallyVisibleToTeam"
+            {
+                "library"   "server"
+                "linux"     "\x55\x89\xE5\x57\x56\x53\x83\xEC\x6C\xC7\x45\xD0\x00\x00\x00\x00\xA1\x2A\x2A\x2A\x2A\xC7\x45\xD4\x00\x00\x00\x00\x8B\x7D\x08\x85\xC0\x0F\x84\x2A\x2A\x2A\x2A\x8D\x55\xD0\x89\x04\x24\x89\x54\x24\x04\xC7\x44\x24\x2C\x2A\x2A\x2A\x2A\xC7\x44\x24\x28\x2A\x2A\x2A\x2A\xC7\x44\x24\x24\x2A\x2A\x2A\x2A\xC7\x44\x24\x20\x2A\x2A\x2A\x2A\xC7\x44\x24\x1C\x77\x07\x00\x00"
+                /* 55 89 E5 57 56 53 83 EC 6C C7 45 D0 00 00 00 00 A1 ? ? ? ? C7 45 D4 00 00 00 00 8B 7D 08 85 C0 0F 84 ? ? ? ? 8D 55 D0 89 04 24 89 54 24 04 C7 44 24 2C ? ? ? ? C7 44 24 28 ? ? ? ? C7 44 24 24 ? ? ? ? C7 44 24 20 ? ? ? ? C7 44 24 1C 77 07 00 00 */
+            }
+
+            /*
+             * TerrorNavArea::IsPotentiallyVisible(const TerrorNavArea* other, bool checkAttributes) -> bool
+             */
+            "TerrorNavArea::IsPotentiallyVisible"
+            {
+                "library"   "server"
+                "linux"     "\x55\x89\xE5\x56\x53\x83\xEC\x30\x8B\x5D\x0C\x8B\x75\x08\x8B\x45\x10\x85\xDB\x0F\x84\x2A\x2A\x2A\x2A\x39\xF3\x0F\x84\xF7"
+                /* 55 89 E5 56 53 83 EC 30 8B 5D 0C 8B 75 08 8B 45 10 85 DB 0F 84 ? ? ? ? 39 F3 0F 84 F7 */
+            }
+
 		}
 	}
 }

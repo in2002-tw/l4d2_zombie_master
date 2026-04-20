@@ -254,7 +254,8 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
     t = GetEngineTime();
     
     bool obscured = navSpawnAttrs>0 && ( (navSpawnAttrs & NAV_SPAWN_OBSCURED) || (navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
-    if (!obscured && can_any_alive_survivor_see_cheap(pos))
+    int cellCluster = GridLib_GetCellCluster(g_GridCellIndices[idx]);
+    if (!obscured && can_any_alive_survivor_see_cheap(pos, cellCluster, navArea))
     {
         g_GridMs_los += (GetEngineTime() - t) * 1000.0;
         g_GridN_los++;
@@ -364,6 +365,13 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     g_GridN_los = 0;
     g_GridN_dist = 0;
     g_GridN_valid = 0;
+    g_LosN_fog = 0;
+    g_LosN_nav_rej = 0;
+    g_LosN_shortcut = 0;
+    g_LosN_pvs_rej = 0;
+    g_LosN_trace_hit = 0;
+    g_LosN_safe_hit = 0;
+    g_LosN_clear = 0;
 
     bool cellValid[GRID_MAX_CELLS];
     int closestValidIdx = -1;
@@ -462,11 +470,16 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
     float elapsed_ms = (GetEngineTime() - t_start) * 1000.0;
     if (elapsed_ms > 10.0)
+    {
         LogMessage("[zm] WARNING: Grid_TimerUpdate took %.1f ms (%d cells: %d valid, %d obstructed, %d nav, %d LOS, %d dist) find=%.1f validate=%.1f [obstruct=%.1f nav=%.1f los=%.1f dist=%.1f] render=%.1f",
             elapsed_ms, cellCount, g_GridN_valid, g_GridN_obstructed,
             g_GridN_nav, g_GridN_los, g_GridN_dist,
             ms_find, ms_validate, g_GridMs_obstruct, g_GridMs_nav,
             g_GridMs_los, g_GridMs_dist, ms_render);
+        LogMessage("[zm]   LOS breakdown: fog=%d nav_rej=%d shortcut=%d pvs_rej=%d trace_hit=%d safe_hit=%d clear=%d",
+            g_LosN_fog, g_LosN_nav_rej, g_LosN_shortcut,
+            g_LosN_pvs_rej, g_LosN_trace_hit, g_LosN_safe_hit, g_LosN_clear);
+    }
     
     g_GridValidCellCount = g_GridN_valid;
     
