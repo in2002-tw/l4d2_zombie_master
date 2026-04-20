@@ -331,7 +331,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     //int cellCount = GridLib_FindNearbyCells(aimPos, GRID_SEARCH_RADIUS,
     //    GRID_MAX_Z_DIFF, nearbyCells, GRID_MAX_CELLS, _, GRID_BUDGET_MS);
     
-    int cellCount = GridLib_FindCellsFromClosest(aimPos, GRID_MAX_CELLS, nearbyCells,GRID_MAX_CELLS,_,GRID_BUDGET_MS,false);
+    int cellCount = GridLib_FindCellsConnected(aimPos, GRID_MAX_CELLS, nearbyCells, GRID_MAX_CELLS, 300.0, _, GRID_BUDGET_MS, false);
     
     float ms_find = (GetEngineTime() - t_find) * 1000.0;
     
