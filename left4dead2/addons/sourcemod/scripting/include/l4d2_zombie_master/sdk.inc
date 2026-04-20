@@ -30,6 +30,12 @@ Handle hCreateTank = null;
 // https://github.com/Ilusion9/entityIO-sm
 Handle g_DHook_AcceptInput = null;
 
+// TerrorNavArea::IsPotentiallyVisibleToTeam(int) -> bool
+Handle hNavIsPotentiallyVisibleToTeam = null;
+
+// TerrorNavArea::IsPotentiallyVisible(const TerrorNavArea*, bool) -> bool
+Handle hNavIsPotentiallyVisible = null;
+
 GameData hGameData;
 //GameData hGameData_l4dhooks;
 void GetGameData()
@@ -98,38 +104,116 @@ void PrepSDKCall()
 
 	// PVS engine calls
 	g_pEngineServer = GameConfGetAddress(hGameData, "engine_ptr");
-	if (g_pEngineServer != Address_Null)
+	if (g_pEngineServer == Address_Null)
 	{
-		// GetClusterForOrigin(Vector const&) → int
-		StartPrepSDKCall(SDKCall_Raw);
-		PrepSDKCall_SetVirtual(GameConfGetOffset(hGameData, "IVEngineServer::GetClusterForOrigin"));
-		PrepSDKCall_AddParameter(SDKType_Vector, SDKPass_ByRef);
-		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
-		hGetClusterForOrigin = EndPrepSDKCall();
-		if (hGetClusterForOrigin==null) LogMessage("[zm] WARNING: Failed to create GetClusterForOrigin SDKCall");
-
-		// GetPVSForCluster(int cluster, int pvslength, unsigned char* outputpvs) → int
-		StartPrepSDKCall(SDKCall_Raw);
-		PrepSDKCall_SetVirtual(GameConfGetOffset(hGameData, "IVEngineServer::GetPVSForCluster"));
-		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
-		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
-		PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);
-		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
-		hGetPVSForCluster = EndPrepSDKCall();
-		if (hGetPVSForCluster==null) LogMessage("[zm] WARNING: Failed to create GetPVSForCluster SDKCall");
-		// CheckOriginInPVS(Vector const&, unsigned char const*, int) → bool
-		StartPrepSDKCall(SDKCall_Raw);
-		PrepSDKCall_SetVirtual(GameConfGetOffset(hGameData, "IVEngineServer::CheckOriginInPVS"));
-		PrepSDKCall_AddParameter(SDKType_Vector, SDKPass_ByRef);
-		PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);
-		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
-		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
-		hCheckOriginInPVS = EndPrepSDKCall();
-		if (hCheckOriginInPVS == null) LogMessage("[zm] WARNING: Failed to create CheckOriginInPVS SDKCall");
+		LogMessage("[zm] WARNING: Could not find engine server pointer (gamedata address 'engine_ptr'); PVS checks disabled");
 	}
-	else LogMessage("[zm] WARNING: Could not find engine server pointer, PVS checks disabled");	
+	else
+	{
+		int offClu = GameConfGetOffset(hGameData, "IVEngineServer::GetClusterForOrigin");
+		int offPvs = GameConfGetOffset(hGameData, "IVEngineServer::GetPVSForCluster");
+		int offChk = GameConfGetOffset(hGameData, "IVEngineServer::CheckOriginInPVS");
+
+		// GetClusterForOrigin(Vector const&) -> int
+		if (offClu == -1)
+			LogMessage("[zm] WARNING: Gamedata offset IVEngineServer::GetClusterForOrigin missing");
+		else
+		{
+			StartPrepSDKCall(SDKCall_Raw);
+			PrepSDKCall_SetVirtual(offClu);
+			PrepSDKCall_AddParameter(SDKType_Vector, SDKPass_ByRef);
+			PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
+			hGetClusterForOrigin = EndPrepSDKCall();
+			if (hGetClusterForOrigin == null)
+				LogMessage("[zm] WARNING: EndPrepSDKCall(GetClusterForOrigin) returned null (offset=%d may be wrong)", offClu);
+		}
+
+		// GetPVSForCluster(int cluster, int pvslength, unsigned char* outputpvs) -> int
+		if (offPvs == -1)
+			LogMessage("[zm] WARNING: Gamedata offset IVEngineServer::GetPVSForCluster missing");
+		else
+		{
+			StartPrepSDKCall(SDKCall_Raw);
+			PrepSDKCall_SetVirtual(offPvs);
+			PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+			PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+			PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);
+			PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
+			hGetPVSForCluster = EndPrepSDKCall();
+			if (hGetPVSForCluster == null)
+				LogMessage("[zm] WARNING: EndPrepSDKCall(GetPVSForCluster) returned null (offset=%d may be wrong)", offPvs);
+		}
+
+		// CheckOriginInPVS(Vector const&, unsigned char const*, int) -> bool
+		if (offChk == -1)
+			LogMessage("[zm] WARNING: Gamedata offset IVEngineServer::CheckOriginInPVS missing");
+		else
+		{
+			StartPrepSDKCall(SDKCall_Raw);
+			PrepSDKCall_SetVirtual(offChk);
+			PrepSDKCall_AddParameter(SDKType_Vector, SDKPass_ByRef);
+			PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);
+			PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+			PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
+			hCheckOriginInPVS = EndPrepSDKCall();
+			if (hCheckOriginInPVS == null)
+				LogMessage("[zm] WARNING: EndPrepSDKCall(CheckOriginInPVS) returned null (offset=%d may be wrong)", offChk);
+		}
+
+		bool allPvsReady = hGetClusterForOrigin != null && hGetPVSForCluster != null && hCheckOriginInPVS != null;
+		LogMessage("[zm] INFO: PVS SDKCalls: GetClusterForOrigin=%s GetPVSForCluster=%s CheckOriginInPVS=%s (pipeline %s)",
+			hGetClusterForOrigin == null ? "FAIL" : "ok",
+			hGetPVSForCluster == null ? "FAIL" : "ok",
+			hCheckOriginInPVS == null ? "FAIL" : "ok",
+			allPvsReady ? "READY" : "DEGRADED - fallback LOS path will run");
+	}
+
+	// TerrorNavArea::IsPotentiallyVisibleToTeam(int team) -> bool
+	StartPrepSDKCall(SDKCall_Raw);
+	bool navSigOk = PrepSDKCall_SetFromConf(hGameData, SDKConf_Signature, "TerrorNavArea::IsPotentiallyVisibleToTeam");
+	if (navSigOk)
+	{
+		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+		PrepSDKCall_SetReturnInfo(SDKType_Bool, SDKPass_Plain);
+		hNavIsPotentiallyVisibleToTeam = EndPrepSDKCall();
+	}
+	if (!navSigOk)
+		LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisibleToTeam SetFromConf failed; nav filter disabled (gamedata sig not found or binary mismatch)");
+	else if (hNavIsPotentiallyVisibleToTeam == null)
+		LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisibleToTeam EndPrepSDKCall returned null; nav filter disabled");
+	else
+		LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisibleToTeam SDKCall ready");
+
+	// TerrorNavArea::IsPotentiallyVisible(const TerrorNavArea*, bool) -> bool (signature-based, non-virtual)
+	StartPrepSDKCall(SDKCall_Raw);
+	bool navPairSigOk = PrepSDKCall_SetFromConf(hGameData, SDKConf_Signature, "TerrorNavArea::IsPotentiallyVisible");
+	if (navPairSigOk)
+	{
+		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain); // const TerrorNavArea* other
+		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain); // bool checkAttributes
+		PrepSDKCall_SetReturnInfo(SDKType_Bool, SDKPass_Plain);
+		hNavIsPotentiallyVisible = EndPrepSDKCall();
+	}
+	if (!navPairSigOk)
+		LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisible SetFromConf failed; per-area-pair LOS path disabled (sig not found or binary mismatch)");
+	else if (hNavIsPotentiallyVisible == null)
+		LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisible EndPrepSDKCall returned null; per-area-pair LOS path disabled");
+	else
+		LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisible SDKCall ready");
 
 	delete hGameData;
+}
+
+stock bool NavArea_IsPotentiallyVisibleToTeam(Address navArea, int team)
+{
+	if (hNavIsPotentiallyVisibleToTeam == null || navArea == Address_Null) return true;
+	return SDKCall(hNavIsPotentiallyVisibleToTeam, navArea, team);
+}
+
+stock bool NavArea_IsPotentiallyVisible(Address cellArea, Address survivorArea, bool checkAttributes)
+{
+	if (hNavIsPotentiallyVisible == null || cellArea == Address_Null || survivorArea == Address_Null) return true;
+	return SDKCall(hNavIsPotentiallyVisible, cellArea, survivorArea, checkAttributes);
 }
 
 // PVS wrapper functions

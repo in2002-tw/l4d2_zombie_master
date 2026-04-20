@@ -330,6 +330,7 @@ int zm_stage = ZM_END;
 
 // Zombie Master Live Variables
 float fog_distance = FOG_DISTANCE;
+float fog_distance_sq = 25000000.0; // = FOG_DISTANCE*FOG_DISTANCE; SP can't init with a non-literal expr aaaaaaaaa
 bool zm_can_start = false;
 int zm_client = -1;
 int zm_client_userid = -1;
@@ -395,6 +396,7 @@ bool   g_bBatchActive = false; // is survivor batch valid?
 int    g_iBatchSurvivorCount = 0;
 bool   g_BatchSurvivorValidPVS[MAXPLAYERS+1]; // avoiding char non sense
 char   g_BatchSurvivorPVS[MAXPLAYERS+1][PVS_BUFFER_SIZE];
+int    g_BatchSurvivorCluster[MAXPLAYERS+1]; // survivor eye leaf cluster, -1 if invalid
 int    g_iBatchSurvivorClients[MAXPLAYERS+1];
 float  g_fBatchSurvivorPos[MAXPLAYERS+1][3];
 float  g_fBatchTime;
@@ -445,6 +447,16 @@ int    g_GridN_nav;
 int    g_GridN_los;
 int    g_GridN_dist;
 int    g_GridN_valid;
+
+// Per-stage LOS filter counters (subset of the g_GridN_los total; reset each grid tick).
+// Together they describe which filter rejected each cell and where time went.
+int    g_LosN_fog;        // any_alive_survivors_in_radius early-exit (no survivor within fog radius)
+int    g_LosN_nav_rej;    // nav-area IsPotentiallyVisibleToTeam returned false
+int    g_LosN_shortcut;   // same-cluster shortcut taken (skipped a PVS native call)
+int    g_LosN_pvs_rej;    // per-survivor PVS rejected (summed across survivors within a cell)
+int    g_LosN_trace_hit;  // L4D2_IsVisibleToPlayer returned true (blocks spawn)
+int    g_LosN_safe_hit;   // saferoom door trace said visible
+int    g_LosN_clear;      // fell through all filters, returned false (no visibility)
 
 float t_vomited[MAXPLAYERS+1] = {0.0,...}; // tracking when to spawn horde
 

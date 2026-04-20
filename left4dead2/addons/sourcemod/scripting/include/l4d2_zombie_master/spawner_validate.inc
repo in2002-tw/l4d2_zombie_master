@@ -38,20 +38,31 @@ void Spawner_CacheSurvivorData()
 		{
     		GetClientEyePosition(i, eyePos);
     		cluster = PVS_GetClusterForOrigin(eyePos);
-    		if (cluster<0) g_BatchSurvivorValidPVS[g_iBatchSurvivorCount] = false;
+    		g_BatchSurvivorCluster[g_iBatchSurvivorCount] = cluster;
+    		if (cluster<0)
+    		{
+    		    g_BatchSurvivorValidPVS[g_iBatchSurvivorCount] = false;
+    		}
     		else
     		{
         		g_BatchSurvivorValidPVS[g_iBatchSurvivorCount] = true;
         		PVS_GetForCluster(cluster, g_BatchSurvivorPVS[g_iBatchSurvivorCount]);
     		}
 		}
+		else
+		{
+		    g_BatchSurvivorCluster[g_iBatchSurvivorCount] = -1;
+		}
 		g_iBatchSurvivorClients[g_iBatchSurvivorCount] = i;
-		g_SurvNavAreaComputed[g_iBatchSurvivorCount] = false;
+		g_CachedSurvNavArea[g_iBatchSurvivorCount] = L4D_GetNearestNavArea(
+			g_fBatchSurvivorPos[g_iBatchSurvivorCount], 300.0, false, false, true, TEAM_SURVIVOR);
+		g_SurvNavAreaComputed[g_iBatchSurvivorCount] = true;
 		g_iBatchSurvivorCount++;
 	}
 	g_bBatchActive = g_iBatchSurvivorCount>0;
 	g_bBatchPVSActive = g_bBatchActive && hCheckOriginInPVS!=null;
 	if (g_bBatchActive) g_fBatchTime = GetGameTime();
+
 	if (DEBUG_SPAWNER) LogMessage("[zm] Spawner_CacheSurvivorData: %d survivors, active=%d, PVS_active=%d",g_iBatchSurvivorCount,g_bBatchActive,g_bBatchPVSActive);
 }
 
@@ -138,233 +149,124 @@ bool any_alive_survivors_in_radius(float vecPos[3], float radius)
 }
 
 /**
- * Check if any alive survivor (or the saferoom door) has line of sight to a position.
- * Tests multiple points on the spawn hull to prevent partial-visibility exploits.
- * First does a cheap distance cull (fog_distance), then ray traces for actual visibility.
+ * Check if any alive survivor (or the saferoom door) can see a position.
+ * Uses 2 test points at hull mid-height and top.
  *
- * @param vecPos  The world position to check visibility for
- * @param hint    If true, show a HUD hint to the ZM explaining why the spot is visible
- * @return        true if any survivor can see the position
+ * @param vecPos       World position to test visibility against
+ * @param cellCluster  Optional precomputed PVS leaf cluster of vecPos. When >= 0, enables
+ *                     the same-cluster shortcut (skip PVS_CheckOriginInPVS when survivor
+ *                     sits in the same cluster: Pass -1 (default) when unknown.
+ * @param cellNavArea  Optional nav area of vecPos. When non-null and the nav-area
+ *                     SDKCall is available, the director's lazily-maintained per-team
+ *                     visibility bit gates the PVS loop
+ * @return             true if any alive survivor or the saferoom door has line of sight
  */
-//bool can_any_alive_survivor_see(float vecPos[3], bool hint = true)
-//{
-//   if (DEBUG) LogMessage("[zm] can_any_alive_survivor_see");
-//   bool visible = false;
-//   
-//   static float VecPos2[3]; AddVectors(vecPos,{0.0,0.0,HULL_DZ},VecPos2);
-//   static float VecPos3[3]; AddVectors(vecPos,{-HULL_DX,-HULL_DX,HULL_DZ},VecPos3);
-//   static float VecPos4[3]; AddVectors(vecPos,{HULL_DX,HULL_DX,HULL_DZ},VecPos4);
-//   static float VecPos5[3]; AddVectors(vecPos,{HULL_DX,-HULL_DX,HULL_DDZ},VecPos5);
-//   static float VecPos6[3]; AddVectors(vecPos,{0.0,0.0,HULL_DDZ},VecPos6);
-//
-//   // Check line of sight with saferoom door
-//   if (!L4D_IsSurvivalMode() && zm_stage<ZM_STARTED && IsValidEntRef(g_iLockedDoor))
-//   {
-//        int filter_client = -1;
-//        if (IsValidClientZM()) filter_client = zm_client;
-//        int door = EntRefToEntIndex(g_iLockedDoor);
-//        static float saferoom_pos[3];
-//        L4D_GetEntityWorldSpaceCenter(door,saferoom_pos);
-//        saferoom_pos[2] -= 10.0;
-//        if (GetVectorDistance(saferoom_pos,vecPos)<=fog_distance)
-//        {
-//            Handle trace = TR_TraceRayFilterEx(vecPos,saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,filter_client);
-//            if(TR_DidHit(trace) && TR_GetEntityIndex(trace)==door) visible = true;
-//            delete trace;
-//            if (!visible)
-//            {
-//                trace = TR_TraceRayFilterEx(VecPos2,saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,filter_client);
-//                if(TR_DidHit(trace) && TR_GetEntityIndex(trace)==door) visible = true;
-//                delete trace;
-//            }
-//            if (!visible)
-//            {
-//                trace = TR_TraceRayFilterEx(VecPos3,saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,filter_client);
-//                if(TR_DidHit(trace) && TR_GetEntityIndex(trace)==door) visible = true;
-//                delete trace;
-//            }
-//            if (!visible)
-//            {
-//                trace = TR_TraceRayFilterEx(VecPos4,saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,filter_client);
-//                if(TR_DidHit(trace) && TR_GetEntityIndex(trace)==door) visible = true;
-//                delete trace;
-//            }
-//            if (!visible)
-//            {
-//                trace = TR_TraceRayFilterEx(VecPos5,saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,filter_client);
-//                if(TR_DidHit(trace) && TR_GetEntityIndex(trace)==door) visible = true;
-//                delete trace;
-//            }
-//            if (!visible)
-//            {
-//                trace = TR_TraceRayFilterEx(VecPos6,saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,filter_client);
-//                if(TR_DidHit(trace) && TR_GetEntityIndex(trace)==door) visible = true;
-//                delete trace;
-//            }
-//
-//            if (visible)
-//            {
-//                if (hint) update_hint("%T", "Visible saferoom", zm_client);
-//                return true;
-//            }
-//        }
-//    }
-//
-//    //Ray traces are (probably) expensive so let's do easy calculations first.
-//    bool skip = true;
-//    bool skipList[MAXPLAYERS+1] = {true,...};
-//    int i = INVALID_ENT_REFERENCE;
-//    if (l4dhooks_updated)
-//    {
-//        while( (i = L4D_FindEntityByClassnameWithin(i,"player",vecPos,fog_distance)) != INVALID_ENT_REFERENCE )
-//        {
-//            if (IsValidClient(i) && GetClientTeam(i) == TEAM_SURVIVOR && IsPlayerAlive(i))
-//            {
-//                skip = false;
-//                skipList[i] = false;
-//            }
-//        }
-//    }
-//    else
-//    {
-//        float pos[3];
-//        for(i = 1; i <= MaxClients; i++)
-//        {
-//              if (IsValidClient(i) && GetClientTeam(i) == TEAM_SURVIVOR && IsPlayerAlive(i))
-//              {
-//                GetClientAbsOrigin(i,pos);
-//                if (GetVectorDistance(pos,vecPos)<fog_distance)
-//                {
-//                    skip=false;
-//                    skipList[i] = false;
-//                }
-//              }
-//        }
-//    }
-//
-//   if (skip) return false;
-//
-//   // Check VecPos2 first - that's most likely to hit.
-//   for(i = 1; i <= MaxClients; i++)
-//   {
-//        if (skipList[i]) continue;
-//        if (L4D2_IsVisibleToPlayer(i,TEAM_SURVIVOR,3,0,VecPos2)) {visible=true; break;}
-//   }
-//   if (!visible)
-//   {
-//        for(i = 1; i <= MaxClients; i++ )
-//        {
-//             if (skipList[i]) continue;
-//             if (L4D2_IsVisibleToPlayer(i,TEAM_SURVIVOR,3,0,vecPos)) {visible=true; break;}
-//             if (L4D2_IsVisibleToPlayer(i,TEAM_SURVIVOR,3,0,VecPos3)) {visible=true; break;}
-//             if (L4D2_IsVisibleToPlayer(i,TEAM_SURVIVOR,3,0,VecPos4)) {visible=true; break;}
-//             if (L4D2_IsVisibleToPlayer(i,TEAM_SURVIVOR,3,0,VecPos5)) {visible=true; break;}
-//             if (L4D2_IsVisibleToPlayer(i,TEAM_SURVIVOR,3,0,VecPos6)) {visible=true; break;}
-//        }
-//   }
-//
-//   if (visible)
-//   {
-//       if (hint) update_hint("%T", "Visible survivors", zm_client);
-//       return true;
-//   }
-//   return false;
-//}
-
-/**
- * Cheaper version of can_any_alive_survivor_see.
- * Uses 3 test points instead of 6, single survivor loop, and skips saferoom door checks.
- * Suitable for batch-checking many candidate positions (e.g. grid cell filtering).
- */
-bool can_any_alive_survivor_see_cheap(float vecPos[3])
+bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Address cellNavArea = Address_Null)
 {
    if (DEBUG) LogMessage("[zm] can_any_alive_survivor_see_cheap");
-   //g_bNoSurvivorsWithinFog = false; // use this to skip distance checks
-   
+
    if (l4dhooks_updated && !any_alive_survivors_in_radius(vecPos,fog_distance))
    {
-       //g_bNoSurvivorsWithinFog = true;
-       return false; // this call is very fast, good for early exit.
+       g_LosN_fog++;
+       return false; // very fast early exit when no survivor within fog radius
    }
-   
-   // 3 test points: ground, mid-height center (most likely), top center
-   static float testPoints[3][3];
-   bool visible = false;
-   AddVectors(vecPos, {0.0, 0.0, HULL_DZ}, testPoints[1]);
-   AddVectors(vecPos, {0.0, 0.0, HULL_DDZ}, testPoints[2]);
-   
-   // Check first saferoom door.
-   if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor))
+
+   // Nav-area visibility pre-reject: if the director's recent-visibility list for the survivor team
+   // does not include this area, no survivor has marked it as seeable.
+   if (!NavArea_IsPotentiallyVisibleToTeam(cellNavArea, TEAM_SURVIVOR))
    {
-       static float saferoom_pos[3];
-       L4D_GetEntityWorldSpaceCenter(g_iLockedDoor,saferoom_pos);
-       if (GetVectorDistance(saferoom_pos,vecPos)<=fog_distance)
-       {
-            int door = EntRefToEntIndex(g_iLockedDoor);
-            Handle trace = TR_TraceRayFilterEx(testPoints[1],saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,door);
-            visible = !TR_DidHit(trace);
-            delete trace;
-            if (visible) return true;
-            trace = TR_TraceRayFilterEx(testPoints[2],saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,door);
-            visible = !TR_DidHit(trace);
-            delete trace;
-            if (visible) return true;
-        }
+       g_LosN_nav_rej++;
+       return false;
    }
-   
+
+   // 2 test points: mid-height hull center (most likely hit), top hull center
+   static float testPoints[2][3];
+   testPoints[0] = vecPos; testPoints[0][2] += HULL_DZ;
+   testPoints[1] = vecPos; testPoints[1][2] += HULL_DDZ;
+
    Spawner_CacheSurvivorData();
    if (Is_PVS_Valid())
    {
        for (int s = 0; s < g_iBatchSurvivorCount; s++)
        {
-           if (GetVectorDistance(g_fBatchSurvivorPos[s],vecPos) >= fog_distance) continue;
+           if (GetVectorDistance(g_fBatchSurvivorPos[s],vecPos,true) >= fog_distance_sq) continue;
 
-           //LogMessage("%d %s", s, g_BatchSurvivorPVS[s]);
-           // PVS pre-filter: if position is not in this survivor's PVS, skip raytraces
-           if (!g_BatchSurvivorValidPVS[s] || !PVS_CheckOriginInPVS(vecPos, g_BatchSurvivorPVS[s]))
-           {
-               if (DEBUG_SPAWNER) LogMessage("PVS pre-filter %d skipping raytraces", s);
-               continue;
-           }
-               
-           // l4dhooks does not validate client indices
+           // l4dhooks does not validate client indices; gate before PVS_Check to skip that native call on stale slots
            if (!IsValidClient(g_iBatchSurvivorClients[s])) continue;
-           if (L4D2_IsVisibleToPlayer(g_iBatchSurvivorClients[s],TEAM_SURVIVOR,3,0,testPoints[1])) return true;
-           if (L4D2_IsVisibleToPlayer(g_iBatchSurvivorClients[s],TEAM_SURVIVOR,3,0,testPoints[2])) return true;
-       }
-       return false;
-   }
-   //else LogMessage("PERF WARNING: can_any_alive_survivor_see_cheap not using PVS");
-   
-   //testPoints[0] = vecPos;
 
-   float pos[3];
-   bool skipList[MAXPLAYERS+1] = {true, ...};
-   bool skip = true;
-   for (int i = 1; i <= MaxClients; i++)
-   {
-       if (IsClientInGame(i) && GetClientTeam(i) == TEAM_SURVIVOR && IsPlayerAlive(i))
-       {
-           GetClientAbsOrigin(i, pos);
-           if (GetVectorDistance(pos, vecPos) < fog_distance)
+           // Same-cluster shortcut: two points in one leaf cluster are trivially mutually visible via PVS.
+           // Skip any per-pair visibility check and go straight to the trace.
+           bool sameCluster = (cellCluster >= 0 && cellCluster == g_BatchSurvivorCluster[s]);
+           if (sameCluster) g_LosN_shortcut++;
+           else
            {
-               skip = false;
-               skipList[i] = false;
+               // per-area-pair bitset lookup. Engine's own fast path.
+               // Falls back to legacy per-survivor PVS byte-buffer check when:
+               //  - SDKCall not bound (Microslop windows))
+               //  - cell or survivor nav area is null
+               bool pairChecked = false;
+               bool pairVisible = true;
+               if (hNavIsPotentiallyVisible != null
+                   && cellNavArea != Address_Null && g_CachedSurvNavArea[s] != Address_Null)
+               {
+                   pairChecked = true;
+                   pairVisible = NavArea_IsPotentiallyVisible(cellNavArea, g_CachedSurvNavArea[s], false);
+               }
+
+               if (pairChecked)
+               {
+                   if (!pairVisible)
+                   {
+                       g_LosN_pvs_rej++;
+                       if (DEBUG_SPAWNER) LogMessage("nav-pair pre-filter %d skipping raytraces", s);
+                       continue;
+                   }
+               }
+               else
+               {
+                   // Legacy per-survivor PVS byte-buffer check
+                   if (!g_BatchSurvivorValidPVS[s] || !PVS_CheckOriginInPVS(vecPos, g_BatchSurvivorPVS[s]))
+                   {
+                       g_LosN_pvs_rej++;
+                       if (DEBUG_SPAWNER) LogMessage("PVS pre-filter %d skipping raytraces", s);
+                       continue;
+                   }
+               }
            }
+           if (L4D2_IsVisibleToPlayer(g_iBatchSurvivorClients[s],TEAM_SURVIVOR,3,0,testPoints[0])) { g_LosN_trace_hit++; return true; }
+           if (L4D2_IsVisibleToPlayer(g_iBatchSurvivorClients[s],TEAM_SURVIVOR,3,0,testPoints[1])) { g_LosN_trace_hit++; return true; }
+       }
+   }
+   else
+   {
+       // Fallback (no PVS native): single-pass distance + visibility over alive survivors
+       float pos[3];
+       for (int i = 1; i <= MaxClients; i++)
+       {
+           if (!IsClientInGame(i) || GetClientTeam(i) != TEAM_SURVIVOR || !IsPlayerAlive(i)) continue;
+           GetClientAbsOrigin(i, pos);
+           if (GetVectorDistance(pos, vecPos, true) >= fog_distance_sq) continue;
+           if (L4D2_IsVisibleToPlayer(i, TEAM_SURVIVOR, 3, 0, testPoints[0])) { g_LosN_trace_hit++; return true; }
+           if (L4D2_IsVisibleToPlayer(i, TEAM_SURVIVOR, 3, 0, testPoints[1])) { g_LosN_trace_hit++; return true; }
        }
    }
 
-   if (skip) return false;
-
-   // Single loop: check mid-height first (most likely hit), then others
-   for (int i = 1; i <= MaxClients; i++)
+   // Saferoom door fallback: only after no survivor saw directly.
+   if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor))
    {
-       if (skipList[i]) continue;
-       if (L4D2_IsVisibleToPlayer(i, TEAM_SURVIVOR, 3, 0, testPoints[1])) return true;
-       //if (L4D2_IsVisibleToPlayer(i, TEAM_SURVIVOR, 3, 0, testPoints[0])) return true;
-       if (L4D2_IsVisibleToPlayer(i, TEAM_SURVIVOR, 3, 0, testPoints[2])) return true;
+       static float saferoom_pos[3];
+       L4D_GetEntityWorldSpaceCenter(g_iLockedDoor,saferoom_pos);
+       if (GetVectorDistance(saferoom_pos,vecPos,true) <= fog_distance_sq)
+       {
+           int door = EntRefToEntIndex(g_iLockedDoor);
+           TR_TraceRayFilter(testPoints[0],saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,door);
+           if (!TR_DidHit()) { g_LosN_safe_hit++; return true; }
+           TR_TraceRayFilter(testPoints[1],saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,door);
+           if (!TR_DidHit()) { g_LosN_safe_hit++; return true; }
+       }
    }
 
+   g_LosN_clear++;
    return false;
 }
 
@@ -612,6 +514,7 @@ Action check_fog_distance(Handle timer = null)
 	if (new_fog_distance!=fog_distance)
 	{
 	    fog_distance = new_fog_distance;
+	    fog_distance_sq = new_fog_distance * new_fog_distance;
 	    CreateTimer(10.0,check_fog_distance,TIMER_FLAG_NO_MAPCHANGE);
 	    CreateTimer(30.0,check_fog_distance,TIMER_FLAG_NO_MAPCHANGE);
 	    CreateTimer(45.0,check_fog_distance,TIMER_FLAG_NO_MAPCHANGE);

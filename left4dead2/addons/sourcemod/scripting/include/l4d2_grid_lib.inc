@@ -149,6 +149,7 @@ enum struct GridCell
 	Address navArea;       // Nav area reference
 	bool isObstructed;     // Hull trace result (pre-computed)
 	float normal[3];       // Surface normal
+	int cluster;           // PVS leaf cluster for position (-1 if PVS native unavailable)
 }
 
 /**
@@ -526,6 +527,22 @@ stock bool GridLib_GetCellData(int cellIdx,
 	obstructed = cell.isObstructed;
 
 	return true;
+}
+
+/**
+ * Get the precomputed PVS leaf cluster for a cell.
+ *
+ * @param cellIdx    Cell index
+ * @return           Cluster int, or -1 if invalid index or PVS native unavailable at precompute time
+ */
+stock int GridLib_GetCellCluster(int cellIdx)
+{
+	if (!g_IsReady || cellIdx < 0 || cellIdx >= g_TotalCells)
+		return -1;
+
+	GridCell cell;
+	g_GridCells.GetArray(cellIdx, cell, sizeof(GridCell));
+	return cell.cluster;
 }
 
 /**
@@ -1337,6 +1354,7 @@ static bool GridLib_CheckAndStoreCell(float cellPos[3],
 	cell.normal[0] = surfaceNormal[0];
 	cell.normal[1] = surfaceNormal[1];
 	cell.normal[2] = surfaceNormal[2];
+	cell.cluster = (hGetClusterForOrigin != null) ? PVS_GetClusterForOrigin(cellPos) : -1;
 
 	int cellIndex = g_GridCells.PushArray(cell);
 	GridLib_AddCellToHash(cellIndex, cellPos);

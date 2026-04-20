@@ -939,7 +939,8 @@ Action zm_new_round(Handle timer = null)
         l4d2_specials = false;
 	
 	fog_distance = FOG_DISTANCE;
-	
+	fog_distance_sq = FOG_DISTANCE * FOG_DISTANCE;
+
 	roundcount += 1;
 	
 	saferoom_locked = false;
@@ -1552,7 +1553,7 @@ public Action EvtWitchKilled(Event event, const char[] name, bool dontBroadcast)
 public void OnMapStart()
 {
     if (DEBUG) LogMessage("[zm] OnMapStart");
-	
+
 	PluginPrecacheModel(MODEL_SMOKER);
 	PluginPrecacheModel(MODEL_BOOMER);
 	PluginPrecacheModel(MODEL_HUNTER);

@@ -119,6 +119,26 @@ if [ "$COMPILE_SUCCESS" = true ]; then
             fi
         fi
 
+        # Copy models (GridRenderer Prop backend needs models/grid/*)
+        SERVER_MODELS_DIR="$L4D2_SERVER_DIR/models"
+        MODELS_DIR="left4dead2/models"
+        if [ -d "$MODELS_DIR" ] && [ -d "$SERVER_MODELS_DIR" ]; then
+            cp -r "$MODELS_DIR"/. "$SERVER_MODELS_DIR/"
+            if [ $? -eq 0 ]; then
+                echo "✓ Models copied to: $SERVER_MODELS_DIR/"
+            fi
+        fi
+
+        # Copy materials (textures/VMTs referenced by the above models)
+        SERVER_MATERIALS_DIR="$L4D2_SERVER_DIR/materials"
+        MATERIALS_DIR="left4dead2/materials"
+        if [ -d "$MATERIALS_DIR" ] && [ -d "$SERVER_MATERIALS_DIR" ]; then
+            cp -r "$MATERIALS_DIR"/. "$SERVER_MATERIALS_DIR/"
+            if [ $? -eq 0 ]; then
+                echo "✓ Materials copied to: $SERVER_MATERIALS_DIR/"
+            fi
+        fi
+
         echo ""
         echo "To reload plugins, use:"
         for PLUGIN_NAME in "${PLUGINS[@]}"; do
