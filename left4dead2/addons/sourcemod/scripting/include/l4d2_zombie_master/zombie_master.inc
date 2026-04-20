@@ -401,7 +401,7 @@ float  g_fBatchTime;
 float   g_CachedSurvFlow[MAXPLAYERS+1];
 Address g_CachedSurvNavArea[MAXPLAYERS+1];
 bool    g_SurvNavAreaComputed[MAXPLAYERS+1];
-//float   g_GridEffectiveMinDist;
+float   g_GridEffectiveMinDist;
 
 #define GRID_BUDGET_MS 20.0
 #define GRID_SEARCH_RADIUS  150.0
@@ -412,6 +412,7 @@ bool    g_SurvNavAreaComputed[MAXPLAYERS+1];
 // State
 Handle g_hGridTimer;
 bool   g_bGridReady;
+//bool   g_bNoSurvivorsWithinFog; // context from can_any_alive_survivor_see
 
 // Per-spawn flow marker state (same pattern as analog)
 bool   g_bGridFlowUsed;

@@ -279,14 +279,19 @@ bool any_alive_survivors_in_radius(float vecPos[3], float radius)
 bool can_any_alive_survivor_see_cheap(float vecPos[3])
 {
    if (DEBUG) LogMessage("[zm] can_any_alive_survivor_see_cheap");
-
+   //g_bNoSurvivorsWithinFog = false; // use this to skip distance checks
+   
+   if (l4dhooks_updated && !any_alive_survivors_in_radius(vecPos,fog_distance))
+   {
+       //g_bNoSurvivorsWithinFog = true;
+       return false; // this call is very fast, good for early exit.
+   }
+   
    // 3 test points: ground, mid-height center (most likely), top center
    static float testPoints[3][3];
    bool visible = false;
    AddVectors(vecPos, {0.0, 0.0, HULL_DZ}, testPoints[1]);
    AddVectors(vecPos, {0.0, 0.0, HULL_DDZ}, testPoints[2]);
-
-   if (l4dhooks_updated && !any_alive_survivors_in_radius(vecPos,fog_distance)) return false; // this call is very fast, good for early exit.
    
    // Check first saferoom door.
    if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor))
@@ -371,6 +376,15 @@ bool distance_early_exit(float distance, float safe_distance, bool store_client)
     return (!store_client || distance<150.0) && distance<safe_distance;
 }
 
+// Is given distance to survivors too close to spawn zombies? -1.0 for invalid values
+bool distance_too_close(float distance)
+{
+    if (g_fSpawnMinDistance<=0.0) return false;
+    if (zm_stage<ZM_STARTED) distance *= 2.0; // allow spawns close to saferoom before round start
+    if (distance>=0.0 && distance<g_fSpawnMinDistance) return true;
+    return false;
+}
+
 /**
  * Find the smallest travel distance from pos to any alive survivor or first saferoom door. The result may trigger flow.
  *
@@ -383,7 +397,11 @@ bool distance_early_exit(float distance, float safe_distance, bool store_client)
 float min_distance_to_survivors(float pos[3], bool store_client=false, float safe_distance = -1.0, Address navArea = Address_Null)
 {
     if (store_client) spawner_nearest_survivor = -1;
-    if (safe_distance<0.0) safe_distance = (g_fSpawnMinDistance<150.0) ? 150.0 : g_fSpawnMinDistance; // 150.0 for "survivor being targeted" detection
+    if (safe_distance<0.0)
+    {
+        safe_distance = (zm_stage<ZM_STARTED) ? g_fSpawnMinDistance/2.0 : g_fSpawnMinDistance;
+        if (safe_distance<150.0) safe_distance = 150.0; // 150.0 for "survivor being targeted" detection
+    }
     
     bool include_saferoom = zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor);
     static float pos_saferoom[3];

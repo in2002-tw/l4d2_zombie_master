@@ -256,13 +256,12 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
         min_distance = min_distance_to_survivors(vPos_spawner,draw,_,navArea);
         float t_ms = (GetEngineTime()-t)*1000.0;
         if (t_ms>1.0) LogMessage("min_distance_to_survivors took %f ms", t_ms);
-        if (min_distance>=0.0 && draw) latest_distance = min_distance;
-        if (zm_stage<ZM_STARTED) min_distance *= 2.0; // allow spawns close to saferoom before round start
-        if (min_distance>=0.0 && g_fSpawnMinDistance>0.0 && min_distance<g_fSpawnMinDistance)
+        if (min_distance>=0.0 && draw) latest_distance = min_distance; // to trigger flow
+        if (distance_too_close(min_distance))
         {
             if (!fail) spawner_state = SPAWNER_DISTANCE;
             fail = true;
-            if (latest_distance<150.0 && draw && spawner_nearest_survivor>0) // trigger flow
+            if (latest_distance<150.0 && draw && get_spawner_target_survivor(false,_)>0) // trigger flow
             {
                 if (draw) update_ZM_spawner(vPos,vPos_spawner,spawner_state,draw);
                 return spawner_state;
@@ -296,7 +295,8 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
     if (fail && draw && spawner_state>SPAWNER_NAV && get_spawner_target_survivor(false,SPAWNER_DISTANCE)<0) // check other candidates
     {
         float newPos[3];
-        if (!skip_gridlib && g_bGridReady && g_iSpawnerMode>0 && g_GridHasValidCell && can_ZM_see(g_GridClosestValidPos))
+        if (!skip_gridlib && g_bGridReady && g_iSpawnerMode>0 && g_GridHasValidCell && can_ZM_see(g_GridClosestValidPos)
+            && ( (GetGameTime()-t_last_spawner_grid_update)<0.1 || Analog_CanSpawnPos(newPos,zClass,false,false,true)==SPAWNER_OK)) // grid may be outdated
         {
             newPos = g_GridClosestValidPos;
             Grid_InvalidateClosestValid();
@@ -310,7 +310,7 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
         }
         if (fail && !skip_gridlib) // ask gridlib for a better position
         {
-            if (FindNearbyValidSpawnCell(vPos_spawner,newPos,check_dist,zClass) && Analog_CanSpawnPos(newPos,zClass,false,false,true)==SPAWNER_OK)
+            if (FindNearbyValidSpawnCell(vPos_spawner,newPos,check_dist,zClass))
                 fail = false;
         }
         
@@ -375,7 +375,8 @@ int SpawnerCellFilter(int cellIdx)
         return GRIDLIB_FILTER_DISCARD_ALL;
     
     // Nav-blocked attributes apply to the entire nav area
-    if (GridLib_GetCellSpawnAttributes(cellIdx) & GRIDLIB_NAV_BLOCKED_ZOMBIES)
+    int navSpawnAttrs = GridLib_GetCellSpawnAttributes(cellIdx);
+    if (navSpawnAttrs & GRIDLIB_NAV_BLOCKED_ZOMBIES)
         return GRIDLIB_FILTER_DISCARD_NAV;
 
     float cellPos[3], normal[3];
@@ -389,7 +390,7 @@ int SpawnerCellFilter(int cellIdx)
     //if (obstructed)
     //    return GRIDLIB_FILTER_DISCARD;
     
-    if (!nav_can_spawn_zombies(g_iSpawnerZombieClass,navArea))
+    if (!nav_can_spawn_zombies(g_iSpawnerZombieClass,navArea,_,navSpawnAttrs))
     {
         if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d failed nav attrs", cellIdx);
         return GRIDLIB_FILTER_DISCARD_NAV;
@@ -411,10 +412,11 @@ int SpawnerCellFilter(int cellIdx)
     //        return GRIDLIB_FILTER_DISCARD;
     //}
     
-    if (IsValidClientZM() && !can_ZM_see(cellPos)) // Check if ZM can actually see that location.
-        return GRIDLIB_FILTER_DISCARD;
+    //if (IsValidClientZM() && !can_ZM_see(cellPos)) // Check if ZM can actually see that location.
+    //    return GRIDLIB_FILTER_DISCARD;
     
-    if (can_any_alive_survivor_see_cheap(cellPos))
+    bool obscured = navSpawnAttrs>0 && ( (navSpawnAttrs & NAV_SPAWN_OBSCURED) || (navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
+    if (!obscured && can_any_alive_survivor_see_cheap(cellPos))
     {
         if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d visible to survivors", cellIdx);
         return GRIDLIB_FILTER_DISCARD;
@@ -777,14 +779,14 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         if (g_iSpawnerMode>0 && g_GridValidCellCount>=count && GetVectorDistance(g_GridClosestValidPos,zm_spawner_pos)<150.0
             && L4D2_NavAreaTravelDistance(g_GridClosestValidPos,zm_spawner_pos,false)<150.0)
         {
-            //for (int c = 0; c < count; c++)
-            //{
-            //    gridlib_cells[c] = g_GridCellIndices[c];
-            //}
-            //use_gridlib = true;
-            //gridlib_cell_count = g_GridValidCellCount;
-            resolved = Grid_ResolveCommonPositions(count,flow,angry,hint,outPositions,maxOut);
-            return resolved;
+            
+            // Grid may be outdated
+            if ((GetGameTime()-t_last_spawner_grid_update)>=0.1) Grid_Update();
+            if (g_GridValidCellCount>=count)
+            {
+                resolved = Grid_ResolveCommonPositions(count,flow,angry,hint,outPositions,maxOut);
+                return resolved;
+            }
         }
         
         bool try_gridlib = true;
@@ -858,9 +860,12 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             if (zm_spawner_navArea && count > 1)
             {
                 L4D_FindRandomSpot(zm_spawner_navArea, pos);
-                if (valid_last && distance_last_saferoom(pos)<DISTANCE_LAST_SAFEROOM) pos = zm_spawner_pos;
-                else if (g_fSpawnMinDistance>0.0 && min_distance_to_survivors(pos,false,g_fSpawnMinDistance,zm_spawner_navArea)<g_fSpawnMinDistance) pos = zm_spawner_pos;
-                else if (can_any_alive_survivor_see_cheap(pos)) pos = zm_spawner_pos;
+                if (valid_last && distance_last_saferoom(pos)<DISTANCE_LAST_SAFEROOM)
+                    pos = zm_spawner_pos;
+                else if ( g_fSpawnMinDistance>0.0 && distance_too_close(min_distance_to_survivors(pos,false,_,zm_spawner_navArea)) )
+                    pos = zm_spawner_pos;
+                else if (can_any_alive_survivor_see_cheap(pos))
+                    pos = zm_spawner_pos;
                 else if (IsObstructed(pos,_,_,true))
                 {
                     if (!obstruction_rescue_hull_up(pos,_,ZOMBIECLASS_COMMON))

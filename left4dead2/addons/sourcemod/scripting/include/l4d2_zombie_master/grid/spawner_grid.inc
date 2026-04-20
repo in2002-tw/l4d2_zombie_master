@@ -205,8 +205,9 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
 {
     
     // Nav area attributes
+    int navSpawnAttrs = -1; // skip LOS checks for obscured navmeshes
     float t = GetEngineTime();
-    if (!nav_can_spawn_zombies(false, navArea))
+    if (!nav_can_spawn_zombies(_,navArea,_,navSpawnAttrs))
     {
         g_GridMs_nav += (GetEngineTime() - t) * 1000.0;
         g_GridN_nav++;
@@ -224,13 +225,24 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
         g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
         return false;
     }
-    float min_distance = min_distance_to_survivors(pos,g_iSpawnerMode==2,_,navArea);
-    if (min_distance>=0.0 && g_iSpawnerMode==2) latest_distance = min_distance; // to trigger flow
-    if (zm_stage<ZM_STARTED) min_distance *= 2.0; // allow spawns close to saferoom before round start
-    if (g_fSpawnMinDistance>0.0 && min_distance>=0.0 && min_distance<g_fSpawnMinDistance)
+    
+    // Check survivor distance: only care about too close if not in grid spawner mode. Otherwise always check because we need to see if flow should trigger.
+    if (g_fSpawnMinDistance>0.0 || g_iSpawnerMode==2)
     {
-        g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
-        return false;
+        float min_distance = -1.0;
+        if (g_iSpawnerMode==2) min_distance = min_distance_to_survivors(pos,true,_,navArea); // determine down to flow trigger distance
+        else
+        {
+            g_GridEffectiveMinDist = g_fSpawnMinDistance;
+            if (zm_stage < ZM_STARTED) g_GridEffectiveMinDist /= 2.0;
+            min_distance = min_distance_to_survivors(pos,false,g_GridEffectiveMinDist,navArea); // only care about too close
+        }
+        if (min_distance>=0.0 && g_iSpawnerMode==2) latest_distance = min_distance; // latest_distance is used to trigger flow
+        if (distance_too_close(min_distance))
+        {
+            g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
+            return false;
+        }
     }
     g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
     
@@ -240,7 +252,9 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
 
     // Survivor line of sight
     t = GetEngineTime();
-    if (can_any_alive_survivor_see_cheap(pos))
+    
+    bool obscured = navSpawnAttrs>0 && ( (navSpawnAttrs & NAV_SPAWN_OBSCURED) || (navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
+    if (!obscured && can_any_alive_survivor_see_cheap(pos))
     {
         g_GridMs_los += (GetEngineTime() - t) * 1000.0;
         g_GridN_los++;
