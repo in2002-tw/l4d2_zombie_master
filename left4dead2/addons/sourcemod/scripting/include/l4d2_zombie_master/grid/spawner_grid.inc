@@ -94,6 +94,7 @@ static bool Grid_TryPhysPropRescue(int idx, float pos[3])
     g_GridValidPositions[idx] = adjustedPos;
     g_GridOverridePositions[idx] = adjustedPos;
     g_GridHasOverride[idx] = true;
+    g_GridOverrideFlat[idx] = true;  // prop tops are flat; ignore ground slope
     return true;
 }
 
@@ -123,6 +124,7 @@ static bool Grid_CheckObstruction(int idx, float pos[3], bool obstructed)
                 g_GridValidPositions[idx] = pos;
                 g_GridOverridePositions[idx] = pos;
                 g_GridHasOverride[idx] = true;
+                g_GridOverrideFlat[idx] = false;  // hull-up lifts vertically; ground slope still applies
             }
         }
     }
@@ -380,7 +382,10 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     Address closestNavArea;
 
     for (int i = 0; i < GRID_MAX_CELLS; i++)
+    {
         g_GridHasOverride[i] = false;
+        g_GridOverrideFlat[i] = false;
+    }
 
     // Validate each cell
     for (int i = 0; i < cellCount; i++)
@@ -465,7 +470,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     // Render
     float t_render = GetEngineTime();
     GridRenderer_DrawCells(client, g_GridCellIndices, cellValid, cellCount, closestValidIdx,
-                           g_GridOverridePositions, g_GridHasOverride);
+                           g_GridOverridePositions, g_GridHasOverride, g_GridOverrideFlat);
     float ms_render = (GetEngineTime() - t_render) * 1000.0;
 
     float elapsed_ms = (GetEngineTime() - t_start) * 1000.0;

@@ -141,7 +141,8 @@ stock int GridRendererProp_DrawCells(int client,
                                      int count,
                                      int closestValidIdx,
                                      const float overridePositions[GRIDRENDERER_MAX_CELLS][3],
-                                     const bool hasOverride[GRIDRENDERER_MAX_CELLS])
+                                     const bool hasOverride[GRIDRENDERER_MAX_CELLS],
+                                     const bool overrideFlat[GRIDRENDERER_MAX_CELLS])
 {
 	if (!g_PropPool[client].initialized || !g_PropModelPrecached)
 		return 0;
@@ -225,6 +226,14 @@ stock int GridRendererProp_DrawCells(int client,
 				position[0] = overridePositions[i][0];
 				position[1] = overridePositions[i][1];
 				position[2] = overridePositions[i][2];
+
+				// Prop-top overrides are flat regardless of ground slope underneath.
+				if (overrideFlat[i])
+				{
+					normal[0] = 0.0;
+					normal[1] = 0.0;
+					normal[2] = 1.0;
+				}
 			}
 
 			int color[4];
@@ -267,6 +276,14 @@ stock int GridRendererProp_DrawCells(int client,
 				position[0] = overridePositions[dataIdx][0];
 				position[1] = overridePositions[dataIdx][1];
 				position[2] = overridePositions[dataIdx][2];
+
+				// Prop-top overrides are flat regardless of ground slope underneath.
+				if (overrideFlat[dataIdx])
+				{
+					normal[0] = 0.0;
+					normal[1] = 0.0;
+					normal[2] = 1.0;
+				}
 
 				float angles[3];
 				GridRendererProp_NormalToAngles(normal, angles);

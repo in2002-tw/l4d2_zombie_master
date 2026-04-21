@@ -112,6 +112,7 @@ stock void GridRenderer_SetAlphaFade(bool enabled)
  * @param closestValidIdx    Index into cellIndices of closest valid cell, or -1
  * @param overridePositions  Per-cell position overrides (e.g. on top of physics props)
  * @param hasOverride        Whether each cell has a position override
+ * @param overrideFlat       When true for a cell with hasOverride, render with flat (0,0,1) normal (prop top)
  * @return                   Number of cells drawn
  */
 stock int GridRenderer_DrawCells(int client,
@@ -120,7 +121,8 @@ stock int GridRenderer_DrawCells(int client,
                                  int count,
                                  int closestValidIdx,
                                  const float overridePositions[GRIDRENDERER_MAX_CELLS][3],
-                                 const bool hasOverride[GRIDRENDERER_MAX_CELLS])
+                                 const bool hasOverride[GRIDRENDERER_MAX_CELLS],
+                                 const bool overrideFlat[GRIDRENDERER_MAX_CELLS])
 {
 	if (count <= 0)
 		return 0;
@@ -130,7 +132,7 @@ stock int GridRenderer_DrawCells(int client,
 
 	return GridRendererProp_DrawCells(client, cellIndices, cellValid,
 	                                  count, closestValidIdx,
-	                                  overridePositions, hasOverride);
+	                                  overridePositions, hasOverride, overrideFlat);
 }
 
 /**

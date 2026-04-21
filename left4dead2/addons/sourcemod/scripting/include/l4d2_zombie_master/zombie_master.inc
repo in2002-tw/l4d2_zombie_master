@@ -433,9 +433,13 @@ float  g_GridClosestValidPos[3];
 bool   g_GridHasValidCell;
 int    g_GridValidCellIdx;
 
-// Physics prop position overrides (runtime-adjusted positions on top of props)
+// Physics prop position overrides (runtime-adjusted positions on top of props).
+// g_GridOverrideFlat[i] = true when the override is onto a flat surface (prop top):
+// in that case the renderer uses (0,0,1) instead of the cell's ground-relative normal.
+// Hull-up rescues leave it false (ground normal still applies).
 float  g_GridOverridePositions[GRID_MAX_CELLS][3];
 bool   g_GridHasOverride[GRID_MAX_CELLS];
+bool   g_GridOverrideFlat[GRID_MAX_CELLS];
 
 // Per-update timing accumulators (reset each tick, read by perf log)
 float  g_GridMs_obstruct;
