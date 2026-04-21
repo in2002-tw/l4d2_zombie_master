@@ -545,16 +545,13 @@ void GridRendererProp_HideAll(int client)
 // ============================================================================
 
 /**
- * Convert a surface normal vector to Euler angles for entity orientation
- *
- * @param normal    Surface normal vector
- * @param angles    Output: Pitch, Yaw, Roll angles
+ * Convert a surface normal vector to Euler angles for entity orientation.
+  *
+ * @param normal    Surface normal vector (unit length)
+ * @param angles    Output: Pitch, Yaw, Roll angles in degrees
  */
 static void GridRendererProp_NormalToAngles(const float normal[3], float angles[3])
 {
-	// The model is a flat quad on the XY plane with +Z as its face normal.
-	// We want to rotate it so the model's +Z aligns with the surface normal.
-
 	float horizontalLength = SquareRoot(normal[0] * normal[0] + normal[1] * normal[1]);
 	float pitch = RadToDeg(ArcTangent2(horizontalLength, normal[2]));
 
