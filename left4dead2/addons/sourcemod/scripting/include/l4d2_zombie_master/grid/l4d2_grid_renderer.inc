@@ -110,9 +110,10 @@ stock void GridRenderer_SetAlphaFade(bool enabled)
  * @param cellValid          Array of validation results (true = valid spawn)
  * @param count              Number of cells (max GRIDRENDERER_MAX_CELLS)
  * @param closestValidIdx    Index into cellIndices of closest valid cell, or -1
- * @param overridePositions  Per-cell position overrides (e.g. on top of physics props)
+ * @param overridePositions  Per-cell position overrides (e.g. on top of rescuable entities)
  * @param hasOverride        Whether each cell has a position override
- * @param overrideFlat       When true for a cell with hasOverride, render with flat (0,0,1) normal (prop top)
+ * @param overrideFlat       When true for a cell with hasOverride, render with flat (0,0,1) normal
+ * @param overrideNormals    Sampled surface normal used when hasOverride && !overrideFlat
  * @return                   Number of cells drawn
  */
 stock int GridRenderer_DrawCells(int client,
@@ -122,7 +123,8 @@ stock int GridRenderer_DrawCells(int client,
                                  int closestValidIdx,
                                  const float overridePositions[GRIDRENDERER_MAX_CELLS][3],
                                  const bool hasOverride[GRIDRENDERER_MAX_CELLS],
-                                 const bool overrideFlat[GRIDRENDERER_MAX_CELLS])
+                                 const bool overrideFlat[GRIDRENDERER_MAX_CELLS],
+                                 const float overrideNormals[GRIDRENDERER_MAX_CELLS][3])
 {
 	if (count <= 0)
 		return 0;
@@ -132,7 +134,8 @@ stock int GridRenderer_DrawCells(int client,
 
 	return GridRendererProp_DrawCells(client, cellIndices, cellValid,
 	                                  count, closestValidIdx,
-	                                  overridePositions, hasOverride, overrideFlat);
+	                                  overridePositions, hasOverride, overrideFlat,
+	                                  overrideNormals);
 }
 
 /**

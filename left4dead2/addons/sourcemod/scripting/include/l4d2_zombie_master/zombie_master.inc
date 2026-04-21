@@ -433,13 +433,18 @@ float  g_GridClosestValidPos[3];
 bool   g_GridHasValidCell;
 int    g_GridValidCellIdx;
 
-// Physics prop position overrides (runtime-adjusted positions on top of props).
-// g_GridOverrideFlat[i] = true when the override is onto a flat surface (prop top):
-// in that case the renderer uses (0,0,1) instead of the cell's ground-relative normal.
-// Hull-up rescues leave it false (ground normal still applies).
+// Runtime-adjusted cell positions written by Grid_TryRescueObstruction when a cell
+// has to spawn on top of a prop/entity instead of its native ground position.
+//   g_GridOverridePositions[i] - adjusted world position used for both spawn and render.
+//   g_GridHasOverride[i]       - true if the adjusted position is in use for this cell.
+//   g_GridOverrideFlat[i]      - true when the surface is within ~11 degrees of horizontal,
+//                                so the renderer should use (0,0,1). When false, the
+//                                renderer uses g_GridOverrideNormals[i].
+//   g_GridOverrideNormals[i]   - sampled surface normal (prop top plane) for tilted cells.
 float  g_GridOverridePositions[GRID_MAX_CELLS][3];
 bool   g_GridHasOverride[GRID_MAX_CELLS];
 bool   g_GridOverrideFlat[GRID_MAX_CELLS];
+float  g_GridOverrideNormals[GRID_MAX_CELLS][3];
 
 // Per-update timing accumulators (reset each tick, read by perf log)
 float  g_GridMs_obstruct;
@@ -1472,67 +1477,12 @@ stock bool IsObstructed(float pos[3], int entity = -1, bool debug=false, bool ig
 	return isObstructed;
 }
 
-// Check if a position is obstructed specifically by a physics prop.
-// If so, returns true and sets hitPropRef to the entity index.
-stock bool IsObstructedByPhysicsProp(float pos[3], int &hitPropRef = -1)
-{
-    Handle hullTrace = TR_TraceHullFilterEx(pos, pos, HULL_MINS, HULL_MAXS,
-                                            MASK_NPCSOLID, TraceFilter_Spawner, -1);
-    bool result = false;
-    if (TR_DidHit(hullTrace))
-    {
-        int hitEntity = TR_GetEntityIndex(hullTrace);
-        if (hitEntity > MaxClients && IsValidEntity(hitEntity))
-        {
-            static char className[32];
-            GetEntityClassname(hitEntity, className, sizeof(className));
-            if (strncmp(className, "prop_physics", 12) == 0 ||
-                StrEqual(className, "prop_car_alarm"))
-            {
-                hitPropRef = hitEntity;
-                result = true;
-            }
-        }
-    }
-    delete hullTrace;
-    return result;
-}
-
 // Trace filter that only hits a specific entity
-static int g_TraceFilter_TargetEntity = -1;
+int g_TraceFilter_TargetEntity = -1;
 
 bool TraceFilter_OnlyTargetEntity(int entity, int contentsMask)
 {
     return (entity == g_TraceFilter_TargetEntity);
-}
-
-// Find the top Z coordinate of a physics prop at a given XY position.
-// Traces downward from above to find the prop's top surface.
-stock float GetPhysicsPropTopZ(int entity, const float pos[3])
-{
-    float startPos[3], endPos[3];
-    startPos[0] = pos[0];
-    startPos[1] = pos[1];
-    startPos[2] = pos[2] + 200.0;
-    endPos[0] = pos[0];
-    endPos[1] = pos[1];
-    endPos[2] = pos[2] - 50.0;
-
-    g_TraceFilter_TargetEntity = entity;
-    Handle trace = TR_TraceRayFilterEx(startPos, endPos, MASK_NPCSOLID,
-                                       RayType_EndPoint, TraceFilter_OnlyTargetEntity);
-
-    float topZ = pos[2];
-    if (TR_DidHit(trace))
-    {
-        float hitPos[3];
-        TR_GetEndPosition(hitPos, trace);
-        topZ = hitPos[2];
-    }
-
-    delete trace;
-    g_TraceFilter_TargetEntity = -1;
-    return topZ;
 }
 
 // Attempt to rescue obstruction by moving vPos upwards.
