@@ -142,7 +142,8 @@ stock int GridRendererProp_DrawCells(int client,
                                      int closestValidIdx,
                                      const float overridePositions[GRIDRENDERER_MAX_CELLS][3],
                                      const bool hasOverride[GRIDRENDERER_MAX_CELLS],
-                                     const bool overrideFlat[GRIDRENDERER_MAX_CELLS])
+                                     const bool overrideFlat[GRIDRENDERER_MAX_CELLS],
+                                     const float overrideNormals[GRIDRENDERER_MAX_CELLS][3])
 {
 	if (!g_PropPool[client].initialized || !g_PropModelPrecached)
 		return 0;
@@ -179,7 +180,7 @@ stock int GridRendererProp_DrawCells(int client,
 		{
 			if (!cellHandled[i] && cellIndices[i] == ac)
 			{
-				// Match — keep this entity for this cell
+				// Match - keep this entity for this cell
 				entityKept[e] = true;
 				entityDataIdx[e] = i;
 				cellHandled[i] = true;
@@ -189,7 +190,7 @@ stock int GridRendererProp_DrawCells(int client,
 
 		if (!entityKept[e])
 		{
-			// Cell is gone — free this entity
+			// Cell is gone - free this entity
 			g_PropPool[client].assignedCell[e] = -1;
 		}
 	}
@@ -220,19 +221,24 @@ stock int GridRendererProp_DrawCells(int client,
 
 		if (GridLib_GetCellData(cellIndices[i], position, normal, navArea, obstructed))
 		{
-			// Apply physics prop position override
+			// Apply runtime rescue position override (prop top, etc.)
 			if (hasOverride[i])
 			{
 				position[0] = overridePositions[i][0];
 				position[1] = overridePositions[i][1];
 				position[2] = overridePositions[i][2];
 
-				// Prop-top overrides are flat regardless of ground slope underneath.
 				if (overrideFlat[i])
 				{
 					normal[0] = 0.0;
 					normal[1] = 0.0;
 					normal[2] = 1.0;
+				}
+				else
+				{
+					normal[0] = overrideNormals[i][0];
+					normal[1] = overrideNormals[i][1];
+					normal[2] = overrideNormals[i][2];
 				}
 			}
 
@@ -255,7 +261,7 @@ stock int GridRendererProp_DrawCells(int client,
 	{
 		int dataIdx = entityDataIdx[e];
 		if (dataIdx < 0)
-			continue;  // Unused — will be hidden in Phase 4
+			continue;  // Unused - will be hidden in Phase 4
 
 		// Update color (and ensure visible)
 		int color[4];
@@ -265,7 +271,7 @@ stock int GridRendererProp_DrawCells(int client,
 
 		bool glowThis = isClosest && cellValid[dataIdx] && g_iSpawnerMode==2;
 
-		// If this cell has a physics prop override, teleport to the adjusted position
+		// If this cell has a rescue position override, teleport to the adjusted position
 		if (hasOverride[dataIdx])
 		{
 			float position[3], normal[3];
@@ -277,12 +283,17 @@ stock int GridRendererProp_DrawCells(int client,
 				position[1] = overridePositions[dataIdx][1];
 				position[2] = overridePositions[dataIdx][2];
 
-				// Prop-top overrides are flat regardless of ground slope underneath.
 				if (overrideFlat[dataIdx])
 				{
 					normal[0] = 0.0;
 					normal[1] = 0.0;
 					normal[2] = 1.0;
+				}
+				else
+				{
+					normal[0] = overrideNormals[dataIdx][0];
+					normal[1] = overrideNormals[dataIdx][1];
+					normal[2] = overrideNormals[dataIdx][2];
 				}
 
 				float angles[3];
