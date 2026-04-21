@@ -1261,58 +1261,6 @@ stock void GridLib_Cleanup()
 	Log_Info(GRIDLIB_LOG_CHANNEL, "Cleaned up");
 }
 
-/**
- * Helper: Calculate surface vectors from normal (for rendering)
- * Used to rotate cell rectangles to match surface orientation
- */
-stock void GridLib_CalculateSurfaceVectors(const float normal[3], float right[3], float up[3])
-{
-	// Choose a reference vector that's not parallel to the normal
-	float reference[3];
-
-	// If normal is mostly pointing up/down, use world forward (Y-axis)
-	if (FloatAbs(normal[2]) > 0.9)
-	{
-		reference[0] = 0.0;
-		reference[1] = 1.0;
-		reference[2] = 0.0;
-	}
-	else
-	{
-		// Otherwise use world up (Z-axis)
-		reference[0] = 0.0;
-		reference[1] = 0.0;
-		reference[2] = 1.0;
-	}
-
-	// Calculate right vector: cross(reference, normal)
-	right[0] = reference[1] * normal[2] - reference[2] * normal[1];
-	right[1] = reference[2] * normal[0] - reference[0] * normal[2];
-	right[2] = reference[0] * normal[1] - reference[1] * normal[0];
-
-	// Normalize right vector
-	float rightLen = SquareRoot(right[0]*right[0] + right[1]*right[1] + right[2]*right[2]);
-	if (rightLen > 0.0001)
-	{
-		right[0] /= rightLen;
-		right[1] /= rightLen;
-		right[2] /= rightLen;
-	}
-
-	// Calculate up vector: cross(normal, right)
-	up[0] = normal[1] * right[2] - normal[2] * right[1];
-	up[1] = normal[2] * right[0] - normal[0] * right[2];
-	up[2] = normal[0] * right[1] - normal[1] * right[0];
-
-	// Normalize up vector
-	float upLen = SquareRoot(up[0]*up[0] + up[1]*up[1] + up[2]*up[2]);
-	if (upLen > 0.0001)
-	{
-		up[0] /= upLen;
-		up[1] /= upLen;
-		up[2] /= upLen;
-	}
-}
 
 /**
  * Run bounded Dijkstra from one nav area, writing reachable (target, pathDist) pairs
