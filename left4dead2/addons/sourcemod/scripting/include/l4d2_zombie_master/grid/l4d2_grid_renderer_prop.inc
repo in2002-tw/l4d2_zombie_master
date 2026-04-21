@@ -141,7 +141,8 @@ stock int GridRendererProp_DrawCells(int client,
                                      int count,
                                      int closestValidIdx,
                                      const float overridePositions[GRIDRENDERER_MAX_CELLS][3],
-                                     const bool hasOverride[GRIDRENDERER_MAX_CELLS])
+                                     const bool hasOverride[GRIDRENDERER_MAX_CELLS],
+                                     const bool overrideFlat[GRIDRENDERER_MAX_CELLS])
 {
 	if (!g_PropPool[client].initialized || !g_PropModelPrecached)
 		return 0;
@@ -225,6 +226,14 @@ stock int GridRendererProp_DrawCells(int client,
 				position[0] = overridePositions[i][0];
 				position[1] = overridePositions[i][1];
 				position[2] = overridePositions[i][2];
+
+				// Prop-top overrides are flat regardless of ground slope underneath.
+				if (overrideFlat[i])
+				{
+					normal[0] = 0.0;
+					normal[1] = 0.0;
+					normal[2] = 1.0;
+				}
 			}
 
 			int color[4];
@@ -267,6 +276,14 @@ stock int GridRendererProp_DrawCells(int client,
 				position[0] = overridePositions[dataIdx][0];
 				position[1] = overridePositions[dataIdx][1];
 				position[2] = overridePositions[dataIdx][2];
+
+				// Prop-top overrides are flat regardless of ground slope underneath.
+				if (overrideFlat[dataIdx])
+				{
+					normal[0] = 0.0;
+					normal[1] = 0.0;
+					normal[2] = 1.0;
+				}
 
 				float angles[3];
 				GridRendererProp_NormalToAngles(normal, angles);
@@ -545,32 +562,23 @@ void GridRendererProp_HideAll(int client)
 // ============================================================================
 
 /**
- * Convert a surface normal vector to Euler angles for entity orientation
+ * Convert a surface normal vector to Euler angles for entity orientation.
  *
- * @param normal    Surface normal vector
- * @param angles    Output: Pitch, Yaw, Roll angles
+ * @param normal    Surface normal vector (unit length)
+ * @param angles    Output: Pitch, Yaw, Roll angles in degrees
  */
 static void GridRendererProp_NormalToAngles(const float normal[3], float angles[3])
 {
-	// The model is a flat quad on the XY plane with +Z as its face normal.
-	// We want to rotate it so the model's +Z aligns with the surface normal.
+	float ny = normal[1];
+	if (ny > 0.99)  ny = 0.99;
+	if (ny < -0.99) ny = -0.99;
 
-	float horizontalLength = SquareRoot(normal[0] * normal[0] + normal[1] * normal[1]);
-	float pitch = RadToDeg(ArcTangent2(horizontalLength, normal[2]));
-
-	float yaw;
-	if (horizontalLength > 0.001)
-	{
-		yaw = RadToDeg(ArcTangent2(normal[1], normal[0]));
-	}
-	else
-	{
-		yaw = 0.0;
-	}
+	float pitch = RadToDeg(ArcTangent2(normal[0], normal[2]));
+	float roll  = -RadToDeg(ArcSine(ny));
 
 	angles[0] = pitch;
-	angles[1] = yaw;
-	angles[2] = 0.0;
+	angles[1] = 0.0;
+	angles[2] = roll;
 }
 
 // ============================================================================

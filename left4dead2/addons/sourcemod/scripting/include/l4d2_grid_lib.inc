@@ -1261,58 +1261,6 @@ stock void GridLib_Cleanup()
 	Log_Info(GRIDLIB_LOG_CHANNEL, "Cleaned up");
 }
 
-/**
- * Helper: Calculate surface vectors from normal (for rendering)
- * Used to rotate cell rectangles to match surface orientation
- */
-stock void GridLib_CalculateSurfaceVectors(const float normal[3], float right[3], float up[3])
-{
-	// Choose a reference vector that's not parallel to the normal
-	float reference[3];
-
-	// If normal is mostly pointing up/down, use world forward (Y-axis)
-	if (FloatAbs(normal[2]) > 0.9)
-	{
-		reference[0] = 0.0;
-		reference[1] = 1.0;
-		reference[2] = 0.0;
-	}
-	else
-	{
-		// Otherwise use world up (Z-axis)
-		reference[0] = 0.0;
-		reference[1] = 0.0;
-		reference[2] = 1.0;
-	}
-
-	// Calculate right vector: cross(reference, normal)
-	right[0] = reference[1] * normal[2] - reference[2] * normal[1];
-	right[1] = reference[2] * normal[0] - reference[0] * normal[2];
-	right[2] = reference[0] * normal[1] - reference[1] * normal[0];
-
-	// Normalize right vector
-	float rightLen = SquareRoot(right[0]*right[0] + right[1]*right[1] + right[2]*right[2]);
-	if (rightLen > 0.0001)
-	{
-		right[0] /= rightLen;
-		right[1] /= rightLen;
-		right[2] /= rightLen;
-	}
-
-	// Calculate up vector: cross(normal, right)
-	up[0] = normal[1] * right[2] - normal[2] * right[1];
-	up[1] = normal[2] * right[0] - normal[0] * right[2];
-	up[2] = normal[0] * right[1] - normal[1] * right[0];
-
-	// Normalize up vector
-	float upLen = SquareRoot(up[0]*up[0] + up[1]*up[1] + up[2]*up[2]);
-	if (upLen > 0.0001)
-	{
-		up[0] /= upLen;
-		up[1] /= upLen;
-		up[2] /= upLen;
-	}
-}
 
 /**
  * Run bounded Dijkstra from one nav area, writing reachable (target, pathDist) pairs
@@ -1655,6 +1603,15 @@ static void GridLib_ComputeSlopeNormal(const float navSize[3], float slopeNormal
 	float slopeLen = slopeAlongX ? navSize[0] : navSize[1];
 	float dZ = navSize[2];
 
+	// Degenerate nav area (zero horizontal extent): fall back to world-up.
+	if (slopeLen < 0.001)
+	{
+		slopeNormal[0] = 0.0;
+		slopeNormal[1] = 0.0;
+		slopeNormal[2] = 1.0;
+		return;
+	}
+
 	if (slopeAlongX)
 	{
 		slopeNormal[0] = -dZ;
@@ -1678,13 +1635,7 @@ static void GridLib_ComputeSlopeNormal(const float navSize[3], float slopeNormal
 		slopeNormal[2] /= len;
 	}
 
-	// Ensure normal points upward
-	if (slopeNormal[2] < 0.0)
-	{
-		slopeNormal[0] = -slopeNormal[0];
-		slopeNormal[1] = -slopeNormal[1];
-		slopeNormal[2] = -slopeNormal[2];
-	}
+	// slopeNormal[2] = slopeLen / len > 0 by construction, so no upward-flip needed.
 }
 
 /**
@@ -1698,6 +1649,97 @@ static float GridLib_ComputeSlopeHullLift(const float navSize[3])
 	if (slopeAxisLen > 0.0)
 		return FloatAbs(navSize[2]) / slopeAxisLen * 16.0;
 	return 0.0;
+}
+
+/**
+ * Z-trace downward at (x, y) within [zBottom, zTop] and return the hit Z.
+ * Returns false if no ground is hit.
+ */
+static bool GridLib_SampleCornerZ(float x, float y, float zTop, float zBottom, float &outZ)
+{
+	float start[3], end[3];
+	start[0] = x; start[1] = y; start[2] = zTop;
+	end[0]   = x; end[1]   = y; end[2]   = zBottom;
+
+	Handle trace = TR_TraceRayFilterEx(start, end, MASK_NPCSOLID,
+	                                   RayType_EndPoint, GridLib_TraceFilter_NoPlayersNoPhysicsProps);
+
+	bool ok = false;
+	if (TR_DidHit(trace) && !TR_StartSolid(trace))
+	{
+		float hitPos[3];
+		TR_GetEndPosition(hitPos, trace);
+		outZ = hitPos[2];
+		ok = true;
+	}
+	delete trace;
+	return ok;
+}
+
+/**
+ * Compute the slope normal from real corner Z samples. Samples Z at the four
+ * inset corners of the nav area; derives the plane normal from the XY gradient.
+ * Falls back to GridLib_ComputeSlopeNormal(navSize, ...) if any sample missed.
+ *
+ * Inset (8 units) keeps the traces off the nav boundary where adjacent-area
+ * geometry can cause spurious hits.
+ */
+static void GridLib_SlopeNormalFromCorners(const float navPos[3], const float navSize[3],
+                                            float zTop, float zBottom,
+                                            float slopeNormal[3])
+{
+	float inset = 8.0;
+	float x0 = navPos[0] + inset;
+	float x1 = navPos[0] + navSize[0] - inset;
+	float y0 = navPos[1] + inset;
+	float y1 = navPos[1] + navSize[1] - inset;
+
+	// Degenerate (very small) nav area: fall back.
+	if (x1 - x0 < 1.0 || y1 - y0 < 1.0)
+	{
+		GridLib_ComputeSlopeNormal(navSize, slopeNormal);
+		return;
+	}
+
+	float nwZ, neZ, swZ, seZ;
+	bool ok =  GridLib_SampleCornerZ(x0, y0, zTop, zBottom, nwZ);
+	ok = ok && GridLib_SampleCornerZ(x1, y0, zTop, zBottom, neZ);
+	ok = ok && GridLib_SampleCornerZ(x0, y1, zTop, zBottom, swZ);
+	ok = ok && GridLib_SampleCornerZ(x1, y1, zTop, zBottom, seZ);
+
+	if (!ok)
+	{
+		GridLib_ComputeSlopeNormal(navSize, slopeNormal);
+		return;
+	}
+
+	// Average Z gradient along each axis (uses both edge pairs, robust to
+	// non-planar quads where all four corners aren't coplanar).
+	float dzX = ((neZ - nwZ) + (seZ - swZ)) * 0.5;
+	float dzY = ((swZ - nwZ) + (seZ - neZ)) * 0.5;
+	float dx = x1 - x0;
+	float dy = y1 - y0;
+
+	// Plane normal from gradient: n = (-dz/dx, -dz/dy, 1), then normalize.
+	slopeNormal[0] = -dzX / dx;
+	slopeNormal[1] = -dzY / dy;
+	slopeNormal[2] = 1.0;
+
+	float len = SquareRoot(slopeNormal[0]*slopeNormal[0] +
+	                       slopeNormal[1]*slopeNormal[1] +
+	                       slopeNormal[2]*slopeNormal[2]);
+	if (len > 0.001)
+	{
+		slopeNormal[0] /= len;
+		slopeNormal[1] /= len;
+		slopeNormal[2] /= len;
+	}
+	else
+	{
+		slopeNormal[0] = 0.0;
+		slopeNormal[1] = 0.0;
+		slopeNormal[2] = 1.0;
+	}
 }
 
 /**
@@ -1893,22 +1935,22 @@ static int GridLib_SubdivideNavArea(Address navArea, int &excludedCount)
 	float spacingX = navSize[0] / float(cellsX);
 	float spacingY = navSize[1] / float(cellsY);
 
-	// Slope properties
-	bool isSloped = (FloatAbs(navSize[2]) > 8.0);
-	float slopeNormal[3] = {0.0, 0.0, 1.0};
-	float slopeHullLift = 0.0;
-	if (isSloped)
-	{
-		GridLib_ComputeSlopeNormal(navSize, slopeNormal);
-		slopeHullLift = GridLib_ComputeSlopeHullLift(navSize);
-	}
-
 	// Z trace band setup
 	float zMin = navPos[2];
 	float zMax = navPos[2] + navSize[2];
 	if (zMin > zMax) { float tmp = zMin; zMin = zMax; zMax = tmp; }
 	float zTop = zMax + 20.0;
 	float bandHeight = (zTop - (zMin - 20.0)) / 4.0;
+
+	// Slope properties
+	bool isSloped = (FloatAbs(navSize[2]) > 8.0);
+	float slopeNormal[3] = {0.0, 0.0, 1.0};
+	float slopeHullLift = 0.0;
+	if (isSloped)
+	{
+		GridLib_SlopeNormalFromCorners(navPos, navSize, zTop, zMin - 20.0, slopeNormal);
+		slopeHullLift = GridLib_ComputeSlopeHullLift(navSize);
+	}
 
 	int cellsCreated = 0;
 	int cellsAttempted = 0;
