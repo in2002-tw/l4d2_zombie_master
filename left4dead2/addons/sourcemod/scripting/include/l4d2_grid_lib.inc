@@ -1596,12 +1596,26 @@ static void GridLib_InitializeSpatialHash()
 /**
  * Compute the overall slope normal for a sloped nav area (stairs, ramps).
  * Individual step treads are flat (0,0,1) but we want the overall slope angle.
+ *
+ * Fallback path: assumes the slope is axis-aligned along the longer horizontal
+ * axis of the nav area. For axis-aligned stairs this is correct; for slopes
+ * along the shorter axis it may point the wrong way. See GridLib_SlopeNormalFromCorners
+ * for the corner-sampled fix.
  */
 static void GridLib_ComputeSlopeNormal(const float navSize[3], float slopeNormal[3])
 {
 	bool slopeAlongX = (navSize[0] >= navSize[1]);
 	float slopeLen = slopeAlongX ? navSize[0] : navSize[1];
 	float dZ = navSize[2];
+
+	// Degenerate nav area (zero horizontal extent): fall back to world-up.
+	if (slopeLen < 0.001)
+	{
+		slopeNormal[0] = 0.0;
+		slopeNormal[1] = 0.0;
+		slopeNormal[2] = 1.0;
+		return;
+	}
 
 	if (slopeAlongX)
 	{
@@ -1626,13 +1640,7 @@ static void GridLib_ComputeSlopeNormal(const float navSize[3], float slopeNormal
 		slopeNormal[2] /= len;
 	}
 
-	// Ensure normal points upward
-	if (slopeNormal[2] < 0.0)
-	{
-		slopeNormal[0] = -slopeNormal[0];
-		slopeNormal[1] = -slopeNormal[1];
-		slopeNormal[2] = -slopeNormal[2];
-	}
+	// slopeNormal[2] = slopeLen / len > 0 by construction, so no upward-flip needed.
 }
 
 /**
