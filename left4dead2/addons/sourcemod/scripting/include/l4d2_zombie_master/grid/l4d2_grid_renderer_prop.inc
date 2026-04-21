@@ -563,28 +563,22 @@ void GridRendererProp_HideAll(int client)
 
 /**
  * Convert a surface normal vector to Euler angles for entity orientation.
-  *
+ *
  * @param normal    Surface normal vector (unit length)
  * @param angles    Output: Pitch, Yaw, Roll angles in degrees
  */
 static void GridRendererProp_NormalToAngles(const float normal[3], float angles[3])
 {
-	float horizontalLength = SquareRoot(normal[0] * normal[0] + normal[1] * normal[1]);
-	float pitch = RadToDeg(ArcTangent2(horizontalLength, normal[2]));
+	float ny = normal[1];
+	if (ny > 0.99)  ny = 0.99;
+	if (ny < -0.99) ny = -0.99;
 
-	float yaw;
-	if (horizontalLength > 0.001)
-	{
-		yaw = RadToDeg(ArcTangent2(normal[1], normal[0]));
-	}
-	else
-	{
-		yaw = 0.0;
-	}
+	float pitch = RadToDeg(ArcTangent2(normal[0], normal[2]));
+	float roll  = -RadToDeg(ArcSine(ny));
 
 	angles[0] = pitch;
-	angles[1] = yaw;
-	angles[2] = 0.0;
+	angles[1] = 0.0;
+	angles[2] = roll;
 }
 
 // ============================================================================
