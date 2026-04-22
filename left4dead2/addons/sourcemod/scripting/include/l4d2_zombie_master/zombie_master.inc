@@ -399,6 +399,7 @@ char   g_BatchSurvivorPVS[MAXPLAYERS+1][PVS_BUFFER_SIZE];
 int    g_BatchSurvivorCluster[MAXPLAYERS+1]; // survivor eye leaf cluster, -1 if invalid
 int    g_iBatchSurvivorClients[MAXPLAYERS+1];
 float  g_fBatchSurvivorPos[MAXPLAYERS+1][3];
+float  g_fBatchSurvivorEyePos[MAXPLAYERS+1][3];
 float  g_fBatchTime;
 float   g_CachedSurvFlow[MAXPLAYERS+1];
 Address g_CachedSurvNavArea[MAXPLAYERS+1];

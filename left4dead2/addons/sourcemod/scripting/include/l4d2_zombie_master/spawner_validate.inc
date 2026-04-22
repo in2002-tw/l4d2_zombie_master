@@ -26,7 +26,6 @@ void Spawner_CacheSurvivorData()
 	g_bBatchPVSActive = false;
 	g_bBatchActive = false;
 	g_iBatchSurvivorCount = 0;
-	static float eyePos[3];
 	int cluster;
 	for (int i = 1; i <= MaxClients; i++)
 	{
@@ -34,10 +33,10 @@ void Spawner_CacheSurvivorData()
 			continue;
 		GetClientAbsOrigin(i, g_fBatchSurvivorPos[g_iBatchSurvivorCount]);
 		g_CachedSurvFlow[g_iBatchSurvivorCount] = L4D2Direct_GetFlowDistance(i);
+		GetClientEyePosition(i,g_fBatchSurvivorEyePos[g_iBatchSurvivorCount]);
 		if (hCheckOriginInPVS!=null)
 		{
-    		GetClientEyePosition(i, eyePos);
-    		cluster = PVS_GetClusterForOrigin(eyePos);
+    		cluster = PVS_GetClusterForOrigin(g_fBatchSurvivorEyePos[g_iBatchSurvivorCount]);
     		g_BatchSurvivorCluster[g_iBatchSurvivorCount] = cluster;
     		if (cluster<0)
     		{
@@ -148,6 +147,10 @@ bool any_alive_survivors_in_radius(float vecPos[3], float radius)
     }
 }
 
+#define LOS_TESTPOINTS 2
+//const int TR_MASK_LOS = CONTENTS_OPAQUE;
+const int TR_MASK_LOS = MASK_VISIBLE;
+
 /**
  * Check if any alive survivor (or the saferoom door) can see a position.
  * Uses 2 test points at hull mid-height and top.
@@ -163,111 +166,146 @@ bool any_alive_survivors_in_radius(float vecPos[3], float radius)
  */
 bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Address cellNavArea = Address_Null)
 {
-   if (DEBUG) LogMessage("[zm] can_any_alive_survivor_see_cheap");
+    if (DEBUG) LogMessage("[zm] can_any_alive_survivor_see_cheap");
+    
+    if (l4dhooks_updated && !any_alive_survivors_in_radius(vecPos,fog_distance))
+    {
+        g_LosN_fog++;
+        return false; // very fast early exit when no survivor within fog radius
+    }
+    
+    // Nav-area visibility pre-reject: if the director's recent-visibility list for the survivor team
+    // does not include this area, no survivor has marked it as seeable.
+    if (!NavArea_IsPotentiallyVisibleToTeam(cellNavArea, TEAM_SURVIVOR))
+    {
+        g_LosN_nav_rej++;
+        return false;
+    }
+    
+    // 2 test points: mid-height hull center (most likely hit), top hull center
+    static float testPoints[LOS_TESTPOINTS][3];
+    testPoints[0] = vecPos; testPoints[0][2] += HULL_DZ;
+    testPoints[1] = vecPos; testPoints[1][2] += HULL_DDZ;
+    
+    Spawner_CacheSurvivorData(); // optimization - load survivor data or read cached values
+    bool use_PVS = Is_PVS_Valid();
+    int i;
+    for (int s = 0; s < g_iBatchSurvivorCount; s++)
+    {
+        if (GetVectorDistance(g_fBatchSurvivorPos[s],vecPos,true) >= fog_distance_sq) continue;
+    
+        // l4dhooks does not validate client indices; gate before PVS_Check to skip that native call on stale slots
+        if (!IsValidClient(g_iBatchSurvivorClients[s])) continue;
+    
+        if (use_PVS)
+        {
+            // Same-cluster shortcut: two points in one leaf cluster are trivially mutually visible via PVS.
+            // Skip any per-pair visibility check and go straight to the trace.
+            bool sameCluster = use_PVS && (cellCluster >= 0 && cellCluster == g_BatchSurvivorCluster[s]);
+            if (sameCluster) g_LosN_shortcut++;
+            // per-area-pair bitset lookup. Engine's own fast path.
+            // Falls back to legacy per-survivor PVS byte-buffer check when:
+            //  - SDKCall not bound (Microslop windows))
+            //  - cell or survivor nav area is null
+            bool pairChecked = false;
+            bool pairVisible = true;
+            if (hNavIsPotentiallyVisible != null
+                && cellNavArea != Address_Null && g_CachedSurvNavArea[s] != Address_Null)
+            {
+                pairChecked = true;
+                pairVisible = NavArea_IsPotentiallyVisible(cellNavArea, g_CachedSurvNavArea[s], false);
+            }
+    
+            if (pairChecked)
+            {
+                if (!pairVisible)
+                {
+                    g_LosN_pvs_rej++;
+                    if (DEBUG_SPAWNER) LogMessage("nav-pair pre-filter %d skipping raytraces", s);
+                    continue;
+                }
+            }
+            else
+            {
+                // Legacy per-survivor PVS byte-buffer check
+                if (!g_BatchSurvivorValidPVS[s] || !PVS_CheckOriginInPVS(vecPos, g_BatchSurvivorPVS[s]))
+                {
+                    g_LosN_pvs_rej++;
+                    if (DEBUG_SPAWNER) LogMessage("PVS pre-filter %d skipping raytraces", s);
+                    continue;
+                }
+            }
+        }
+        
+        for (i = 0; i < LOS_TESTPOINTS; i++)
+        {
+            TR_TraceRayFilter(g_fBatchSurvivorEyePos[s],testPoints[i],TR_MASK_LOS,RayType_EndPoint,FilterLOS,g_iBatchSurvivorClients[s]);
+            if (!TR_DidHit(INVALID_HANDLE))
+            {
+                g_LosN_trace_hit++;
+                return true;
+            }
+        }
+    }
+    
+    // Fallback before round start: check saferoom door to prevent ZM abusing survivors not looking out door.
+    if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor))
+    {
+        static float saferoom_pos[3];
+        L4D_GetEntityWorldSpaceCenter(g_iLockedDoor,saferoom_pos);
+        if (GetVectorDistance(saferoom_pos,vecPos,true) <= fog_distance_sq)
+        {
+            int door = EntRefToEntIndex(g_iLockedDoor);
+            for (i = 0; i < LOS_TESTPOINTS; i++)
+            {
+                TR_TraceRayFilter(saferoom_pos,testPoints[i],TR_MASK_LOS,RayType_EndPoint,FilterLOS,door);
+                if (!TR_DidHit(INVALID_HANDLE))
+                {
+                    g_LosN_safe_hit++;
+                    return true;
+                }
+            }
+        }
+    }
+    
+    g_LosN_clear++;
+    return false;
+}
 
-   if (l4dhooks_updated && !any_alive_survivors_in_radius(vecPos,fog_distance))
-   {
-       g_LosN_fog++;
-       return false; // very fast early exit when no survivor within fog radius
-   }
-
-   // Nav-area visibility pre-reject: if the director's recent-visibility list for the survivor team
-   // does not include this area, no survivor has marked it as seeable.
-   if (!NavArea_IsPotentiallyVisibleToTeam(cellNavArea, TEAM_SURVIVOR))
-   {
-       g_LosN_nav_rej++;
-       return false;
-   }
-
-   // 2 test points: mid-height hull center (most likely hit), top hull center
-   static float testPoints[2][3];
-   testPoints[0] = vecPos; testPoints[0][2] += HULL_DZ;
-   testPoints[1] = vecPos; testPoints[1][2] += HULL_DDZ;
-
-   Spawner_CacheSurvivorData();
-   if (Is_PVS_Valid())
-   {
-       for (int s = 0; s < g_iBatchSurvivorCount; s++)
-       {
-           if (GetVectorDistance(g_fBatchSurvivorPos[s],vecPos,true) >= fog_distance_sq) continue;
-
-           // l4dhooks does not validate client indices; gate before PVS_Check to skip that native call on stale slots
-           if (!IsValidClient(g_iBatchSurvivorClients[s])) continue;
-
-           // Same-cluster shortcut: two points in one leaf cluster are trivially mutually visible via PVS.
-           // Skip any per-pair visibility check and go straight to the trace.
-           bool sameCluster = (cellCluster >= 0 && cellCluster == g_BatchSurvivorCluster[s]);
-           if (sameCluster) g_LosN_shortcut++;
-           else
-           {
-               // per-area-pair bitset lookup. Engine's own fast path.
-               // Falls back to legacy per-survivor PVS byte-buffer check when:
-               //  - SDKCall not bound (Microslop windows))
-               //  - cell or survivor nav area is null
-               bool pairChecked = false;
-               bool pairVisible = true;
-               if (hNavIsPotentiallyVisible != null
-                   && cellNavArea != Address_Null && g_CachedSurvNavArea[s] != Address_Null)
-               {
-                   pairChecked = true;
-                   pairVisible = NavArea_IsPotentiallyVisible(cellNavArea, g_CachedSurvNavArea[s], false);
-               }
-
-               if (pairChecked)
-               {
-                   if (!pairVisible)
-                   {
-                       g_LosN_pvs_rej++;
-                       if (DEBUG_SPAWNER) LogMessage("nav-pair pre-filter %d skipping raytraces", s);
-                       continue;
-                   }
-               }
-               else
-               {
-                   // Legacy per-survivor PVS byte-buffer check
-                   if (!g_BatchSurvivorValidPVS[s] || !PVS_CheckOriginInPVS(vecPos, g_BatchSurvivorPVS[s]))
-                   {
-                       g_LosN_pvs_rej++;
-                       if (DEBUG_SPAWNER) LogMessage("PVS pre-filter %d skipping raytraces", s);
-                       continue;
-                   }
-               }
-           }
-           if (L4D2_IsVisibleToPlayer(g_iBatchSurvivorClients[s],TEAM_SURVIVOR,3,0,testPoints[0])) { g_LosN_trace_hit++; return true; }
-           if (L4D2_IsVisibleToPlayer(g_iBatchSurvivorClients[s],TEAM_SURVIVOR,3,0,testPoints[1])) { g_LosN_trace_hit++; return true; }
-       }
-   }
-   else
-   {
-       // Fallback (no PVS native): single-pass distance + visibility over alive survivors
-       float pos[3];
-       for (int i = 1; i <= MaxClients; i++)
-       {
-           if (!IsClientInGame(i) || GetClientTeam(i) != TEAM_SURVIVOR || !IsPlayerAlive(i)) continue;
-           GetClientAbsOrigin(i, pos);
-           if (GetVectorDistance(pos, vecPos, true) >= fog_distance_sq) continue;
-           if (L4D2_IsVisibleToPlayer(i, TEAM_SURVIVOR, 3, 0, testPoints[0])) { g_LosN_trace_hit++; return true; }
-           if (L4D2_IsVisibleToPlayer(i, TEAM_SURVIVOR, 3, 0, testPoints[1])) { g_LosN_trace_hit++; return true; }
-       }
-   }
-
-   // Saferoom door fallback: only after no survivor saw directly.
-   if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor))
-   {
-       static float saferoom_pos[3];
-       L4D_GetEntityWorldSpaceCenter(g_iLockedDoor,saferoom_pos);
-       if (GetVectorDistance(saferoom_pos,vecPos,true) <= fog_distance_sq)
-       {
-           int door = EntRefToEntIndex(g_iLockedDoor);
-           TR_TraceRayFilter(testPoints[0],saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,door);
-           if (!TR_DidHit()) { g_LosN_safe_hit++; return true; }
-           TR_TraceRayFilter(testPoints[1],saferoom_pos,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,door);
-           if (!TR_DidHit()) { g_LosN_safe_hit++; return true; }
-       }
-   }
-
-   g_LosN_clear++;
-   return false;
+// Entity filter for LOS checks. Ignore players, infected, witches, and everything else that is see-through (transparent).
+stock bool FilterLOS(int entity, int mask, int self = -1)
+{
+	if (entity==self) return false;
+	if (entity==0) return true;
+	if (IsValidClient(entity)) return false;
+	static char class[16];
+	GetEntityClassname(entity,class,sizeof(class));
+	switch (class[0])
+	{
+    	case 'i':
+    	{
+        	if (strncmp(class,"infected",8,false)==0) return false;
+    	}
+    	case 'w':
+    	{
+        	if (strncmp(class,"witch",5,false)==0) return false;
+    	}
+    	case 'e':
+    	{
+        	if (strncmp(class,"env_",4,false)==0) return false;
+        	if (strncmp(class,"entity_blocker",14,false)==0) return false;
+    	}
+    	case 'f':
+    	{
+        	if (strncmp(class,"func",4,false)==0) return false;
+    	}
+    	case 's':
+    	{
+        	if (strncmp(class,"script_clip",11,false)==0) return false;
+    	}
+	}
+	//if (DEBUG_SPAWNER) LogMessage("FilterLOS %d hit %d %s", self, entity, class);
+	return true;
 }
 
 // Should we exit min_distance_to_survivors early?

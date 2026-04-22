@@ -1387,8 +1387,8 @@ static Action GridLib_Timer_PrecomputeNavReach(Handle timer)
 	if (g_NavReachCursor >= g_NavReachPending.Length)
 	{
 		g_NavReachReady = true;
-		Log_Info(GRIDLIB_LOG_CHANNEL, "Nav reach precompute complete: %d source areas (D_max=%.0f)",
-			g_NavReachCursor, GRIDLIB_NAV_REACH_MAX);
+		Log_Info(GRIDLIB_LOG_CHANNEL, "Nav reach precompute complete: %d source areas (D_max=%.0f), took %f ms",
+			g_NavReachCursor, GRIDLIB_NAV_REACH_MAX, (GetEngineTime()-t_start)*1000.0);
 		delete g_NavReachPending;
 		g_NavReachPending = null;
 		g_NavReachCursor = 0;
