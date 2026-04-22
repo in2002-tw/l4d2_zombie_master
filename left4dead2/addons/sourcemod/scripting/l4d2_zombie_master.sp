@@ -225,7 +225,7 @@ public void OnPluginStart()
     g_hLosTestpoints = CreateConVar("zm_los_testpoints", "3", "Number of LOS raytrace samples per survivor per spawner check (1-6). More = fairer LOS, higher cost.",FCVAR_PROTECTED, true, 1.0, true, 6.0);
     g_hLosTestpoints.AddChangeHook(ConVarChanged_Cvars);
 
-    g_hLosFilterFallback = CreateConVar("zm_los_filter_fallback", "1", "If 1, when the cheap LOS trace hits an entity (not world), re-run a filtered trace to ignore glass props / non-solid func_brush. 0 = accept cheaper but slightly conservative spawns.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
+    g_hLosFilterFallback = CreateConVar("zm_los_filter_fallback", "0", "If 1, when the cheap LOS trace hits an entity (not world), re-run a filtered trace to ignore glass props / non-solid func_brush. 0 = accept cheaper but slightly conservative spawns (default).",FCVAR_PROTECTED, true, 0.0, true, 1.0);
     g_hLosFilterFallback.AddChangeHook(ConVarChanged_Cvars);
 
     g_hSpawnerMode = CreateConVar("zm_spawner_mode", "1", "Default spawner mode. 0 = analog(3 rings), 1 = analog+grid, 2 = grid.",FCVAR_PROTECTED, true, 0.0, true, 2.0);

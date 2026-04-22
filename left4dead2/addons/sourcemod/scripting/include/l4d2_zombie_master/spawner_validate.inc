@@ -256,13 +256,34 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
     Spawner_CacheSurvivorData(); // optimization - load survivor data or read cached values
     bool use_PVS = Is_PVS_Valid();
     int i;
+    float t_surv = GetEngineTime();
+
+    // Build per-cell survivor iteration order: closest-first maximises the chance of
+    // early-exiting on the first visible trace. Fog-distance and valid-client gates
+    // are applied up-front so the hot loop below deals only with candidates.
+    static int   surv_order[MAXPLAYERS+1];
+    static float surv_distsq[MAXPLAYERS+1];
+    int surv_n = 0;
     for (int s = 0; s < g_iBatchSurvivorCount; s++)
     {
-        if (GetVectorDistance(g_fBatchSurvivorPos[s],vecPos,true) >= fog_distance_sq) continue;
-    
-        // l4dhooks does not validate client indices; gate before PVS_Check to skip that native call on stale slots
+        float dsq = GetVectorDistance(g_fBatchSurvivorPos[s], vecPos, true);
+        if (dsq >= fog_distance_sq) continue;
         if (!IsValidClient(g_iBatchSurvivorClients[s])) continue;
-    
+        int j = surv_n - 1;
+        while (j >= 0 && surv_distsq[j] > dsq)
+        {
+            surv_order[j+1]  = surv_order[j];
+            surv_distsq[j+1] = surv_distsq[j];
+            j--;
+        }
+        surv_order[j+1]  = s;
+        surv_distsq[j+1] = dsq;
+        surv_n++;
+    }
+
+    for (int o = 0; o < surv_n; o++)
+    {
+        int s = surv_order[o];
         if (use_PVS)
         {
             // Same-cluster shortcut: two points in one leaf cluster are trivially mutually visible via PVS.
@@ -306,14 +327,17 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         for (i = 0; i < g_iLosTestpoints; i++)
         {
             TR_TraceRay(g_fBatchSurvivorEyePos[s], testPoints[i], TR_MASK_LOS, RayType_EndPoint);
+            g_LosN_surv_trace++;
             if (!los_blocked(g_fBatchSurvivorEyePos[s], testPoints[i], g_iBatchSurvivorClients[s]))
             {
                 g_LosN_trace_hit++;
+                g_LosMs_surv += (GetEngineTime() - t_surv) * 1000.0;
                 return true;
             }
         }
     }
-    
+    g_LosMs_surv += (GetEngineTime() - t_surv) * 1000.0;
+
     // Fallback before round start: check saferoom door to prevent ZM abusing survivors not looking out door.
     if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor))
     {
@@ -321,19 +345,24 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         L4D_GetEntityWorldSpaceCenter(g_iLockedDoor,saferoom_pos);
         if (GetVectorDistance(saferoom_pos,vecPos,true) <= fog_distance_sq)
         {
+            float t_safe = GetEngineTime();
+            g_LosN_safe_enter++;
             int door = EntRefToEntIndex(g_iLockedDoor);
             for (i = 0; i < g_iLosTestpoints; i++)
             {
                 TR_TraceRay(saferoom_pos, testPoints[i], TR_MASK_LOS, RayType_EndPoint);
+                g_LosN_safe_trace++;
                 if (!los_blocked(saferoom_pos, testPoints[i], door))
                 {
                     g_LosN_safe_hit++;
+                    g_LosMs_safe += (GetEngineTime() - t_safe) * 1000.0;
                     return true;
                 }
             }
+            g_LosMs_safe += (GetEngineTime() - t_safe) * 1000.0;
         }
     }
-    
+
     g_LosN_clear++;
     return false;
 }

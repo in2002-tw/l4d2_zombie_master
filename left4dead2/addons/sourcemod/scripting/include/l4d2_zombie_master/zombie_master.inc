@@ -470,6 +470,13 @@ int    g_LosN_trace_hit;  // L4D2_IsVisibleToPlayer returned true (blocks spawn)
 int    g_LosN_safe_hit;   // saferoom door trace said visible
 int    g_LosN_clear;      // fell through all filters, returned false (no visibility)
 
+// split cost of survivor-eye loop vs saferoom-door fallback.
+float  g_LosMs_surv;       // total ms inside the survivor-eye loop (summed across cells)
+float  g_LosMs_safe;       // total ms inside the saferoom-door fallback block
+int    g_LosN_surv_trace;  // TR_TraceRay calls fired inside the survivor-eye loop
+int    g_LosN_safe_trace;  // TR_TraceRay calls fired inside the saferoom-door block
+int    g_LosN_safe_enter;  // times the saferoom-door block actually ran (past the distance gate)
+
 float t_vomited[MAXPLAYERS+1] = {0.0,...}; // tracking when to spawn horde
 
 bool specials_frozen = false;

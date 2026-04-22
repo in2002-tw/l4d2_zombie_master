@@ -451,6 +451,11 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     g_LosN_trace_hit = 0;
     g_LosN_safe_hit = 0;
     g_LosN_clear = 0;
+    g_LosMs_surv = 0.0;
+    g_LosMs_safe = 0.0;
+    g_LosN_surv_trace = 0;
+    g_LosN_safe_trace = 0;
+    g_LosN_safe_enter = 0;
 
     bool cellValid[GRID_MAX_CELLS];
     int closestValidIdx = -1;
@@ -563,7 +568,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     float ms_render = (GetEngineTime() - t_render) * 1000.0;
 
     float elapsed_ms = (GetEngineTime() - t_start) * 1000.0;
-    if (elapsed_ms > 10.0)
+    if (elapsed_ms > 5.0)
     {
         LogMessage("[zm] WARNING: Grid_TimerUpdate took %.1f ms (%d cells: %d valid, %d obstructed, %d nav, %d LOS, %d dist) find=%.1f validate=%.1f [obstruct=%.1f nav=%.1f los=%.1f dist=%.1f] render=%.1f",
             elapsed_ms, cellCount, g_GridN_valid, g_GridN_obstructed,
@@ -573,6 +578,9 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         LogMessage("[zm]   LOS breakdown: fog=%d nav_rej=%d shortcut=%d pvs_rej=%d trace_hit=%d safe_hit=%d clear=%d",
             g_LosN_fog, g_LosN_nav_rej, g_LosN_shortcut,
             g_LosN_pvs_rej, g_LosN_trace_hit, g_LosN_safe_hit, g_LosN_clear);
+        LogMessage("[zm]   LOS cost split: surv=%.2fms (%d traces) safe=%.2fms (%d traces, %d enters)",
+            g_LosMs_surv, g_LosN_surv_trace,
+            g_LosMs_safe, g_LosN_safe_trace, g_LosN_safe_enter);
     }
     
     g_GridValidCellCount = g_GridN_valid;
