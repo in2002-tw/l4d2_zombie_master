@@ -74,6 +74,7 @@ static float HULL_MAXS[3] = {HULL_DX_STRICT,HULL_DX_STRICT,HULL_DZ_MAX_STRICT};
 #define HULL_DX 20.0
 #define HULL_DZ 40.0
 #define HULL_DDZ 80.0
+#define LOS_TESTPOINTS 3
 
 // TraceHull to determine if ZM is looking at survivor through walls
 static float HULL_MINS_LOOK[3] = {-HULL_DX,-HULL_DX,-HULL_DZ};
@@ -469,6 +470,13 @@ int    g_LosN_trace_hit;  // L4D2_IsVisibleToPlayer returned true (blocks spawn)
 int    g_LosN_safe_hit;   // saferoom door trace said visible
 int    g_LosN_clear;      // fell through all filters, returned false (no visibility)
 
+// split cost of survivor-eye loop vs saferoom-door fallback.
+float  g_LosMs_surv;       // total ms inside the survivor-eye loop (summed across cells)
+float  g_LosMs_safe;       // total ms inside the saferoom-door fallback block
+int    g_LosN_surv_trace;  // TR_TraceRay calls fired inside the survivor-eye loop
+int    g_LosN_safe_trace;  // TR_TraceRay calls fired inside the saferoom-door block
+int    g_LosN_safe_enter;  // times the saferoom-door block actually ran (past the distance gate)
+
 float t_vomited[MAXPLAYERS+1] = {0.0,...}; // tracking when to spawn horde
 
 bool specials_frozen = false;
@@ -716,6 +724,9 @@ void GetCvars()
     g_fAbilityCooldown = g_hAbilityCooldown.FloatValue;
     
     g_fGridCooldown = g_hGridCooldown.FloatValue;
+
+
+    cellcache_get_cvars();
 }
 
 Action ZM_MOTD(int client, int args)
