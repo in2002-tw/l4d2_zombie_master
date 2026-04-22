@@ -41,6 +41,7 @@ bool DEBUG = false;
 #include <l4d2_zombie_master/sdk>
 #include <l4d2_zombie_master/glow>
 #include <l4d2_zombie_master/grid/l4d2_grid_renderer>
+#include <l4d2_zombie_master/los_cellcache>
 #include <l4d2_zombie_master/spawner_validate>
 #include <l4d2_zombie_master/spawner_analog>
 #include <l4d2_zombie_master/grid/spawner_grid>
@@ -221,6 +222,14 @@ public void OnPluginStart()
     
     g_hGridCooldown = CreateConVar("zm_grid_cooldown", "0.0", "Invalid cell cooldown time. This is an optimization. Do not change unless you know what you are doing.",FCVAR_PROTECTED, true, 0.0, true, 10000.0);
     g_hGridCooldown.AddChangeHook(ConVarChanged_Cvars);
+
+
+    g_hLosCellCache = CreateConVar("zm_los_cellcache", "1", "If 1, use a shared hash-based (survivor_grid_cell, target_grid_cell) LOS cache to skip redundant traces. 0 = always trace.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
+    g_hLosCellCache.AddChangeHook(ConVarChanged_Cvars);
+
+    g_hLosCellCacheTTL = CreateConVar("zm_los_cellcache_ttl", "1.0", "Cell-pair LOS cache entry lifetime in seconds.",FCVAR_PROTECTED, true, 0.1, true, 60.0);
+    g_hLosCellCacheTTL.AddChangeHook(ConVarChanged_Cvars);
+
 
     g_hSpawnerMode = CreateConVar("zm_spawner_mode", "1", "Default spawner mode. 0 = analog(3 rings), 1 = analog+grid, 2 = grid.",FCVAR_PROTECTED, true, 0.0, true, 2.0);
     g_hSpawnerMode.AddChangeHook(ConVarChanged_Cvars_ZMenu);
@@ -909,6 +918,7 @@ Action zm_new_round(Handle timer = null)
     }
     Spawner_Init();
     if (g_CellCooldown) g_CellCooldown.Clear();
+    cellcache_clear_all();
 
     if (g_hRandomizer.IntValue==2) random_gamemode();
     

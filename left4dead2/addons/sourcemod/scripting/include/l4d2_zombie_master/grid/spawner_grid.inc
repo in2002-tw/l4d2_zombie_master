@@ -334,7 +334,7 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
     
     bool obscured = navSpawnAttrs>0 && ( (navSpawnAttrs & NAV_SPAWN_OBSCURED) || (navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
     int cellCluster = GridLib_GetCellCluster(g_GridCellIndices[idx]);
-    if (!obscured && can_any_alive_survivor_see_cheap(pos, cellCluster, navArea))
+    if (!obscured && can_any_alive_survivor_see_cheap(pos, cellCluster, navArea, g_GridCellIndices[idx]))
     {
         g_GridMs_los += (GetEngineTime() - t) * 1000.0;
         g_GridN_los++;
@@ -451,6 +451,15 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     g_LosN_trace_hit = 0;
     g_LosN_safe_hit = 0;
     g_LosN_clear = 0;
+    g_LosMs_surv = 0.0;
+    g_LosMs_safe = 0.0;
+    g_LosN_surv_trace = 0;
+    g_LosN_safe_trace = 0;
+    g_LosN_safe_enter = 0;
+    g_LosN_cellcache_hit_vis = 0;
+    g_LosN_cellcache_hit_blk = 0;
+    g_LosN_cellcache_miss = 0;
+    g_LosN_cellcache_evict = 0;
 
     bool cellValid[GRID_MAX_CELLS];
     int closestValidIdx = -1;
@@ -573,6 +582,13 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         LogMessage("[zm]   LOS breakdown: fog=%d nav_rej=%d shortcut=%d pvs_rej=%d trace_hit=%d safe_hit=%d clear=%d",
             g_LosN_fog, g_LosN_nav_rej, g_LosN_shortcut,
             g_LosN_pvs_rej, g_LosN_trace_hit, g_LosN_safe_hit, g_LosN_clear);
+        LogMessage("[zm]   LOS cost split: surv=%.2fms (%d traces) safe=%.2fms (%d traces, %d enters)",
+            g_LosMs_surv, g_LosN_surv_trace,
+            g_LosMs_safe, g_LosN_safe_trace, g_LosN_safe_enter);
+        LogMessage("[zm]   LOS cellcache: hit_vis=%d hit_blk=%d miss=%d evict=%d (enabled=%d ttl=%.2f)",
+            g_LosN_cellcache_hit_vis, g_LosN_cellcache_hit_blk,
+            g_LosN_cellcache_miss, g_LosN_cellcache_evict,
+            g_bLosCellCache ? 1 : 0, g_fLosCellCacheTTL);
     }
     
     g_GridValidCellCount = g_GridN_valid;

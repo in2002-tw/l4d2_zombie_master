@@ -87,6 +87,9 @@ void Spawner_CacheSurvivorData()
 		g_CachedSurvNavArea[g_iBatchSurvivorCount] = L4D_GetNearestNavArea(
 			g_fBatchSurvivorPos[g_iBatchSurvivorCount], 300.0, false, false, true, TEAM_SURVIVOR);
 		g_SurvNavAreaComputed[g_iBatchSurvivorCount] = true;
+
+		g_CachedSurvCell[g_iBatchSurvivorCount] = surv_pos_key(g_fBatchSurvivorEyePos[g_iBatchSurvivorCount]);
+
 		g_iBatchSurvivorCount++;
 	}
 	g_bBatchActive = g_iBatchSurvivorCount>0;
@@ -178,13 +181,33 @@ bool any_alive_survivors_in_radius(float vecPos[3], float radius)
     }
 }
 
-#define LOS_TESTPOINTS 3
-//const int TR_MASK_LOS = CONTENTS_OPAQUE;
-const int TR_MASK_LOS = MASK_VISIBLE & ~CONTENTS_WINDOW;
+const int TR_MASK_LOS = MASK_VISIBLE;
+
+/**
+ * Check if LOS from `eyePos` to `testPoint` is blocked.
+ *
+ * Runs a single TR_TraceRayFilter with FilterLOS. The filter skips self, all clients,
+ * witches, common infected, and other see-through classes so they don't spuriously
+ * block survivor sightlines. Necessary because every useful LOS mask includes
+ * CONTENTS_SOLID and players in L4D2 respond to CONTENTS_SOLID.
+ *
+ * @param eyePos     Eye position.
+ * @param testPoint  Target point.
+ * @param self       Entity index of the eye owner (client or door ent), passed to FilterLOS.
+ * @return           true if LOS is blocked, false if visible.
+ */
+stock bool los_blocked(const float eyePos[3], const float testPoint[3], int self)
+{
+    TR_TraceRayFilter(eyePos, testPoint, TR_MASK_LOS, RayType_EndPoint, FilterLOS, self);
+    return TR_DidHit(INVALID_HANDLE);
+}
 
 /**
  * Check if any alive survivor (or the saferoom door) can see a position.
- * Uses 2 test points at hull mid-height and top.
+ * Uses `LOS_TESTPOINTS` (3) test points distributed across the spawner hull. Each
+ * testpoint is resolved via los_blocked() which runs a single TR_TraceRayFilter with
+ * MASK_VISIBLE + FilterLOS (skips clients/NPCs/see-through classes; glass brushes
+ * pass via the mask).
  *
  * @param vecPos       World position to test visibility against
  * @param cellCluster  Optional precomputed PVS leaf cluster of vecPos. When >= 0, enables
@@ -193,9 +216,12 @@ const int TR_MASK_LOS = MASK_VISIBLE & ~CONTENTS_WINDOW;
  * @param cellNavArea  Optional nav area of vecPos. When non-null and the nav-area
  *                     SDKCall is available, the director's lazily-maintained per-team
  *                     visibility bit gates the PVS loop
+ * @param cellIdx      Optional GridLib target cell idx for vecPos. When >= 0 and the
+ *                     `zm_los_cellcache` cvar is on, enables the shared cell-pair LOS
+ *                     cache lookup (see los_cellcache.inc). Pass -1 (default) for non-grid callers.
  * @return             true if any alive survivor or the saferoom door has line of sight
  */
-bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Address cellNavArea = Address_Null)
+bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Address cellNavArea = Address_Null, int cellIdx = -1)
 {
     if (DEBUG) LogMessage("[zm] can_any_alive_survivor_see_cheap");
     
@@ -204,7 +230,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         g_LosN_fog++;
         return false; // very fast early exit when no survivor within fog radius
     }
-    
+
     // Nav-area visibility pre-reject: if the director's recent-visibility list for the survivor team
     // does not include this area, no survivor has marked it as seeable.
     if (!NavArea_IsPotentiallyVisibleToTeam(cellNavArea, TEAM_SURVIVOR))
@@ -213,23 +239,66 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         return false;
     }
     
-    // 3 test points: mid-height hull center (most likely hit), top hull center, leg position
+    // LOS_TESTPOINTS (3) sample points around the spawner hull: mid-height center,
+    // top center with small jitter, and a leg corner.
     static float testPoints[LOS_TESTPOINTS][3];
     testPoints[0] = vecPos; testPoints[0][2] += HULL_DZ;
     testPoints[1] = vecPos; testPoints[1][2] += HULL_DDZ; testPoints[1][0] -= 4.0; testPoints[1][1] += 5.0;
     testPoints[2] = vecPos; testPoints[2][2] += HULL_DZ_MIN_STRICT; testPoints[2][0] += HULL_DX; testPoints[2][1] -= HULL_DX;
-    //testPoints[3] = vecPos; testPoints[3][2] += HULL_DZ; testPoints[3][0] += HULL_DX; testPoints[3][1] += HULL_DX;
     
     Spawner_CacheSurvivorData(); // optimization - load survivor data or read cached values
     bool use_PVS = Is_PVS_Valid();
     int i;
+    float t_surv = GetEngineTime();
+
+    // Build per-cell survivor iteration order: closest-first maximises the chance of
+    // early-exiting on the first visible trace. Fog-distance and valid-client gates
+    // are applied up-front so the hot loop below deals only with candidates.
+    static int   surv_order[MAXPLAYERS+1];
+    static float surv_distsq[MAXPLAYERS+1];
+    int surv_n = 0;
     for (int s = 0; s < g_iBatchSurvivorCount; s++)
     {
-        if (GetVectorDistance(g_fBatchSurvivorPos[s],vecPos,true) >= fog_distance_sq) continue;
-    
-        // l4dhooks does not validate client indices; gate before PVS_Check to skip that native call on stale slots
+        float dsq = GetVectorDistance(g_fBatchSurvivorPos[s], vecPos, true);
+        if (dsq >= fog_distance_sq) continue;
         if (!IsValidClient(g_iBatchSurvivorClients[s])) continue;
-    
+        int j = surv_n - 1;
+        while (j >= 0 && surv_distsq[j] > dsq)
+        {
+            surv_order[j+1]  = surv_order[j];
+            surv_distsq[j+1] = surv_distsq[j];
+            j--;
+        }
+        surv_order[j+1]  = s;
+        surv_distsq[j+1] = dsq;
+        surv_n++;
+    }
+
+    for (int o = 0; o < surv_n; o++)
+    {
+        int s = surv_order[o];
+
+        // Shared cell-pair cache: skip the work when (surv_subcell_key, target_cell) is
+        // already known within its TTL. Eligibility: cache enabled, target has a grid
+        // cell idx. The survivor key is always a valid packed position hash.
+        int survCellKey = g_CachedSurvCell[s];
+        bool cacheEligible = g_bLosCellCache && cellIdx >= 0;
+        if (cacheEligible)
+        {
+            bool cachedRes;
+            if (cellcache_lookup(survCellKey, cellIdx, cachedRes))
+            {
+                if (cachedRes)
+                {
+                    g_LosN_cellcache_hit_vis++;
+                    g_LosMs_surv += (GetEngineTime() - t_surv) * 1000.0;
+                    return true;
+                }
+                g_LosN_cellcache_hit_blk++;
+                continue; // cached as blocked for this survivor-cell pair; move on
+            }
+        }
+
         if (use_PVS)
         {
             // Same-cluster shortcut: two points in one leaf cluster are trivially mutually visible via PVS.
@@ -254,7 +323,6 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
                 if (!pairVisible)
                 {
                     g_LosN_pvs_rej++;
-                    if (DEBUG_SPAWNER) LogMessage("nav-pair pre-filter %d skipping raytraces", s);
                     continue;
                 }
             }
@@ -264,7 +332,6 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
                 if (!g_BatchSurvivorValidPVS[s] || !PVS_CheckOriginInPVS(vecPos, g_BatchSurvivorPVS[s]))
                 {
                     g_LosN_pvs_rej++;
-                    if (DEBUG_SPAWNER) LogMessage("PVS pre-filter %d skipping raytraces", s);
                     continue;
                 }
             }
@@ -272,23 +339,29 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         
         for (i = 0; i < LOS_TESTPOINTS; i++)
         {
-            TR_TraceRayFilter(g_fBatchSurvivorEyePos[s],testPoints[i],TR_MASK_LOS,RayType_EndPoint,FilterLOS,g_iBatchSurvivorClients[s]);
-            if (!TR_DidHit(INVALID_HANDLE))
+            g_LosN_surv_trace++;
+            bool blocked = los_blocked(g_fBatchSurvivorEyePos[s], testPoints[i], g_iBatchSurvivorClients[s]);
+            if (!blocked)
             {
                 g_LosN_trace_hit++;
+                if (cacheEligible)
+                {
+                    cellcache_populate(survCellKey, cellIdx, true, g_fLosCellCacheTTL);
+                    g_LosN_cellcache_miss++;
+                }
+                g_LosMs_surv += (GetEngineTime() - t_surv) * 1000.0;
                 return true;
             }
-            //else
-            //{
-            //    int surfflags = TR_GetSurfaceFlags(INVALID_HANDLE);
-            //    char surfname[128];
-            //    TR_GetSurfaceName(INVALID_HANDLE,surfname,sizeof(surfname));
-            //    int surfprops = TR_GetSurfaceProps(INVALID_HANDLE); // glass surfprops is 33
-            //    LogMessage("TRMaterial Flags %i Props %i Name %s",surfflags,surfprops,surfname);
-            //}
+        }
+        // All testpoints blocked for this survivor.
+        if (cacheEligible)
+        {
+            cellcache_populate(survCellKey, cellIdx, false, g_fLosCellCacheTTL);
+            g_LosN_cellcache_miss++;
         }
     }
-    
+    g_LosMs_surv += (GetEngineTime() - t_surv) * 1000.0;
+
     // Fallback before round start: check saferoom door to prevent ZM abusing survivors not looking out door.
     if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor))
     {
@@ -296,19 +369,23 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         L4D_GetEntityWorldSpaceCenter(g_iLockedDoor,saferoom_pos);
         if (GetVectorDistance(saferoom_pos,vecPos,true) <= fog_distance_sq)
         {
+            float t_safe = GetEngineTime();
+            g_LosN_safe_enter++;
             int door = EntRefToEntIndex(g_iLockedDoor);
             for (i = 0; i < LOS_TESTPOINTS; i++)
             {
-                TR_TraceRayFilter(saferoom_pos,testPoints[i],TR_MASK_LOS,RayType_EndPoint,FilterLOS,door);
-                if (!TR_DidHit(INVALID_HANDLE))
+                g_LosN_safe_trace++;
+                if (!los_blocked(saferoom_pos, testPoints[i], door))
                 {
                     g_LosN_safe_hit++;
+                    g_LosMs_safe += (GetEngineTime() - t_safe) * 1000.0;
                     return true;
                 }
             }
+            g_LosMs_safe += (GetEngineTime() - t_safe) * 1000.0;
         }
     }
-    
+
     g_LosN_clear++;
     return false;
 }
