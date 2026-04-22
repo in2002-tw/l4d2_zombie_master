@@ -278,6 +278,14 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
                 g_LosN_trace_hit++;
                 return true;
             }
+            //else
+            //{
+            //    int surfflags = TR_GetSurfaceFlags(INVALID_HANDLE);
+            //    char surfname[128];
+            //    TR_GetSurfaceName(INVALID_HANDLE,surfname,sizeof(surfname));
+            //    int surfprops = TR_GetSurfaceProps(INVALID_HANDLE); // glass surfprops is 33
+            //    LogMessage("TRMaterial Flags %i Props %i Name %s",surfflags,surfprops,surfname);
+            //}
         }
     }
     
@@ -313,6 +321,7 @@ stock bool FilterLOS(int entity, int mask, int self = -1)
 	if (IsValidClient(entity)) return false;
 	static char class[16];
 	GetEntityClassname(entity,class,sizeof(class));
+	//LogMessage("FilterLOS %d hit %d %s", self, entity, class);
 	switch (class[0])
 	{
     	case 'i':
@@ -336,8 +345,15 @@ stock bool FilterLOS(int entity, int mask, int self = -1)
     	{
         	if (strncmp(class,"script_clip",11,false)==0) return false;
     	}
+    	case 'p':
+    	{
+        	if (strncmp(class,"prop_physics",12,false)==0) // prop_physics can be glass
+        	{
+            	//if (TR_GetSurfaceProps(INVALID_HANDLE)==33) return false;
+            	return false;
+        	}
+    	}
 	}
-	//LogMessage("FilterLOS %d hit %d %s", self, entity, class);
 	return true;
 }
 
