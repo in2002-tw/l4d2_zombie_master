@@ -77,6 +77,12 @@ void Grid_OnDisabled(int client)
 #define GRID_RESCUE_MAX_DEPTH 2
 static int g_GridRescueDepth = 0;
 
+// Rendered surface tilt of a rescued cell is clamped to a minimum normal Z of this
+// value. cos(45deg) = 0.7071 keeps the indicator no more tilted than 45 deg visually,
+// even when the actual prop top is steeper. Rescue commit is not affected; the hull
+// position is still placed at the surface's topZ.
+#define GRID_RESCUE_MIN_NORMAL_Z 0.7071
+
 // Try to resolve a cell obstructed by a rescuable entity by finding a standable
 // position on top of it.
 //
@@ -101,7 +107,12 @@ static bool Grid_TryRescueObstruction(int idx, float pos[3])
         case 'z': { if (strcmp(className, "zombie", false) == 0) return false; }
     }
 
-    float topZ = pos[2];
+    static float vOrigin[3], vMaxs[3];
+    GetEntPropVector(obstructor, Prop_Send, "m_vecOrigin", vOrigin);
+    GetEntPropVector(obstructor, Prop_Send, "m_vecMaxs",  vMaxs);
+    float aabbTopZ = vOrigin[2] + vMaxs[2];
+
+    float topZ = aabbTopZ;
     float surfaceNormal[3];
     surfaceNormal[0] = 0.0;
     surfaceNormal[1] = 0.0;
@@ -112,7 +123,7 @@ static bool Grid_TryRescueObstruction(int idx, float pos[3])
         float startPos[3], endPos[3];
         startPos[0] = pos[0];
         startPos[1] = pos[1];
-        startPos[2] = pos[2] + 2048.0;
+        startPos[2] = aabbTopZ + 4.0;
         endPos[0] = pos[0];
         endPos[1] = pos[1];
         endPos[2] = pos[2];
@@ -125,24 +136,39 @@ static bool Grid_TryRescueObstruction(int idx, float pos[3])
         {
             float hitPos[3];
             TR_GetEndPosition(hitPos, trace);
-            topZ = hitPos[2];
-            TR_GetPlaneNormal(trace, surfaceNormal);
-            resolved = true;
+            if (TR_GetEntityIndex(trace) == obstructor)
+            {
+                topZ = hitPos[2];
+                TR_GetPlaneNormal(trace, surfaceNormal);
+                resolved = true;
+            }
         }
         delete trace;
         g_TraceFilter_TargetEntity = -1;
     }
 
-    // AABB fallback: only when the ray trace could not resolve a top.
+    // AABB fallback: when the ray trace could not land on the target's top surface.
     if (!resolved)
     {
-        static float vOrigin[3], vMaxs[3];
-        GetEntPropVector(obstructor, Prop_Send, "m_vecOrigin", vOrigin);
-        GetEntPropVector(obstructor, Prop_Send, "m_vecMaxs",  vMaxs);
-        topZ = vOrigin[2] + vMaxs[2];
+        topZ = aabbTopZ;
         surfaceNormal[0] = 0.0;
         surfaceNormal[1] = 0.0;
         surfaceNormal[2] = 1.0;
+    }
+
+    // Clamp the rendered surface tilt to at most 45 degrees from horizontal.
+    if (surfaceNormal[2] < GRID_RESCUE_MIN_NORMAL_Z)
+    {
+        float xyLen = SquareRoot(surfaceNormal[0]*surfaceNormal[0]
+                               + surfaceNormal[1]*surfaceNormal[1]);
+        if (xyLen > 0.0001)
+        {
+            float newXYLen = SquareRoot(1.0 - GRID_RESCUE_MIN_NORMAL_Z * GRID_RESCUE_MIN_NORMAL_Z);
+            float scale = newXYLen / xyLen;
+            surfaceNormal[0] *= scale;
+            surfaceNormal[1] *= scale;
+        }
+        surfaceNormal[2] = GRID_RESCUE_MIN_NORMAL_Z;
     }
 
     float adjustedPos[3];
