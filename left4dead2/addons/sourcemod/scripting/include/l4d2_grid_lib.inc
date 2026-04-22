@@ -328,7 +328,7 @@ stock int GridLib_FindNearbyCells(const float position[3],
                                    int[] results,
                                    int maxResults,
                                    GridLibCellFilter filter = INVALID_FUNCTION,
-                                   float budget_ms = 20.0)
+                                   float budget_ms = 10.0)
 {
 	if (!g_IsReady || g_GridCells == null)
 		return 0;
@@ -647,7 +647,7 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
                                        int[] results,
                                        int maxResults,
                                        GridLibCellFilter filter = INVALID_FUNCTION,
-                                       float budget_ms = 20.0,
+                                       float budget_ms = 10.0,
                                        bool discard_obstructed = true)
 {
 	Log_Debug(GRIDLIB_LOG_CHANNEL, "FindCellsFromClosest: pos=(%.0f,%.0f,%.0f) desired=%d maxResults=%d filter=%s",
@@ -921,7 +921,7 @@ stock int GridLib_FindCellsConnected(const float position[3],
                                       int maxResults,
                                       float pathBudget = 300.0,
                                       GridLibCellFilter filter = INVALID_FUNCTION,
-                                      float budget_ms = 20.0,
+                                      float budget_ms = 10.0,
                                       bool discard_obstructed = true,
                                       float oversample = 5.0)
 {
