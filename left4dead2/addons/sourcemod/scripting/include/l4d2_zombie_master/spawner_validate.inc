@@ -178,13 +178,42 @@ bool any_alive_survivors_in_radius(float vecPos[3], float radius)
     }
 }
 
-#define LOS_TESTPOINTS 3
 //const int TR_MASK_LOS = CONTENTS_OPAQUE;
-const int TR_MASK_LOS = MASK_VISIBLE & ~CONTENTS_WINDOW;
+const int TR_MASK_LOS = MASK_VISIBLE;
+
+/**
+ * Check if LOS from `eyePos` to `testPoint` is blocked.
+ *
+ * The caller is responsible for running the cheap `TR_TraceRay(eyePos, testPoint,
+ * TR_MASK_LOS, RayType_EndPoint)` before calling this helper; the helper reads
+ * the most-recent trace state via INVALID_HANDLE. This split keeps the hot path
+ * inline and avoids a redundant trace when the caller wants to inspect the
+ * trace state in-between.
+ *
+ * If the cheap trace hit an entity (not world) and `g_bLosFilterFallback` is
+ * set, a filtered trace is run so FilterLOS can ignore glass prop_physics,
+ * non-solid func_brush, etc. Otherwise the cheap trace result stands.
+ *
+ * @param eyePos     Eye position used to run the filtered-fallback trace.
+ * @param testPoint  World position used to run the filtered-fallback trace.
+ * @param self       Entity index of the eye owner (client or door ent), passed to FilterLOS.
+ * @return           true if LOS is blocked, false if visible.
+ */
+stock bool los_blocked(const float eyePos[3], const float testPoint[3], int self)
+{
+    if (!TR_DidHit(INVALID_HANDLE)) return false;
+    if (!g_bLosFilterFallback) return true;
+    if (TR_GetEntityIndex(INVALID_HANDLE) == 0) return true; // hit world brush, filter cannot change the answer
+    TR_TraceRayFilter(eyePos, testPoint, TR_MASK_LOS, RayType_EndPoint, FilterLOS, self);
+    return TR_DidHit(INVALID_HANDLE);
+}
 
 /**
  * Check if any alive survivor (or the saferoom door) can see a position.
- * Uses 2 test points at hull mid-height and top.
+ * Uses `g_iLosTestpoints` (cvar `zm_los_testpoints`, 1-6) test points distributed
+ * across the spawner hull. Traces use MASK_VISIBLE; when the cheap trace hits an
+ * entity, `g_bLosFilterFallback` (cvar `zm_los_filter_fallback`) controls whether
+ * to re-run with FilterLOS to pass through glass / non-solid brush entities.
  *
  * @param vecPos       World position to test visibility against
  * @param cellCluster  Optional precomputed PVS leaf cluster of vecPos. When >= 0, enables
@@ -213,12 +242,16 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         return false;
     }
     
-    // 3 test points: mid-height hull center (most likely hit), top hull center, leg position
-    static float testPoints[LOS_TESTPOINTS][3];
+    // Up to LOS_TESTPOINTS_MAX (6) test points around the spawner hull. Loop below runs
+    // only the first g_iLosTestpoints rows. Rows 0-2 match the prior 3-point behaviour
+    // exactly; rows 3-5 add diagonal corners at each height level.
+    static float testPoints[LOS_TESTPOINTS_MAX][3];
     testPoints[0] = vecPos; testPoints[0][2] += HULL_DZ;
     testPoints[1] = vecPos; testPoints[1][2] += HULL_DDZ; testPoints[1][0] -= 4.0; testPoints[1][1] += 5.0;
     testPoints[2] = vecPos; testPoints[2][2] += HULL_DZ_MIN_STRICT; testPoints[2][0] += HULL_DX; testPoints[2][1] -= HULL_DX;
-    //testPoints[3] = vecPos; testPoints[3][2] += HULL_DZ; testPoints[3][0] += HULL_DX; testPoints[3][1] += HULL_DX;
+    testPoints[3] = vecPos; testPoints[3][2] += HULL_DZ;             testPoints[3][0] += HULL_DX; testPoints[3][1] += HULL_DX;
+    testPoints[4] = vecPos; testPoints[4][2] += HULL_DDZ;            testPoints[4][0] -= HULL_DX; testPoints[4][1] -= HULL_DX;
+    testPoints[5] = vecPos; testPoints[5][2] += HULL_DZ_MIN_STRICT;  testPoints[5][0] -= HULL_DX; testPoints[5][1] += HULL_DX;
     
     Spawner_CacheSurvivorData(); // optimization - load survivor data or read cached values
     bool use_PVS = Is_PVS_Valid();
@@ -270,22 +303,14 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
             }
         }
         
-        for (i = 0; i < LOS_TESTPOINTS; i++)
+        for (i = 0; i < g_iLosTestpoints; i++)
         {
-            TR_TraceRayFilter(g_fBatchSurvivorEyePos[s],testPoints[i],TR_MASK_LOS,RayType_EndPoint,FilterLOS,g_iBatchSurvivorClients[s]);
-            if (!TR_DidHit(INVALID_HANDLE))
+            TR_TraceRay(g_fBatchSurvivorEyePos[s], testPoints[i], TR_MASK_LOS, RayType_EndPoint);
+            if (!los_blocked(g_fBatchSurvivorEyePos[s], testPoints[i], g_iBatchSurvivorClients[s]))
             {
                 g_LosN_trace_hit++;
                 return true;
             }
-            //else
-            //{
-            //    int surfflags = TR_GetSurfaceFlags(INVALID_HANDLE);
-            //    char surfname[128];
-            //    TR_GetSurfaceName(INVALID_HANDLE,surfname,sizeof(surfname));
-            //    int surfprops = TR_GetSurfaceProps(INVALID_HANDLE); // glass surfprops is 33
-            //    LogMessage("TRMaterial Flags %i Props %i Name %s",surfflags,surfprops,surfname);
-            //}
         }
     }
     
@@ -297,10 +322,10 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         if (GetVectorDistance(saferoom_pos,vecPos,true) <= fog_distance_sq)
         {
             int door = EntRefToEntIndex(g_iLockedDoor);
-            for (i = 0; i < LOS_TESTPOINTS; i++)
+            for (i = 0; i < g_iLosTestpoints; i++)
             {
-                TR_TraceRayFilter(saferoom_pos,testPoints[i],TR_MASK_LOS,RayType_EndPoint,FilterLOS,door);
-                if (!TR_DidHit(INVALID_HANDLE))
+                TR_TraceRay(saferoom_pos, testPoints[i], TR_MASK_LOS, RayType_EndPoint);
+                if (!los_blocked(saferoom_pos, testPoints[i], door))
                 {
                     g_LosN_safe_hit++;
                     return true;

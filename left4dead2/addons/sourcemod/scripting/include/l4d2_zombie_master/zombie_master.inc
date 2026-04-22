@@ -74,6 +74,7 @@ static float HULL_MAXS[3] = {HULL_DX_STRICT,HULL_DX_STRICT,HULL_DZ_MAX_STRICT};
 #define HULL_DX 20.0
 #define HULL_DZ 40.0
 #define HULL_DDZ 80.0
+#define LOS_TESTPOINTS_MAX 6
 
 // TraceHull to determine if ZM is looking at survivor through walls
 static float HULL_MINS_LOOK[3] = {-HULL_DX,-HULL_DX,-HULL_DZ};
@@ -510,7 +511,8 @@ ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer,
        g_hCostCharger, g_hCostTank, g_hCostWitchStatic, g_hCostWitchMoving, g_hCostCommon, g_hCostUncommon, g_hLockSaferoom,
        g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait, g_hPanicRateMultiplier,
        g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons, g_hAllowFreeze,
-       g_hGridSearchRadius, g_hGrid, g_hSpawnerMode, g_hPanicRefill, g_hCursed, g_hGridCooldown;
+       g_hGridSearchRadius, g_hGrid, g_hSpawnerMode, g_hPanicRefill, g_hCursed, g_hGridCooldown,
+       g_hLosTestpoints, g_hLosFilterFallback;
 
 float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fStopInactivity,g_fSpecialCooldown, g_fPanicRateMultiplier,
 g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout,
@@ -534,6 +536,8 @@ g_iBonusFinaleStage, g_iBonusSurvival, g_iMaxWitches, g_iMaxSI, g_iMaxUniqueSI;
 
 bool g_bLockSaferoom, g_bGrid;
 int g_iSpawnerMode;
+int g_iLosTestpoints;
+bool g_bLosFilterFallback;
 
 int info_director = -1;
 
@@ -716,6 +720,9 @@ void GetCvars()
     g_fAbilityCooldown = g_hAbilityCooldown.FloatValue;
     
     g_fGridCooldown = g_hGridCooldown.FloatValue;
+
+    g_iLosTestpoints = g_hLosTestpoints.IntValue;
+    g_bLosFilterFallback = g_hLosFilterFallback.BoolValue;
 }
 
 Action ZM_MOTD(int client, int args)
