@@ -411,6 +411,7 @@ float   g_GridEffectiveMinDist;
 #define GRID_MAX_Z_DIFF     100.0
 #define GRID_MAX_CELLS      25
 #define GRID_UPDATE_RATE    0.1
+StringMap g_CellCooldown;
 
 // State
 Handle g_hGridTimer;
@@ -509,11 +510,11 @@ ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer,
        g_hCostCharger, g_hCostTank, g_hCostWitchStatic, g_hCostWitchMoving, g_hCostCommon, g_hCostUncommon, g_hLockSaferoom,
        g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait, g_hPanicRateMultiplier,
        g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons, g_hAllowFreeze,
-       g_hGridSearchRadius, g_hGrid, g_hSpawnerMode, g_hPanicRefill, g_hCursed;
+       g_hGridSearchRadius, g_hGrid, g_hSpawnerMode, g_hPanicRefill, g_hCursed, g_hGridCooldown;
 
 float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fStopInactivity,g_fSpecialCooldown, g_fPanicRateMultiplier,
 g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout,
-g_fGridSearchRadius, g_fAbilityCooldown;
+g_fGridSearchRadius, g_fAbilityCooldown, g_fGridCooldown;
 
 bool g_bFairQueue, g_bDiscountTank, g_bMemes, g_bClownGlow, g_bAllowFreeze;
 char g_sForceCommon[32];
@@ -713,6 +714,8 @@ void GetCvars()
     if (!g_bGrid) g_iSpawnerMode = 0;
     
     g_fAbilityCooldown = g_hAbilityCooldown.FloatValue;
+    
+    g_fGridCooldown = g_hGridCooldown.FloatValue;
 }
 
 Action ZM_MOTD(int client, int args)

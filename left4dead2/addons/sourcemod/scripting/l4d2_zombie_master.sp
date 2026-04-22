@@ -132,6 +132,7 @@ public void OnPluginStart()
 	CreateTimer(1.0,Timer_load_zm_global_settings);
 	//AutoExecConfig(true, CONFIG_FILENAME);
 	g_Steam = new StringMap();
+	g_CellCooldown = new StringMap();
 	precache_survivor_hp();
 	LoadTranslations("l4d2_zombie_master.phrases");
 	LoadTranslations("common.phrases");
@@ -217,6 +218,9 @@ public void OnPluginStart()
     
     g_hGridSearchRadius = CreateConVar("zm_grid_search_radius", "500", "Search radius (units) for GridLib fallback spawn when indicator is blue.",FCVAR_PROTECTED, true, 0.0, true, 5000.0);
     g_hGridSearchRadius.AddChangeHook(ConVarChanged_Cvars);
+    
+    g_hGridCooldown = CreateConVar("zm_grid_cooldown", "0.0", "Invalid cell cooldown time. This is an optimization. Do not change unless you know what you are doing.",FCVAR_PROTECTED, true, 0.0, true, 10000.0);
+    g_hGridCooldown.AddChangeHook(ConVarChanged_Cvars);
 
     g_hSpawnerMode = CreateConVar("zm_spawner_mode", "1", "Default spawner mode. 0 = analog(3 rings), 1 = analog+grid, 2 = grid.",FCVAR_PROTECTED, true, 0.0, true, 2.0);
     g_hSpawnerMode.AddChangeHook(ConVarChanged_Cvars_ZMenu);
@@ -904,6 +908,7 @@ Action zm_new_round(Handle timer = null)
         GridLib_StartPrecomputation();
     }
     Spawner_Init();
+    if (g_CellCooldown) g_CellCooldown.Clear();
 
     if (g_hRandomizer.IntValue==2) random_gamemode();
     

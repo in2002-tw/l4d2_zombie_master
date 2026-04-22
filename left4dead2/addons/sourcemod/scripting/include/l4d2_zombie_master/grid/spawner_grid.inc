@@ -485,6 +485,12 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
         g_GridValidPositions[i] = pos;
         g_GridCellIndices[i] = nearbyCells[i];
+        
+        if (cell_cooldown(nearbyCells[i]))
+        {
+           cellValid[i] = false;
+           continue;
+        }
 
         cellValid[i] = Grid_ValidateCell(i, pos, navArea, obstructed);
 
@@ -498,21 +504,26 @@ Action Grid_TimerUpdate(Handle timer, int userid)
                 closestNavArea = navArea;
             }
         }
-        else if (g_iSpawnerMode==2)
+        else
         {
-            int target = get_spawner_target_survivor(false,_);
-            if (target>0)
+            if (g_iSpawnerMode==2)
             {
-                g_iGridTargetClient = target;
-                if (g_iGlowList[target]==INVALID_ENT_REFERENCE && IsValidClientZM() && L4D2_GetSurvivorVictim(zm_client)!=target)
+                int target = get_spawner_target_survivor(false,_);
+                if (target>0)
                 {
-                    CreateZMGlow(target,false,true);
+                    g_iGridTargetClient = target;
+                    if (g_iGlowList[target]==INVALID_ENT_REFERENCE && IsValidClientZM() && L4D2_GetSurvivorVictim(zm_client)!=target)
+                    {
+                        CreateZMGlow(target,false,true);
+                    }
+                    closestValidIdx = -1;
+                    cellCount = 0;
+                    GridRenderer_HideAll(client);
+                    break;
                 }
-                closestValidIdx = -1;
-                cellCount = 0;
-                GridRenderer_HideAll(client);
-                break;
+                else set_cell_cooldown(nearbyCells[i]);
             }
+            else set_cell_cooldown(nearbyCells[i]);
         }
         
     }

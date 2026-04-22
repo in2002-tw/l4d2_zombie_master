@@ -374,6 +374,9 @@ int SpawnerCellFilter(int cellIdx)
     if (cellfilter_fails>=MAX_FAILS)
         return GRIDLIB_FILTER_DISCARD_ALL;
     
+    if (cell_cooldown(cellIdx))
+        return GRIDLIB_FILTER_DISCARD;
+    
     // Nav-blocked attributes apply to the entire nav area
     int navSpawnAttrs = GridLib_GetCellSpawnAttributes(cellIdx);
     if (navSpawnAttrs & GRIDLIB_NAV_BLOCKED_ZOMBIES)
@@ -403,7 +406,10 @@ int SpawnerCellFilter(int cellIdx)
         static float distance_last;
         distance_last = distance_last_saferoom(cellPos);
         if (distance_last>0.0 && distance_last_saferoom(cellPos)<DISTANCE_LAST_SAFEROOM) // prevent last saferoom abuse
+        {
+            set_cell_cooldown(cellIdx);
             return GRIDLIB_FILTER_DISCARD;
+        }
     }
     
     //if (IsObstructed(cellPos,_,_,g_iSpawnerZombieClass==ZOMBIECLASS_COMMON))
@@ -419,7 +425,10 @@ int SpawnerCellFilter(int cellIdx)
     if (!obscured && can_any_alive_survivor_see_cheap(cellPos))
     {
         if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d visible to survivors", cellIdx);
-        return GRIDLIB_FILTER_DISCARD;
+        {
+            set_cell_cooldown(cellIdx);
+            return GRIDLIB_FILTER_DISCARD;
+        }
     }
 
     //float travel = L4D2_NavAreaTravelDistance(cellPos, g_SpawnerFilterOrigin, false);
@@ -435,6 +444,7 @@ int SpawnerCellFilter(int cellIdx)
         if (minDist >= 0.0 && minDist < g_fSpawnMinDistance)
         {
             if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d too close (%.0f)", cellIdx, minDist);
+            set_cell_cooldown(cellIdx);
             return GRIDLIB_FILTER_DISCARD;
         }
     }

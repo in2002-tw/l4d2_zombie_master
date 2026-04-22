@@ -12,6 +12,37 @@
 
 bool DEBUG_SPAWNER = false;
 
+// ==========================================================================
+// Cell Cooldown - for reducing expensive revalidation
+// ==========================================================================
+
+// Check if cell is in cooldown
+bool cell_cooldown(int cellIdx)
+{
+    if (g_fGridCooldown<=0.0 || !g_CellCooldown || g_CellCooldown.Size<=0) return false;
+    char cellKey[8];
+    FormatEx(cellKey,sizeof(cellKey), "%x", cellIdx);
+    float t_cooldown; // gametime
+    if (!g_CellCooldown.GetValue(cellKey,t_cooldown)) return false;
+    if (t_cooldown>GetGameTime()) return true;
+    g_CellCooldown.Remove(cellKey);
+    return false;
+}
+
+// Set cell cooldown time
+void set_cell_cooldown(int cellIdx, float t = -1.0)
+{
+    if (t<0.0)
+    {
+        if (g_fGridCooldown<=0.0) return;
+        t = GetGameTime()+g_fGridCooldown;
+    }
+    char cellKey[8];
+    FormatEx(cellKey,sizeof(cellKey), "%x", cellIdx);
+    g_CellCooldown.SetValue(cellKey,t,true);
+    LogMessage("%s %f", cellKey, t);
+}
+
 // Batch PVS state for accelerated visibility checks in GridLib filter callbacks + other survivor data.
 // Call before a batch.
 /**
@@ -147,9 +178,9 @@ bool any_alive_survivors_in_radius(float vecPos[3], float radius)
     }
 }
 
-#define LOS_TESTPOINTS 2
+#define LOS_TESTPOINTS 3
 //const int TR_MASK_LOS = CONTENTS_OPAQUE;
-const int TR_MASK_LOS = MASK_VISIBLE;
+const int TR_MASK_LOS = MASK_VISIBLE & ~CONTENTS_WINDOW;
 
 /**
  * Check if any alive survivor (or the saferoom door) can see a position.
@@ -182,10 +213,12 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         return false;
     }
     
-    // 2 test points: mid-height hull center (most likely hit), top hull center
+    // 3 test points: mid-height hull center (most likely hit), top hull center, leg position
     static float testPoints[LOS_TESTPOINTS][3];
     testPoints[0] = vecPos; testPoints[0][2] += HULL_DZ;
-    testPoints[1] = vecPos; testPoints[1][2] += HULL_DDZ;
+    testPoints[1] = vecPos; testPoints[1][2] += HULL_DDZ; testPoints[1][0] -= 4.0; testPoints[1][1] += 5.0;
+    testPoints[2] = vecPos; testPoints[2][2] += HULL_DZ_MIN_STRICT; testPoints[2][0] += HULL_DX; testPoints[2][1] -= HULL_DX;
+    //testPoints[3] = vecPos; testPoints[3][2] += HULL_DZ; testPoints[3][0] += HULL_DX; testPoints[3][1] += HULL_DX;
     
     Spawner_CacheSurvivorData(); // optimization - load survivor data or read cached values
     bool use_PVS = Is_PVS_Valid();
@@ -304,7 +337,7 @@ stock bool FilterLOS(int entity, int mask, int self = -1)
         	if (strncmp(class,"script_clip",11,false)==0) return false;
     	}
 	}
-	//if (DEBUG_SPAWNER) LogMessage("FilterLOS %d hit %d %s", self, entity, class);
+	//LogMessage("FilterLOS %d hit %d %s", self, entity, class);
 	return true;
 }
 
