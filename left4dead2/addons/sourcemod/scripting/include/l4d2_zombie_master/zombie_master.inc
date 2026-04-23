@@ -430,6 +430,7 @@ bool   g_bGridSurvivorBeamDrawn;
 // Cached validation results from last timer update
 float  g_GridValidPositions[GRID_MAX_CELLS][3];
 bool   g_GridValidFlags[GRID_MAX_CELLS];
+int    g_GridCellContext[GRID_MAX_CELLS];
 int    g_GridCellIndices[GRID_MAX_CELLS];
 int    g_GridCellCount;
 int    g_GridValidCellCount;

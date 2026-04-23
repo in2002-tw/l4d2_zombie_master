@@ -35,9 +35,13 @@
 
 // Cell colors (RGBA)
 #define GRIDRENDERER_COLOR_VALID             {0, 100, 0, 255}      // Dark green
-#define GRIDRENDERER_COLOR_INVALID           {100, 0, 0, 255}      // Dark red
 #define GRIDRENDERER_COLOR_HIGHLIGHT         {0, 255, 0, 255}      // Green
-#define GRIDRENDERER_COLOR_HIGHLIGHT_INVALID {255, 128, 0, 255}    // Orange
+
+#define GRIDRENDERER_COLOR_BLOCKED           {100, 0,   0, 255}      // Dark red
+#define GRIDRENDERER_COLOR_HIGHLIGHT_BLOCKED {255, 128, 0, 255}    // Orange
+
+#define GRIDRENDERER_COLOR_CONDITIONAL           {0, 0,   100, 255}      // Dark blue
+#define GRIDRENDERER_COLOR_HIGHLIGHT_CONDITIONAL {0, 128, 255, 255}    // ???
 
 // ============================================================================
 // Include Prop Backend
@@ -157,32 +161,25 @@ stock void GridRenderer_HideAll(int client)
  * @param isClosest   Whether this is the closest valid cell (highlighted)
  * @param color       Output RGBA color array
  */
-stock void GridRenderer_ResolveColor(bool isValid, bool isClosest, int color[4])
+stock void GridRenderer_ResolveColor(bool isValid, bool isClosest, int color[4], int context = SPAWNER_OK)
 {
 	if (isClosest && g_iSpawnerMode==2)
 	{
-		if (isValid)
-		{
-			int c[4] = GRIDRENDERER_COLOR_HIGHLIGHT;
-			color = c;
-		}
+		if (isValid) color = GRIDRENDERER_COLOR_HIGHLIGHT;
+		
 		else
 		{
-			int c[4] = GRIDRENDERER_COLOR_HIGHLIGHT_INVALID;
-			color = c;
+			if (context>SPAWNER_NAV) color = GRIDRENDERER_COLOR_HIGHLIGHT_CONDITIONAL;
+			else color = GRIDRENDERER_COLOR_HIGHLIGHT_BLOCKED;
 		}
 	}
 	else
 	{
-		if (isValid)
-		{
-			int c[4] = GRIDRENDERER_COLOR_VALID;
-			color = c;
-		}
+		if (isValid) color = GRIDRENDERER_COLOR_VALID;
 		else
 		{
-			int c[4] = GRIDRENDERER_COLOR_INVALID;
-			color = c;
+			if (context>SPAWNER_NAV) color = GRIDRENDERER_COLOR_CONDITIONAL;
+            else color = GRIDRENDERER_COLOR_BLOCKED;
 		}
 	}
 }

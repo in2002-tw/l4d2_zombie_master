@@ -161,6 +161,7 @@ static bool Grid_CheckObstruction(int idx, float pos[3], bool obstructed)
 
 // Run min_distance_to_survivors with store_client set to True until a valid survivor is hit with the grid cells. Then call the rest with
 // This will allow flow spawns to function as intended.
+int g_iGridValidateContext; // spawner context state
 static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstructed)
 {
     
@@ -171,6 +172,7 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
     {
         g_GridMs_nav += (GetEngineTime() - t) * 1000.0;
         g_GridN_nav++;
+        g_iGridValidateContext = SPAWNER_NAV;
         return false;
     }
     g_GridMs_nav += (GetEngineTime() - t) * 1000.0;
@@ -183,7 +185,14 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
     if (distLast > 0.0 && distLast < DISTANCE_LAST_SAFEROOM)
     {
         g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
+        g_iGridValidateContext = SPAWNER_INVALID;
         return false;
+    }
+    
+    if (cell_cooldown(g_GridCellIndices[idx]))
+    {
+       g_iGridValidateContext = SPAWNER_OTHER;
+       return false;
     }
     
     // Check survivor distance: only care about too close if not in grid spawner mode. Otherwise always check because we need to see if flow should trigger.
@@ -201,6 +210,7 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
         if (distance_too_close(min_distance))
         {
             g_GridMs_dist += (GetEngineTime() - t) * 1000.0;
+            g_iGridValidateContext = SPAWNER_DISTANCE;
             return false;
         }
     }
@@ -208,7 +218,10 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
     
     // Obstruction (includes z rescue)
     if (!Grid_CheckObstruction(idx, pos, obstructed))
+    {
+        g_iGridValidateContext = SPAWNER_OTHER;
         return false;
+    }
 
     // Survivor line of sight
     t = GetEngineTime();
@@ -221,12 +234,14 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
         {
             g_GridMs_los += (GetEngineTime() - t) * 1000.0;
             g_GridN_los++;
+            g_iGridValidateContext = SPAWNER_SIGHT;
             return false;
         }
     }
     g_GridMs_los += (GetEngineTime() - t) * 1000.0;
 
     g_GridN_valid++;
+    g_iGridValidateContext = SPAWNER_OK;
     return true;
 }
 
@@ -373,19 +388,15 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         if (over_budget || !GridLib_GetCellData(nearbyCells[i], pos, normal, navArea, obstructed))
         {
             cellValid[i] = false;
+            g_GridCellContext[i] = SPAWNER_OTHER;
             continue;
         }
 
         g_GridValidPositions[i] = pos;
         g_GridCellIndices[i] = nearbyCells[i];
-        
-        if (cell_cooldown(nearbyCells[i]))
-        {
-           cellValid[i] = false;
-           continue;
-        }
 
         cellValid[i] = Grid_ValidateCell(i, pos, navArea, obstructed);
+        g_GridCellContext[i] = g_iGridValidateContext;
 
         if (cellValid[i])
         {

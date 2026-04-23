@@ -244,7 +244,7 @@ stock int GridRendererProp_DrawCells(int client,
 
 			int color[4];
 			bool isClosest = (i == closestValidIdx);
-			GridRenderer_ResolveColor(cellValid[i], isClosest, color);
+			GridRenderer_ResolveColor(cellValid[i], isClosest, color, g_GridCellContext[i]);
 			color[3] = GridRendererProp_ComputeAlpha(i, count, isClosest);
 
 			float angles[3];
@@ -266,7 +266,7 @@ stock int GridRendererProp_DrawCells(int client,
 		// Update color (and ensure visible)
 		int color[4];
 		bool isClosest = (dataIdx == closestValidIdx);
-		GridRenderer_ResolveColor(cellValid[dataIdx], isClosest, color);
+		GridRenderer_ResolveColor(cellValid[dataIdx], isClosest, color, g_GridCellContext[dataIdx]);
 		color[3] = GridRendererProp_ComputeAlpha(dataIdx, count, isClosest);
 
 		bool glowThis = isClosest && cellValid[dataIdx] && g_iSpawnerMode==2;
