@@ -1579,7 +1579,10 @@ bool Grid_TryRescueObstruction(int idx, float pos[3], int entity = -1)
 {
     int obstructor = g_iObstructingEntity;
 
-    if (obstructor <= 0) return false;
+    if (obstructor <= 0)
+    {
+        return false;
+    }
 
     static char className[16];
     GetEntityClassname(obstructor, className, sizeof(className));

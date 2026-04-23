@@ -351,8 +351,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         {
             // Same-cluster shortcut: two points in one leaf cluster are trivially mutually visible via PVS.
             // Skip any per-pair visibility check and go straight to the trace.
-            bool sameCluster = use_PVS_SameCluster && (cellCluster >= 0 && cellCluster == g_BatchSurvivorCluster[s]);
-            if (sameCluster)
+            if (use_PVS_SameCluster && (cellCluster >= 0 && cellCluster == g_BatchSurvivorCluster[s]) );
             {
                 g_LosN_shortcut++;
                 return true;
@@ -371,10 +370,6 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
             // Falls back to legacy per-survivor PVS byte-buffer check when:
             //  - SDKCall not bound (Microslop windows))
             //  - cell or survivor nav area is null
-            if (check_nav && g_CachedSurvNavArea[s] != Address_Null && !NavArea_IsPotentiallyVisible(cellNavArea, g_CachedSurvNavArea[s], false))
-            {
-                temp_traces = MIN_TRACES;
-            }
            // bool pairChecked = false;
             //bool pairVisible = true;
             //if (check_nav && g_CachedSurvNavArea[s] != Address_Null)
@@ -395,7 +390,13 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
             
         }
         
-        for (i = 0; i < num_traces; i++)
+        if (check_nav && temp_traces>MIN_TRACES && g_CachedSurvNavArea[s] != Address_Null && !NavArea_IsPotentiallyVisible(cellNavArea, g_CachedSurvNavArea[s], false))
+        {
+            temp_traces = MIN_TRACES;
+        }
+        
+        
+        for (i = 0; i < temp_traces; i++)
         {
             g_LosN_surv_trace++;
             bool blocked = los_blocked(g_fBatchSurvivorEyePos[s], testPoints[i], g_iBatchSurvivorClients[s]);
