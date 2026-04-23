@@ -10,6 +10,7 @@
 //float  g_SpawnerFilterRadius;
 int   g_iSpawnerZombieClass;
 bool g_bLastDoorValid = false;
+bool g_bSpawnerFilterZM = false; // mark cells invisible to ZM as invalid?
 
 /**
  * Draw the colored spawn indicator ring at the ZM's aim position and update spawner state.
@@ -418,8 +419,8 @@ int SpawnerCellFilter(int cellIdx)
     //        return GRIDLIB_FILTER_DISCARD;
     //}
     
-    //if (IsValidClientZM() && !can_ZM_see(cellPos)) // Check if ZM can actually see that location.
-    //    return GRIDLIB_FILTER_DISCARD;
+    if (g_bSpawnerFilterZM && IsValidClientZM() && !can_ZM_see(cellPos)) // Check if ZM can actually see that location.
+        return GRIDLIB_FILTER_DISCARD;
     
     bool obscured = navSpawnAttrs>0 && ( (navSpawnAttrs & NAV_SPAWN_OBSCURED) || (navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
     if (!obscured && can_any_alive_survivor_see_cheap(cellPos))
@@ -493,6 +494,7 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
     float t_gridlib = GetEngineTime();
     int cells[1];
     reset_SpawnerCellFilter();
+    g_bSpawnerFilterZM = true;
     int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 1, SpawnerCellFilter, GRID_BUDGET_MS);
     float gridlib_ms = (GetEngineTime() - t_gridlib) * 1000.0;
 
@@ -812,6 +814,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         if (try_gridlib)
         {
             reset_SpawnerCellFilter();
+            g_bSpawnerFilterZM = false;
             gridlib_cell_count = GridLib_FindCellsFromClosest(zm_spawner_pos, count, gridlib_cells, 500, SpawnerCellFilter, GRID_BUDGET_MS, false);
             if (gridlib_cell_count > 0) use_gridlib = true;
         }

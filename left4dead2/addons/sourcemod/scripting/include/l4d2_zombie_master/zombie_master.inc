@@ -74,7 +74,7 @@ static float HULL_MAXS[3] = {HULL_DX_STRICT,HULL_DX_STRICT,HULL_DZ_MAX_STRICT};
 #define HULL_DX 20.0
 #define HULL_DZ 40.0
 #define HULL_DDZ 80.0
-#define LOS_TESTPOINTS 3
+#define LOS_TESTPOINTS 6
 
 // TraceHull to determine if ZM is looking at survivor through walls
 static float HULL_MINS_LOOK[3] = {-HULL_DX,-HULL_DX,-HULL_DZ};
@@ -2687,8 +2687,52 @@ bool can_ZM_see(float vPos[3])
     if (GetVectorDistance(vPos,vEye)>=fog_distance) return false;
     vPos2 = vPos; vPos2[2] += 32.0;
     bool can_see = true;
-    Handle trace = TR_TraceRayFilterEx(vEye,vPos2,MASK_VISIBLE,RayType_EndPoint,FilterSpawner,zm_client);
+    Handle trace = TR_TraceRayFilterEx(vEye,vPos2,MASK_VISIBLE,RayType_EndPoint,FilterLOS,zm_client);
     if(TR_DidHit(trace)) can_see = false;
     delete trace;
     return can_see;
+}
+
+// Entity filter for LOS checks. Ignore players, infected, witches, and everything else that is see-through (transparent).
+stock bool FilterLOS(int entity, int mask, int self = -1)
+{
+	if (entity==self) return false;
+	if (entity==0) return true;
+	if (IsValidClient(entity)) return false;
+	static char class[16];
+	GetEntityClassname(entity,class,sizeof(class));
+	//LogMessage("FilterLOS %d hit %d %s", self, entity, class);
+	switch (class[0])
+	{
+    	case 'i':
+    	{
+        	if (strncmp(class,"infected",8,false)==0) return false;
+    	}
+    	case 'w':
+    	{
+        	if (strncmp(class,"witch",5,false)==0) return false;
+    	}
+    	case 'e':
+    	{
+        	if (strncmp(class,"env_",4,false)==0) return false;
+        	if (strncmp(class,"entity_blocker",14,false)==0) return false;
+    	}
+    	case 'f':
+    	{
+        	if (strncmp(class,"func",4,false)==0) return false;
+    	}
+    	case 's':
+    	{
+        	if (strncmp(class,"script_clip",11,false)==0) return false;
+    	}
+    	case 'p':
+    	{
+        	if (strncmp(class,"prop_physics",12,false)==0) // prop_physics can be glass
+        	{
+            	//if (TR_GetSurfaceProps(INVALID_HANDLE)==33) return false;
+            	return false;
+        	}
+    	}
+	}
+	return true;
 }

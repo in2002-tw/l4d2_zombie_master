@@ -183,6 +183,10 @@ bool any_alive_survivors_in_radius(float vecPos[3], float radius)
 
 const int TR_MASK_LOS = MASK_VISIBLE;
 
+// 1st survivor: 6 traces. 2nd: 5. 3rd: 4. 4th and the rest: 3.
+#define MAX_TRACES LOS_TESTPOINTS
+#define MIN_TRACES 3
+
 /**
  * Check if LOS from `eyePos` to `testPoint` is blocked.
  *
@@ -230,25 +234,63 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         g_LosN_fog++;
         return false; // very fast early exit when no survivor within fog radius
     }
-
-    // Nav-area visibility pre-reject: if the director's recent-visibility list for the survivor team
-    // does not include this area, no survivor has marked it as seeable.
-    if (!NavArea_IsPotentiallyVisibleToTeam(cellNavArea, TEAM_SURVIVOR))
-    {
-        g_LosN_nav_rej++;
-        return false;
-    }
     
-    // LOS_TESTPOINTS (3) sample points around the spawner hull: mid-height center,
-    // top center with small jitter, and a leg corner.
+    // LOS_TESTPOINTS (6) sample points around the spawner hull
+    // Ordered by priority. The ones more likely to hit should always go first.
     static float testPoints[LOS_TESTPOINTS][3];
     testPoints[0] = vecPos; testPoints[0][2] += HULL_DZ;
     testPoints[1] = vecPos; testPoints[1][2] += HULL_DDZ; testPoints[1][0] -= 4.0; testPoints[1][1] += 5.0;
     testPoints[2] = vecPos; testPoints[2][2] += HULL_DZ_MIN_STRICT; testPoints[2][0] += HULL_DX; testPoints[2][1] -= HULL_DX;
+    testPoints[3] = vecPos; testPoints[3][2] += HULL_DZ; testPoints[3][0] -= HULL_DX; testPoints[3][1] += HULL_DX;
+    testPoints[4] = vecPos; testPoints[4][2] += HULL_DDZ; testPoints[4][0] += HULL_DX; testPoints[4][1] += HULL_DX;
+    testPoints[5] = vecPos; testPoints[5][2] += HULL_DZ; testPoints[5][0] -= HULL_DX; testPoints[5][1] -= HULL_DX;
+    int num_traces = MAX_TRACES; // start with MAX_TRACES, after each set, reduce number of traces by 1 until we fire only MIN_TRACES.
+    
+    //LogMessage("can_any_alive_survivor_see_cheap spawner mode: %d cluster %d navArea %d cell %d", g_iSpawnerMode, cellCluster, cellNavArea, cellIdx);
+    
+    int i;
+    bool check_nav = cellNavArea != Address_Null; // check IsPotentiallyVisibleToTeam and IsPotentiallyVisible
+    
+    // Check saferoom door to prevent ZM abusing survivors not looking out door.
+    if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor))
+    {
+        static float saferoom_pos[3];
+        L4D_GetEntityWorldSpaceCenter(g_iLockedDoor,saferoom_pos);
+        if (GetVectorDistance(saferoom_pos,vecPos,true) <= fog_distance_sq)
+        {
+            float t_safe = GetEngineTime();
+            g_LosN_safe_enter++;
+            int door = EntRefToEntIndex(g_iLockedDoor);
+            for (i = 0; i < num_traces; i++)
+            {
+                g_LosN_safe_trace++;
+                if (!los_blocked(saferoom_pos, testPoints[i], door))
+                {
+                    g_LosN_safe_hit++;
+                    g_LosMs_safe += (GetEngineTime() - t_safe) * 1000.0;
+                    return true;
+                }
+            }
+            if (num_traces>MIN_TRACES) num_traces -= 1;
+            g_LosMs_safe += (GetEngineTime() - t_safe) * 1000.0;
+        }
+    }
+
+    // Nav-area visibility pre-reject: if the director's recent-visibility list for the survivor team
+    // does not include this area, no survivor has marked it as seeable.
+    if (check_nav && hNavIsPotentiallyVisibleToTeam && !NavArea_IsPotentiallyVisibleToTeam(cellNavArea, TEAM_SURVIVOR))
+    {
+        g_LosN_nav_rej++;
+        num_traces = MIN_TRACES;
+        check_nav = false; // MIN_TRACES already reduced
+        //return false;
+    }
     
     Spawner_CacheSurvivorData(); // optimization - load survivor data or read cached values
     bool use_PVS = Is_PVS_Valid();
-    int i;
+    bool use_PVS_SameCluster = true; // use PVS same cluster shortcut
+    bool use_LOS_cache = true;
+    check_nav = check_nav && hNavIsPotentiallyVisible != null; // only checking IsPotentiallyVisible from here
     float t_surv = GetEngineTime();
 
     // Build per-cell survivor iteration order: closest-first maximises the chance of
@@ -273,16 +315,18 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         surv_distsq[j+1] = dsq;
         surv_n++;
     }
-
+    
+    int temp_traces;
     for (int o = 0; o < surv_n; o++)
     {
         int s = surv_order[o];
+        temp_traces = num_traces;
 
         // Shared cell-pair cache: skip the work when (surv_subcell_key, target_cell) is
         // already known within its TTL. Eligibility: cache enabled, target has a grid
         // cell idx. The survivor key is always a valid packed position hash.
         int survCellKey = g_CachedSurvCell[s];
-        bool cacheEligible = g_bLosCellCache && cellIdx >= 0;
+        bool cacheEligible = use_LOS_cache && g_bLosCellCache && cellIdx >= 0;
         if (cacheEligible)
         {
             bool cachedRes;
@@ -303,41 +347,51 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         {
             // Same-cluster shortcut: two points in one leaf cluster are trivially mutually visible via PVS.
             // Skip any per-pair visibility check and go straight to the trace.
-            bool sameCluster = use_PVS && (cellCluster >= 0 && cellCluster == g_BatchSurvivorCluster[s]);
-            if (sameCluster) g_LosN_shortcut++;
-            // per-area-pair bitset lookup. Engine's own fast path.
-            // Falls back to legacy per-survivor PVS byte-buffer check when:
-            //  - SDKCall not bound (Microslop windows))
-            //  - cell or survivor nav area is null
-            bool pairChecked = false;
-            bool pairVisible = true;
-            if (hNavIsPotentiallyVisible != null
-                && cellNavArea != Address_Null && g_CachedSurvNavArea[s] != Address_Null)
+            bool sameCluster = use_PVS_SameCluster && (cellCluster >= 0 && cellCluster == g_BatchSurvivorCluster[s]);
+            if (sameCluster)
             {
-                pairChecked = true;
-                pairVisible = NavArea_IsPotentiallyVisible(cellNavArea, g_CachedSurvNavArea[s], false);
+                g_LosN_shortcut++;
+                return true;
             }
-    
-            if (pairChecked)
-            {
-                if (!pairVisible)
-                {
-                    g_LosN_pvs_rej++;
-                    continue;
-                }
-            }
-            else
-            {
+            //else
+            //{
                 // Legacy per-survivor PVS byte-buffer check
                 if (!g_BatchSurvivorValidPVS[s] || !PVS_CheckOriginInPVS(vecPos, g_BatchSurvivorPVS[s]))
                 {
                     g_LosN_pvs_rej++;
                     continue;
                 }
+            //}
+            
+            // per-area-pair bitset lookup. Engine's own fast path.
+            // Falls back to legacy per-survivor PVS byte-buffer check when:
+            //  - SDKCall not bound (Microslop windows))
+            //  - cell or survivor nav area is null
+            if (check_nav && g_CachedSurvNavArea[s] != Address_Null && !NavArea_IsPotentiallyVisible(cellNavArea, g_CachedSurvNavArea[s], false))
+            {
+                temp_traces = MIN_TRACES;
             }
+           // bool pairChecked = false;
+            //bool pairVisible = true;
+            //if (check_nav && g_CachedSurvNavArea[s] != Address_Null)
+            //{
+            //    pairChecked = true;
+            //    pairVisible = NavArea_IsPotentiallyVisible(cellNavArea, g_CachedSurvNavArea[s], false);
+            //}
+    
+            //if (pairChecked)
+            //{
+                //if (!pairVisible)
+                //{
+                    //g_LosN_pvs_rej++;
+                    //temp_traces = MIN_TRACES;
+                    //continue;
+                //}
+            //}
+            
         }
         
-        for (i = 0; i < LOS_TESTPOINTS; i++)
+        for (i = 0; i < num_traces; i++)
         {
             g_LosN_surv_trace++;
             bool blocked = los_blocked(g_fBatchSurvivorEyePos[s], testPoints[i], g_iBatchSurvivorClients[s]);
@@ -353,6 +407,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
                 return true;
             }
         }
+        if (num_traces>MIN_TRACES && temp_traces>=num_traces) num_traces -= 1;
         // All testpoints blocked for this survivor.
         if (cacheEligible)
         {
@@ -362,76 +417,8 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
     }
     g_LosMs_surv += (GetEngineTime() - t_surv) * 1000.0;
 
-    // Fallback before round start: check saferoom door to prevent ZM abusing survivors not looking out door.
-    if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor))
-    {
-        static float saferoom_pos[3];
-        L4D_GetEntityWorldSpaceCenter(g_iLockedDoor,saferoom_pos);
-        if (GetVectorDistance(saferoom_pos,vecPos,true) <= fog_distance_sq)
-        {
-            float t_safe = GetEngineTime();
-            g_LosN_safe_enter++;
-            int door = EntRefToEntIndex(g_iLockedDoor);
-            for (i = 0; i < LOS_TESTPOINTS; i++)
-            {
-                g_LosN_safe_trace++;
-                if (!los_blocked(saferoom_pos, testPoints[i], door))
-                {
-                    g_LosN_safe_hit++;
-                    g_LosMs_safe += (GetEngineTime() - t_safe) * 1000.0;
-                    return true;
-                }
-            }
-            g_LosMs_safe += (GetEngineTime() - t_safe) * 1000.0;
-        }
-    }
-
     g_LosN_clear++;
     return false;
-}
-
-// Entity filter for LOS checks. Ignore players, infected, witches, and everything else that is see-through (transparent).
-stock bool FilterLOS(int entity, int mask, int self = -1)
-{
-	if (entity==self) return false;
-	if (entity==0) return true;
-	if (IsValidClient(entity)) return false;
-	static char class[16];
-	GetEntityClassname(entity,class,sizeof(class));
-	//LogMessage("FilterLOS %d hit %d %s", self, entity, class);
-	switch (class[0])
-	{
-    	case 'i':
-    	{
-        	if (strncmp(class,"infected",8,false)==0) return false;
-    	}
-    	case 'w':
-    	{
-        	if (strncmp(class,"witch",5,false)==0) return false;
-    	}
-    	case 'e':
-    	{
-        	if (strncmp(class,"env_",4,false)==0) return false;
-        	if (strncmp(class,"entity_blocker",14,false)==0) return false;
-    	}
-    	case 'f':
-    	{
-        	if (strncmp(class,"func",4,false)==0) return false;
-    	}
-    	case 's':
-    	{
-        	if (strncmp(class,"script_clip",11,false)==0) return false;
-    	}
-    	case 'p':
-    	{
-        	if (strncmp(class,"prop_physics",12,false)==0) // prop_physics can be glass
-        	{
-            	//if (TR_GetSurfaceProps(INVALID_HANDLE)==33) return false;
-            	return false;
-        	}
-    	}
-	}
-	return true;
 }
 
 // Should we exit min_distance_to_survivors early?
