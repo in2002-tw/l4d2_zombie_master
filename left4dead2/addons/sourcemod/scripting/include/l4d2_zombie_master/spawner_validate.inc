@@ -351,7 +351,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         {
             // Same-cluster shortcut: two points in one leaf cluster are trivially mutually visible via PVS.
             // Skip any per-pair visibility check and go straight to the trace.
-            if (use_PVS_SameCluster && (cellCluster >= 0 && cellCluster == g_BatchSurvivorCluster[s]) );
+            if (use_PVS_SameCluster && (cellCluster >= 0 && cellCluster == g_BatchSurvivorCluster[s]) )
             {
                 g_LosN_shortcut++;
                 return true;
