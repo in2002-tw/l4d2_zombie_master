@@ -250,8 +250,9 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
     //LogMessage("can_any_alive_survivor_see_cheap spawner mode: %d cluster %d navArea %d cell %d", g_iSpawnerMode, cellCluster, cellNavArea, cellIdx);
     
     int i;
-    if (cellNavArea == Address_Null) cellNavArea = L4D_GetNearestNavArea(vecPos, 300.0, false, false, true, TEAM_INFECTED);
-    bool check_nav = cellNavArea != Address_Null; // check IsPotentiallyVisibleToTeam and IsPotentiallyVisible
+    bool check_nav = hNavIsPotentiallyVisibleToTeam!=null || hNavIsPotentiallyVisible!=null;
+    if (check_nav && cellNavArea == Address_Null) cellNavArea = L4D_GetNearestNavArea(vecPos, 300.0, false, false, true, TEAM_INFECTED);
+    check_nav = cellNavArea != Address_Null; // check IsPotentiallyVisibleToTeam and IsPotentiallyVisible
     
     // Check saferoom door to prevent ZM abusing survivors not looking out door.
     if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor))
@@ -280,7 +281,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
 
     // Nav-area visibility pre-reject: if the director's recent-visibility list for the survivor team
     // does not include this area, no survivor has marked it as seeable.
-    if (check_nav && hNavIsPotentiallyVisibleToTeam && !NavArea_IsPotentiallyVisibleToTeam(cellNavArea, TEAM_SURVIVOR))
+    if (check_nav && hNavIsPotentiallyVisibleToTeam!=null && !NavArea_IsPotentiallyVisibleToTeam(cellNavArea, TEAM_SURVIVOR))
     {
         g_LosN_nav_rej++;
         num_traces = MIN_TRACES;
@@ -292,7 +293,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
     bool use_PVS = Is_PVS_Valid();
     bool use_PVS_SameCluster = true; // use PVS same cluster shortcut
     bool use_LOS_cache = true;
-    check_nav = check_nav && hNavIsPotentiallyVisible != null; // only checking IsPotentiallyVisible from here
+    check_nav = check_nav && hNavIsPotentiallyVisible!=null; // only checking IsPotentiallyVisible from here
     float t_surv = GetEngineTime();
     
     if (use_PVS_SameCluster && cellCluster<0 && use_PVS) cellCluster = PVS_GetClusterForOrigin(vecPos);
