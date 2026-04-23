@@ -496,7 +496,7 @@ stock int GridLib_FindNearbyCells(const float position[3],
 	float filterCallMs = filterCallTimeAccum * 1000.0;
 	Log_Debug(GRIDLIB_LOG_CHANNEL, "FindNearbyCells: returning %d/%d candidates (scanned %d, %.2fms, sort=%.2fms, filter=%.2fms)",
 		resultCount, candidateCount, scanned, filterMs, sortMs, filterCallMs);
-	if (filterMs > 10.0)
+	if (filterMs > budget_ms)
 		Log_Warn(GRIDLIB_LOG_CHANNEL, "FindNearbyCells filter took %.1fms (scanned %d/%d, returned %d, sort=%.1fms, filtercb=%.1fms, overhead=%.1fms)",
 			filterMs, scanned, candidateCount, resultCount, sortMs, filterCallMs, filterMs - sortMs - filterCallMs);
 
@@ -877,7 +877,7 @@ stock int GridLib_FindCellsFromClosest(const float position[3],
 		resultCount, filterCalls, candidateCount, collectMs, filterMs,
 		resultCount > 0 ? candidates[0][0] : 0.0,
 		resultCount > 0 ? candidates[resultCount - 1][0] : 0.0);
-	if (filterMs > 10.0)
+	if (filterMs > budget_ms)
 		Log_Warn(GRIDLIB_LOG_CHANNEL, "FindCellsFromClosest filter took %.1fms (filterCalls=%d, candidates=%d)",
 			filterMs, filterCalls, candidateCount);
 

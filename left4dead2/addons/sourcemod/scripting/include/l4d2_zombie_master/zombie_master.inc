@@ -407,6 +407,7 @@ Address g_CachedSurvNavArea[MAXPLAYERS+1];
 bool    g_SurvNavAreaComputed[MAXPLAYERS+1];
 float   g_GridEffectiveMinDist;
 
+#define HORDE_BUDGET_MS 20.0
 #define GRID_BUDGET_MS 10.0
 #define GRID_SEARCH_RADIUS  150.0
 #define GRID_MAX_Z_DIFF     100.0
@@ -598,6 +599,8 @@ int color_unit_select[4] = {255,255,255,128};
 float zm_target_pos[3], zm_spawner_pos[3], spawner_last_valid_pos[3];
 bool spawner_last_valid = false;
 Address zm_spawner_navArea;
+int zm_spawner_cluster = -1;
+int zm_spawner_cellIdx = -1; // gridlib cell number nearest to analog spawner position
 //float zm_spawner_navSize[3];
 //float zm_spawner_navCenter[3]; // for future use in ZM_Horde
 int zm_spawner_state;
@@ -1495,8 +1498,9 @@ stock bool IsObstructed(float pos[3], int entity = -1, bool debug=false, bool ig
 // Trace filter that only hits a specific entity
 int g_TraceFilter_TargetEntity = -1;
 
-bool TraceFilter_OnlyTargetEntity(int entity, int contentsMask)
+bool TraceFilter_OnlyTargetEntity(int entity, int contentsMask, int ignore = -1)
 {
+    if (entity==ignore) return false;
     return (entity == g_TraceFilter_TargetEntity);
 }
 
@@ -1555,6 +1559,150 @@ bool obstruction_rescue_hull_up(float vPos[3], int entity = -1, int zClass = ZOM
     return rescued;
 }
 
+// Recursion depth counter for stacked-prop rescues.
+#define GRID_RESCUE_MAX_DEPTH 2
+static int g_GridRescueDepth = 0;
+
+// Rendered surface tilt of a rescued cell is clamped to a minimum normal Z of this
+// value. cos(45deg) = 0.7071 keeps the indicator no more tilted than 45 deg visually,
+// even when the actual prop top is steeper. Rescue commit is not affected; the hull
+// position is still placed at the surface's topZ.
+#define GRID_RESCUE_MIN_NORMAL_Z 0.7071
+
+// Try to resolve a cell obstructed by a rescuable entity by finding a standable
+// position on top of it.
+//
+// Preconditions:
+//   - The caller just ran IsObstructed(pos) which returned true.
+//   - g_iObstructingEntity therefore identifies the blocker at pos.
+bool Grid_TryRescueObstruction(int idx, float pos[3], int entity = -1)
+{
+    int obstructor = g_iObstructingEntity;
+
+    if (obstructor <= 0) return false;
+
+    static char className[16];
+    GetEntityClassname(obstructor, className, sizeof(className));
+
+    // Anti-stacking: never rescue onto other actors. Same list
+    switch (className[0])
+    {
+        case 'p': { if (strcmp(className, "player", false) == 0) return false; }
+        case 'i': { if (strcmp(className, "infected", false) == 0) return false; }
+        case 'w': { if (strcmp(className, "witch", false) == 0) return false; }
+        case 'z': { if (strcmp(className, "zombie", false) == 0) return false; }
+    }
+
+    static float vOrigin[3], vMaxs[3];
+    GetEntPropVector(obstructor, Prop_Send, "m_vecOrigin", vOrigin);
+    GetEntPropVector(obstructor, Prop_Send, "m_vecMaxs",  vMaxs);
+    float aabbTopZ = vOrigin[2] + vMaxs[2];
+
+    float topZ = aabbTopZ;
+    float surfaceNormal[3];
+    surfaceNormal[0] = 0.0;
+    surfaceNormal[1] = 0.0;
+    surfaceNormal[2] = 1.0;
+    bool resolved = false;
+
+    {
+        float startPos[3], endPos[3];
+        startPos[0] = pos[0];
+        startPos[1] = pos[1];
+        startPos[2] = aabbTopZ + 4.0;
+        endPos[0] = pos[0];
+        endPos[1] = pos[1];
+        endPos[2] = pos[2];
+
+        g_TraceFilter_TargetEntity = obstructor;
+        Handle trace = TR_TraceRayFilterEx(startPos, endPos, MASK_NPCSOLID,
+                                           RayType_EndPoint, TraceFilter_OnlyTargetEntity, entity);
+
+        if (TR_DidHit(trace) && !TR_StartSolid(trace))
+        {
+            float hitPos[3];
+            TR_GetEndPosition(hitPos, trace);
+            if (TR_GetEntityIndex(trace) == obstructor)
+            {
+                topZ = hitPos[2];
+                TR_GetPlaneNormal(trace, surfaceNormal);
+                resolved = true;
+            }
+        }
+        delete trace;
+        g_TraceFilter_TargetEntity = -1;
+    }
+
+    // AABB fallback: when the ray trace could not land on the target's top surface.
+    if (!resolved)
+    {
+        topZ = aabbTopZ;
+        surfaceNormal[0] = 0.0;
+        surfaceNormal[1] = 0.0;
+        surfaceNormal[2] = 1.0;
+    }
+
+    // Clamp the rendered surface tilt to at most 45 degrees from horizontal.
+    if (surfaceNormal[2] < GRID_RESCUE_MIN_NORMAL_Z)
+    {
+        float xyLen = SquareRoot(surfaceNormal[0]*surfaceNormal[0]
+                               + surfaceNormal[1]*surfaceNormal[1]);
+        if (xyLen > 0.0001)
+        {
+            float newXYLen = SquareRoot(1.0 - GRID_RESCUE_MIN_NORMAL_Z * GRID_RESCUE_MIN_NORMAL_Z);
+            float scale = newXYLen / xyLen;
+            surfaceNormal[0] *= scale;
+            surfaceNormal[1] *= scale;
+        }
+        surfaceNormal[2] = GRID_RESCUE_MIN_NORMAL_Z;
+    }
+
+    float adjustedPos[3];
+    adjustedPos[0] = pos[0];
+    adjustedPos[1] = pos[1];
+    adjustedPos[2] = topZ + 2.0;
+
+    if (IsObstructed(adjustedPos))
+    {
+        // IsObstructed just set g_iObstructingEntity to whatever blocks adjustedPos.
+        // If that blocker is itself rescuable (stacked prop, pallet on table), recurse.
+        if (g_GridRescueDepth < GRID_RESCUE_MAX_DEPTH)
+        {
+            g_GridRescueDepth++;
+            bool ok = Grid_TryRescueObstruction(idx, adjustedPos, entity);
+            g_GridRescueDepth--;
+            if (ok)
+            {
+                pos[0] = adjustedPos[0];
+                pos[1] = adjustedPos[1];
+                pos[2] = adjustedPos[2];
+                g_iObstructingEntity = obstructor;
+                return true;
+            }
+        }
+        g_iObstructingEntity = obstructor;
+        return false;
+    }
+
+    // Commit the rescue.
+    pos[0] = adjustedPos[0];
+    pos[1] = adjustedPos[1];
+    pos[2] = adjustedPos[2];
+    if (idx>=0)
+    {
+        g_GridValidPositions[idx] = adjustedPos;
+        g_GridOverridePositions[idx] = adjustedPos;
+        g_GridHasOverride[idx] = true;
+        g_GridOverrideFlat[idx] = (surfaceNormal[2] >= 0.98);
+        g_GridOverrideNormals[idx][0] = surfaceNormal[0];
+        g_GridOverrideNormals[idx][1] = surfaceNormal[1];
+        g_GridOverrideNormals[idx][2] = surfaceNormal[2];
+    }
+
+    g_iObstructingEntity = obstructor;
+    return true;
+}
+
 // for known obstructed pos, try adjusting position slightly
 // optional: navArea and center for try_center, try_random
 // optional: zClass to determine if ignore_zombies is used for relaxed obstruction checks
@@ -1571,7 +1719,8 @@ stock bool try_adjusting_obstructed_pos(float pos[3], int entity = -1, int zClas
     float new_pos[3];
     if (try_up)
     {
-        if (obstruction_rescue_hull_up(pos,entity,zClass)) return true;
+        if ( (g_iObstructingEntity>0 && Grid_TryRescueObstruction(-1,pos,entity)) || obstruction_rescue_hull_up(pos,entity,zClass))
+            return true;
     }
     
     if (try_center && center[0]!=0.0 && center[1]!=0.0)
@@ -1583,7 +1732,7 @@ stock bool try_adjusting_obstructed_pos(float pos[3], int entity = -1, int zClas
         }
         else if (try_center_up)
         {
-            if (obstruction_rescue_hull_up(center,entity,zClass))
+            if ( (g_iObstructingEntity>0 && Grid_TryRescueObstruction(-1,center,entity)) || obstruction_rescue_hull_up(center,entity,zClass))
             {
                 pos = center;
                 return true;
@@ -1601,7 +1750,7 @@ stock bool try_adjusting_obstructed_pos(float pos[3], int entity = -1, int zClas
         }
         else if (try_random_up)
         {
-            if (obstruction_rescue_hull_up(new_pos,entity,zClass))
+            if ( (g_iObstructingEntity>0 && Grid_TryRescueObstruction(-1,new_pos,entity)) || obstruction_rescue_hull_up(new_pos,entity,zClass))
             {
                 pos = new_pos;
                 return true;

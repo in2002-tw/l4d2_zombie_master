@@ -118,15 +118,15 @@ void get_random_xy_orientation(float angle[3])
  * @param flow    If true, spawn near the highest-flow survivor instead of the aimed position
  * @param hint    If true, show HUD feedback to the ZM
  */
-void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bool flow = false, bool hint = true)
+void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bool flow = false, bool hint = true, float t_budget_ms = HORDE_BUDGET_MS)
 {
 	if (!g_bCvarAllow) return;
 	if (!(client==zm_client || client==0)) return;
 	if (DEBUG) LogMessage("[zm] ZM_Horde");
 	
-	if (hint && is_zm_spamming()) return;
-	
 	float t_start = GetEngineTime(); // for profiling
+	
+	if (hint && is_zm_spamming()) return;
 	
 	CountCommons(null,false);
 	if (live_zombie_arr[ZOMBIECLASS_COMMON]>=max_zombie_arr[ZOMBIECLASS_COMMON])
@@ -277,6 +277,7 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
            else DispatchKeyValue(zombie, "targetname", "zm_unit_common");
            Spawner_NotifySpawned(zombie);
         }
+        if ((GetEngineTime()-t_start)*1000.0>t_budget_ms) break;
     }
     Spawner_EndSpawn();
 
@@ -313,8 +314,8 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
     	update_EMS_HUD();
 	}
 	
-	float elapsed_ms = (GetEngineTime() - t_start) * 1000.0;
-	LogMessage("ZM_Horde ct=%d %s angry=%d flow=%d took %f ms",count,type,angry,flow,elapsed_ms);
+	float elapsed_ms = (GetEngineTime()-t_start)*1000.0;
+	if (elapsed_ms>t_budget_ms) LogMessage("ZM_Horde ct=%d %s angry=%d flow=%d took %f ms",count,type,angry,flow,elapsed_ms);
 	
 }
 

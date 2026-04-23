@@ -69,151 +69,6 @@ void Grid_OnDisabled(int client)
         GridRenderer_OnClientDisabled(client);
 }
 
-// ==========================================================================
-// Validation helpers
-// ==========================================================================
-
-// Recursion depth counter for stacked-prop rescues.
-#define GRID_RESCUE_MAX_DEPTH 2
-static int g_GridRescueDepth = 0;
-
-// Rendered surface tilt of a rescued cell is clamped to a minimum normal Z of this
-// value. cos(45deg) = 0.7071 keeps the indicator no more tilted than 45 deg visually,
-// even when the actual prop top is steeper. Rescue commit is not affected; the hull
-// position is still placed at the surface's topZ.
-#define GRID_RESCUE_MIN_NORMAL_Z 0.7071
-
-// Try to resolve a cell obstructed by a rescuable entity by finding a standable
-// position on top of it.
-//
-// Preconditions:
-//   - The caller just ran IsObstructed(pos) which returned true.
-//   - g_iObstructingEntity therefore identifies the blocker at pos.
-static bool Grid_TryRescueObstruction(int idx, float pos[3])
-{
-    int obstructor = g_iObstructingEntity;
-
-    if (obstructor <= 0) return false;
-
-    static char className[16];
-    GetEntityClassname(obstructor, className, sizeof(className));
-
-    // Anti-stacking: never rescue onto other actors. Same list
-    switch (className[0])
-    {
-        case 'p': { if (strcmp(className, "player", false) == 0) return false; }
-        case 'i': { if (strcmp(className, "infected", false) == 0) return false; }
-        case 'w': { if (strcmp(className, "witch", false) == 0) return false; }
-        case 'z': { if (strcmp(className, "zombie", false) == 0) return false; }
-    }
-
-    static float vOrigin[3], vMaxs[3];
-    GetEntPropVector(obstructor, Prop_Send, "m_vecOrigin", vOrigin);
-    GetEntPropVector(obstructor, Prop_Send, "m_vecMaxs",  vMaxs);
-    float aabbTopZ = vOrigin[2] + vMaxs[2];
-
-    float topZ = aabbTopZ;
-    float surfaceNormal[3];
-    surfaceNormal[0] = 0.0;
-    surfaceNormal[1] = 0.0;
-    surfaceNormal[2] = 1.0;
-    bool resolved = false;
-
-    {
-        float startPos[3], endPos[3];
-        startPos[0] = pos[0];
-        startPos[1] = pos[1];
-        startPos[2] = aabbTopZ + 4.0;
-        endPos[0] = pos[0];
-        endPos[1] = pos[1];
-        endPos[2] = pos[2];
-
-        g_TraceFilter_TargetEntity = obstructor;
-        Handle trace = TR_TraceRayFilterEx(startPos, endPos, MASK_NPCSOLID,
-                                           RayType_EndPoint, TraceFilter_OnlyTargetEntity);
-
-        if (TR_DidHit(trace) && !TR_StartSolid(trace))
-        {
-            float hitPos[3];
-            TR_GetEndPosition(hitPos, trace);
-            if (TR_GetEntityIndex(trace) == obstructor)
-            {
-                topZ = hitPos[2];
-                TR_GetPlaneNormal(trace, surfaceNormal);
-                resolved = true;
-            }
-        }
-        delete trace;
-        g_TraceFilter_TargetEntity = -1;
-    }
-
-    // AABB fallback: when the ray trace could not land on the target's top surface.
-    if (!resolved)
-    {
-        topZ = aabbTopZ;
-        surfaceNormal[0] = 0.0;
-        surfaceNormal[1] = 0.0;
-        surfaceNormal[2] = 1.0;
-    }
-
-    // Clamp the rendered surface tilt to at most 45 degrees from horizontal.
-    if (surfaceNormal[2] < GRID_RESCUE_MIN_NORMAL_Z)
-    {
-        float xyLen = SquareRoot(surfaceNormal[0]*surfaceNormal[0]
-                               + surfaceNormal[1]*surfaceNormal[1]);
-        if (xyLen > 0.0001)
-        {
-            float newXYLen = SquareRoot(1.0 - GRID_RESCUE_MIN_NORMAL_Z * GRID_RESCUE_MIN_NORMAL_Z);
-            float scale = newXYLen / xyLen;
-            surfaceNormal[0] *= scale;
-            surfaceNormal[1] *= scale;
-        }
-        surfaceNormal[2] = GRID_RESCUE_MIN_NORMAL_Z;
-    }
-
-    float adjustedPos[3];
-    adjustedPos[0] = pos[0];
-    adjustedPos[1] = pos[1];
-    adjustedPos[2] = topZ + 2.0;
-
-    if (IsObstructed(adjustedPos))
-    {
-        // IsObstructed just set g_iObstructingEntity to whatever blocks adjustedPos.
-        // If that blocker is itself rescuable (stacked prop, pallet on table), recurse.
-        if (g_GridRescueDepth < GRID_RESCUE_MAX_DEPTH)
-        {
-            g_GridRescueDepth++;
-            bool ok = Grid_TryRescueObstruction(idx, adjustedPos);
-            g_GridRescueDepth--;
-            if (ok)
-            {
-                pos[0] = adjustedPos[0];
-                pos[1] = adjustedPos[1];
-                pos[2] = adjustedPos[2];
-                g_iObstructingEntity = obstructor;
-                return true;
-            }
-        }
-        g_iObstructingEntity = obstructor;
-        return false;
-    }
-
-    // Commit the rescue.
-    pos[0] = adjustedPos[0];
-    pos[1] = adjustedPos[1];
-    pos[2] = adjustedPos[2];
-    g_GridValidPositions[idx] = adjustedPos;
-    g_GridOverridePositions[idx] = adjustedPos;
-    g_GridHasOverride[idx] = true;
-    g_GridOverrideFlat[idx] = (surfaceNormal[2] >= 0.98);
-    g_GridOverrideNormals[idx][0] = surfaceNormal[0];
-    g_GridOverrideNormals[idx][1] = surfaceNormal[1];
-    g_GridOverrideNormals[idx][2] = surfaceNormal[2];
-
-    g_iObstructingEntity = obstructor;
-    return true;
-}
-
 static bool Grid_CheckObstruction(int idx, float pos[3], bool obstructed)
 {
     float t = GetEngineTime();
@@ -359,12 +214,15 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
     t = GetEngineTime();
     
     bool obscured = navSpawnAttrs>0 && ( (navSpawnAttrs & NAV_SPAWN_OBSCURED) || (navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
-    int cellCluster = GridLib_GetCellCluster(g_GridCellIndices[idx]);
-    if (!obscured && can_any_alive_survivor_see_cheap(pos, cellCluster, navArea, g_GridCellIndices[idx]))
+    if (!obscured)
     {
-        g_GridMs_los += (GetEngineTime() - t) * 1000.0;
-        g_GridN_los++;
-        return false;
+        int cellCluster = GridLib_GetCellCluster(g_GridCellIndices[idx]);
+        if (can_any_alive_survivor_see_cheap(pos,cellCluster,navArea,g_GridCellIndices[idx]))
+        {
+            g_GridMs_los += (GetEngineTime() - t) * 1000.0;
+            g_GridN_los++;
+            return false;
+        }
     }
     g_GridMs_los += (GetEngineTime() - t) * 1000.0;
 
@@ -508,7 +366,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         
         if (!over_budget && ((GetEngineTime()-t_start)*1000.0)>=GRID_BUDGET_MS)
         {
-            LogMessage("Grid_TimerUpdate over %1.f ms budget at %d/%d cells", GRID_BUDGET_MS, i, cellCount);
+            if (DEBUG_SPAWNER) LogMessage("Grid_TimerUpdate over %1.f ms budget at %d/%d cells", GRID_BUDGET_MS, i, cellCount);
             over_budget = true;
         }
 
@@ -598,7 +456,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     float ms_render = (GetEngineTime() - t_render) * 1000.0;
 
     float elapsed_ms = (GetEngineTime() - t_start) * 1000.0;
-    if (elapsed_ms > 10.0)
+    if (DEBUG_SPAWNER && elapsed_ms > GRID_BUDGET_MS)
     {
         LogMessage("[zm] WARNING: Grid_TimerUpdate took %.1f ms (%d cells: %d valid, %d obstructed, %d nav, %d LOS, %d dist) find=%.1f validate=%.1f [obstruct=%.1f nav=%.1f los=%.1f dist=%.1f] render=%.1f",
             elapsed_ms, cellCount, g_GridN_valid, g_GridN_obstructed,

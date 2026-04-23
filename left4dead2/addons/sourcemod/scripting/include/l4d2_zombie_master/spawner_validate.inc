@@ -54,7 +54,7 @@ void set_cell_cooldown(int cellIdx, float t = -1.0)
 void Spawner_CacheSurvivorData()
 {
 	if (Is_Survivor_Cache_Valid()) return;
-	g_bBatchPVSActive = false;
+	g_bBatchPVSActive = hCheckOriginInPVS!=null;
 	g_bBatchActive = false;
 	g_iBatchSurvivorCount = 0;
 	int cluster;
@@ -65,7 +65,7 @@ void Spawner_CacheSurvivorData()
 		GetClientAbsOrigin(i, g_fBatchSurvivorPos[g_iBatchSurvivorCount]);
 		g_CachedSurvFlow[g_iBatchSurvivorCount] = L4D2Direct_GetFlowDistance(i);
 		GetClientEyePosition(i,g_fBatchSurvivorEyePos[g_iBatchSurvivorCount]);
-		if (hCheckOriginInPVS!=null)
+		if (g_bBatchPVSActive)
 		{
     		cluster = PVS_GetClusterForOrigin(g_fBatchSurvivorEyePos[g_iBatchSurvivorCount]);
     		g_BatchSurvivorCluster[g_iBatchSurvivorCount] = cluster;
@@ -93,7 +93,7 @@ void Spawner_CacheSurvivorData()
 		g_iBatchSurvivorCount++;
 	}
 	g_bBatchActive = g_iBatchSurvivorCount>0;
-	g_bBatchPVSActive = g_bBatchActive && hCheckOriginInPVS!=null;
+	g_bBatchPVSActive = g_bBatchActive && g_bBatchPVSActive;
 	if (g_bBatchActive) g_fBatchTime = GetGameTime();
 
 	if (DEBUG_SPAWNER) LogMessage("[zm] Spawner_CacheSurvivorData: %d survivors, active=%d, PVS_active=%d",g_iBatchSurvivorCount,g_bBatchActive,g_bBatchPVSActive);
@@ -124,6 +124,7 @@ bool Is_Survivor_Cache_Valid()
             invalidate_survivor_cache();
         }
     }
+    else g_bBatchPVSActive = false;
     //LogMessage("Is_PVS_Valid %d %d", g_bBatchPVSActive, g_iBatchSurvivorCount);
     return g_bBatchActive;
 }
@@ -249,6 +250,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
     //LogMessage("can_any_alive_survivor_see_cheap spawner mode: %d cluster %d navArea %d cell %d", g_iSpawnerMode, cellCluster, cellNavArea, cellIdx);
     
     int i;
+    if (cellNavArea == Address_Null) cellNavArea = L4D_GetNearestNavArea(vecPos, 300.0, false, false, true, TEAM_INFECTED);
     bool check_nav = cellNavArea != Address_Null; // check IsPotentiallyVisibleToTeam and IsPotentiallyVisible
     
     // Check saferoom door to prevent ZM abusing survivors not looking out door.
@@ -292,6 +294,8 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
     bool use_LOS_cache = true;
     check_nav = check_nav && hNavIsPotentiallyVisible != null; // only checking IsPotentiallyVisible from here
     float t_surv = GetEngineTime();
+    
+    if (use_PVS_SameCluster && cellCluster<0 && use_PVS) cellCluster = PVS_GetClusterForOrigin(vecPos);
 
     // Build per-cell survivor iteration order: closest-first maximises the chance of
     // early-exiting on the first visible trace. Fog-distance and valid-client gates

@@ -419,6 +419,8 @@ void can_zm_start()
 // Teleport survivor to starting area - ONLY COOP
 // Thanks Dragokas -- https://forums.alliedmods.net/showthread.php?t=338572
 int safezone_navAreaId = -1;
+//float vecPos_tp_safe[3];
+//bool tp_safe_exists = false;
 
 void tp_survivor_start(int client, bool notify = false)
 {
@@ -429,7 +431,9 @@ void tp_survivor_start(int client, bool notify = false)
        return;
    }
    
-   float vector[3];
+   //if (safezone_navAreaId<0) tp_safe_exists = false;
+   
+   static float vector[3]; 
    
    if (L4D_IsSurvivalMode())
    {
@@ -472,6 +476,8 @@ void tp_survivor_start(int client, bool notify = false)
            if (navArea_validStart(temp_navArea))
            {
                safezone_navAreaId = L4D_GetNavAreaID(temp_navArea);
+               //vecPos_tp_safe = vector;
+               //tp_safe_exists = true;
                if (DEBUG) LogMessage("[zm] found info_player_start");
            }
        }
@@ -488,6 +494,8 @@ void tp_survivor_start(int client, bool notify = false)
                     if (navArea_validStart(temp_navArea))
                     {
                         safezone_navAreaId = L4D_GetNavAreaID(temp_navArea);
+                        //vecPos_tp_safe = vector;
+                        //tp_safe_exists = true;
                         if (DEBUG) LogMessage("[zm] found info_survivor_position");
                         break;
                     }
@@ -539,8 +547,12 @@ void tp_survivor_start(int client, bool notify = false)
        if (safezone_navArea && navArea_validStart(safezone_navArea))
        {
            L4D_FindRandomSpot(safezone_navArea,randomPos);
-           if (IsObstructed(randomPos,client)) randomPos[2] += 50.0;
-           else randomPos[2] += 25.0;
+           if (IsObstructed(randomPos,client)) L4D_GetNavAreaCenter(safezone_navArea,randomPos);
+           if (IsObstructed(randomPos,client)) L4D_FindRandomSpot(safezone_navArea,randomPos);
+           if (IsObstructed(randomPos,client))
+           {
+               Grid_TryRescueObstruction(-1,randomPos,client);
+           }
            //TeleportEntity(client, randomPos, NULL_VECTOR, NULL_VECTOR);
            SetAbsOrigin(client,randomPos);
            if (DEBUG) LogMessage("[zm] Teleported %d to safezone", client);

@@ -161,11 +161,14 @@ void PrepSDKCall()
 		}
 
 		bool allPvsReady = hGetClusterForOrigin != null && hGetPVSForCluster != null && hCheckOriginInPVS != null;
-		LogMessage("[zm] INFO: PVS SDKCalls: GetClusterForOrigin=%s GetPVSForCluster=%s CheckOriginInPVS=%s (pipeline %s)",
-			hGetClusterForOrigin == null ? "FAIL" : "ok",
-			hGetPVSForCluster == null ? "FAIL" : "ok",
-			hCheckOriginInPVS == null ? "FAIL" : "ok",
-			allPvsReady ? "READY" : "DEGRADED - fallback LOS path will run");
+		if (!allPvsReady)
+		{
+    		LogMessage("[zm] INFO: PVS SDKCalls: GetClusterForOrigin=%s GetPVSForCluster=%s CheckOriginInPVS=%s (pipeline %s)",
+    		hGetClusterForOrigin == null ? "FAIL" : "ok",
+    		hGetPVSForCluster == null ? "FAIL" : "ok",
+    		hCheckOriginInPVS == null ? "FAIL" : "ok",
+    		allPvsReady ? "READY" : "DEGRADED - fallback LOS path will run");
+        }
 	}
 
 	// TerrorNavArea::IsPotentiallyVisibleToTeam(int team) -> bool
@@ -181,8 +184,8 @@ void PrepSDKCall()
 		LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisibleToTeam SetFromConf failed; nav filter disabled (gamedata sig not found or binary mismatch)");
 	else if (hNavIsPotentiallyVisibleToTeam == null)
 		LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisibleToTeam EndPrepSDKCall returned null; nav filter disabled");
-	else
-		LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisibleToTeam SDKCall ready");
+	//else
+	//	LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisibleToTeam SDKCall ready");
 
 	// TerrorNavArea::IsPotentiallyVisible(const TerrorNavArea*, bool) -> bool (signature-based, non-virtual)
 	StartPrepSDKCall(SDKCall_Raw);
@@ -198,8 +201,8 @@ void PrepSDKCall()
 		LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisible SetFromConf failed; per-area-pair LOS path disabled (sig not found or binary mismatch)");
 	else if (hNavIsPotentiallyVisible == null)
 		LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisible EndPrepSDKCall returned null; per-area-pair LOS path disabled");
-	else
-		LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisible SDKCall ready");
+	//else
+	//	LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisible SDKCall ready");
 
 	delete hGameData;
 }

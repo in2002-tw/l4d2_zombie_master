@@ -24,7 +24,8 @@
 #define LOG_TRACE 5
 
 // Default level applied to any channel that hasn't had SetLevel called on it.
-#define LOG_DEFAULT_LEVEL LOG_INFO
+//#define LOG_DEFAULT_LEVEL LOG_INFO
+#define LOG_DEFAULT_LEVEL LOG_OFF
 
 static StringMap g_LogLevels = null;
 

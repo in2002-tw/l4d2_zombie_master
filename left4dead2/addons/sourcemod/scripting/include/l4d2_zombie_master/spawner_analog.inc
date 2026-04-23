@@ -70,7 +70,6 @@ void update_ZM_spawner(const float target_pos[3], const float spawner_pos[3], co
             spawner_last_valid = true;
         }
         
-        
     }
     zm_target_pos = target_pos;
     zm_spawner_pos = spawner_pos;
@@ -149,6 +148,18 @@ int Analog_CanSpawn(int zClass=ZOMBIECLASS_BOOMER, bool hint = true, bool look_o
 	return spawner_state;
 }
 
+int Analog_Get_GridLib_cellIdx(float pos[3])
+{
+    int cellIdx = -1;
+    if (GridLib_IsReady())
+    {
+       	int seedResult[1];
+       	int seedFound = GridLib_FindNearbyCells(pos,HULL_DX,9999.0,seedResult,1);
+        if (seedFound>0) cellIdx = seedResult[0];
+    }
+    return cellIdx;
+}
+
 /**
  * Main spawn validation orchestrator - specify world position in map.
  * if a spawn is valid at the aimed location. Checks: world bounds, NavMesh area,
@@ -198,7 +209,14 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
     //                                                  bools: anyz los checkground
     Address navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
     int navSpawnAttrs, navAttrFlags;
-    if (draw) zm_spawner_navArea = navArea; // update global navarea
+    int cluster = -1; // PVS Cluster
+    int grid_cellIdx = -1; // Nearest gridlib cell number
+    if (draw)
+    {
+        zm_spawner_navArea = navArea; // update global navarea
+        zm_spawner_cluster = -1;
+        zm_spawner_cellIdx = -1;
+    }
     float navSize[3], navCenter[3];
     if (navArea)
     {
@@ -228,8 +246,11 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
             }
             if (!fail && !obstruction_checked && IsObstructed(vPos_spawner,_,_,ignore_zombies)) // Navmesh xy is good, but we are obstructed. Try moving up.
             {
+                fail = Grid_TryRescueObstruction(-1,vPos_spawner);
+            
                 fail = !try_adjusting_obstructed_pos(vPos_spawner,_,zClass,navArea,navCenter,
-                                             true,!obstruction_checked,!obstruction_checked,!obstruction_checked,!obstruction_checked);
+                                                    true,!obstruction_checked,!obstruction_checked,!obstruction_checked,!obstruction_checked);
+                
                 
             }
             if (!fail && vPos_spawner[2]<z_min)
@@ -284,8 +305,15 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
         bool obscured = ( (navSpawnAttrs & NAV_SPAWN_OBSCURED) || (navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
         if (!obscured)
         {
-            fail = can_any_alive_survivor_see_cheap(vPos_spawner);
+            if(hCheckOriginInPVS!=null) cluster = PVS_GetClusterForOrigin(vPos_spawner);
+            grid_cellIdx = Analog_Get_GridLib_cellIdx(vPos_spawner);
+            fail = can_any_alive_survivor_see_cheap(vPos_spawner,cluster,navArea,grid_cellIdx); 
             if (fail) spawner_state = SPAWNER_SIGHT;
+            if (draw)
+            {
+                zm_spawner_cluster = cluster;
+                zm_spawner_cellIdx = grid_cellIdx;
+            }
         }
     }
     //if (!fail && IsObstructed(vPos_spawner,_,_,ignore_zombies))
@@ -319,7 +347,12 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
         {
             vPos_spawner = newPos;
             spawner_state = SPAWNER_OK;
-            if (draw) zm_spawner_navArea = L4D_GetNearestNavArea(newPos,check_dist,true,true,true,TEAM_INFECTED);
+            if (draw)
+            {
+                zm_spawner_navArea = Address_Null;
+                zm_spawner_cluster = -1;
+                zm_spawner_cellIdx = -1;
+            }
         }
     }
     if (fail)
@@ -350,7 +383,13 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
         }
         return spawner_state;
     }
-    if (draw) update_ZM_spawner(vPos,vPos_spawner,SPAWNER_OK,draw);
+    if (draw)
+    {
+        update_ZM_spawner(vPos,vPos_spawner,SPAWNER_OK,draw);
+        if (zm_spawner_navArea==Address_Null) zm_spawner_navArea = L4D_GetNearestNavArea(vPos_spawner,check_dist,true,true,true,TEAM_INFECTED);
+        if (zm_spawner_cluster<0 && hCheckOriginInPVS!=null) zm_spawner_cluster = PVS_GetClusterForOrigin(vPos_spawner);
+        if (zm_spawner_cellIdx<0) grid_cellIdx = Analog_Get_GridLib_cellIdx(vPos_spawner);
+    }
     vPos = vPos_spawner; // in case dynamic adjustment was made
     return SPAWNER_OK;
 }
@@ -423,7 +462,7 @@ int SpawnerCellFilter(int cellIdx)
         return GRIDLIB_FILTER_DISCARD;
     
     bool obscured = navSpawnAttrs>0 && ( (navSpawnAttrs & NAV_SPAWN_OBSCURED) || (navSpawnAttrs & NAV_SPAWN_IGNORE_VISIBILITY) );
-    if (!obscured && can_any_alive_survivor_see_cheap(cellPos))
+    if (!obscured && can_any_alive_survivor_see_cheap(cellPos,GridLib_GetCellCluster(cellIdx),navArea,cellIdx))
     {
         if (DEBUG_SPAWNER) LogMessage("[zm] SpawnerCellFilter: cell %d visible to survivors", cellIdx);
         {
@@ -551,14 +590,14 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
         outPos = cellPos;
         float total_ms = (GetEngineTime() - t_start) * 1000.0;
         if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: done (gridlib=%.2f ms, total=%.2f ms)", gridlib_ms, total_ms);
-        if (total_ms > 10.0)
+        if (DEBUG_SPAWNER && total_ms > 10.0)
             LogMessage("[zm] WARNING: FindNearbyValidSpawnCell took %.1f ms (gridlib=%.1f ms, %d results)", total_ms, gridlib_ms, count);
         return true;
     }
 
     float total_ms = (GetEngineTime() - t_start) * 1000.0;
     if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: no valid cell found (gridlib=%.2f ms, total=%.2f ms)", gridlib_ms, total_ms);
-    if (total_ms > 10.0)
+    if (DEBUG_SPAWNER && total_ms > 10.0)
         LogMessage("[zm] WARNING: FindNearbyValidSpawnCell took %.1f ms (gridlib=%.1f ms, %d results)", total_ms, gridlib_ms, count);
     return false;
 }
@@ -724,7 +763,9 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
     g_bAnalogHint = hint;
     g_bAnalogBatchMode = true;
     static float min_distance_last;
-    bool valid_last = IsValidEntity(lastdoor); 
+    bool valid_last = IsValidEntity(lastdoor);
+    
+    float t = GetEngineTime();
 
     int spawner_state;
     if (flow) spawner_state = SPAWNER_DISTANCE;
@@ -755,7 +796,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
                 break;
             if (!L4D_GetRandomPZSpawnPosition(target_client, ZOMBIECLASS_COMMON, tries, randomPos))
                 continue;
-            if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(randomPos))
+            if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(randomPos,_,_,_))
                 continue;
             if (valid_last)
             {
@@ -774,6 +815,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             outPositions[idx+1] = randomPos[1];
             outPositions[idx+2] = randomPos[2];
             resolved++;
+            if ((GetEngineTime()-t)*1000.0>GRID_BUDGET_MS) return resolved;
         }
 
         return resolved;
@@ -791,9 +833,8 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         if (g_iSpawnerMode>0 && g_GridValidCellCount>=count && GetVectorDistance(g_GridClosestValidPos,zm_spawner_pos)<150.0
             && L4D2_NavAreaTravelDistance(g_GridClosestValidPos,zm_spawner_pos,false)<150.0)
         {
-            
             // Grid may be outdated
-            if ((GetGameTime()-t_last_spawner_grid_update)>=0.1) Grid_Update();
+            if ((GetGameTime()-t_last_spawner_grid_update)>=0.1 && (GetEngineTime()-t)*1000.0<GRID_BUDGET_MS) Grid_Update();
             if (g_GridValidCellCount>=count)
             {
                 resolved = Grid_ResolveCommonPositions(count,flow,angry,hint,outPositions,maxOut);
@@ -811,7 +852,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             float count_navmesh = (navSize[0] * navSize[1]) / AREA_COMMON + 1.0;
             try_gridlib = count_navmesh < count || count_navmesh > (4.0 * count);
         }
-        if (try_gridlib)
+        if (try_gridlib && (GetEngineTime()-t)*1000.0<GRID_BUDGET_MS)
         {
             reset_SpawnerCellFilter();
             g_bSpawnerFilterZM = false;
@@ -825,7 +866,6 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
     static float pos[3];
     for (int i = 0; i < count && resolved < maxOut; i++)
     {
-
         bool fallback_original_navmesh = false;
         if (use_gridlib && i<gridlib_cell_count)
         {
@@ -870,14 +910,14 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
 
         if (fallback_original_navmesh)
         {
-            if (zm_spawner_navArea && count > 1)
+            if (zm_spawner_navArea && count > 1 && (GetEngineTime()-t)*1000.0<GRID_BUDGET_MS)
             {
                 L4D_FindRandomSpot(zm_spawner_navArea, pos);
                 if (valid_last && distance_last_saferoom(pos)<DISTANCE_LAST_SAFEROOM)
                     pos = zm_spawner_pos;
                 else if ( g_fSpawnMinDistance>0.0 && distance_too_close(min_distance_to_survivors(pos,false,_,zm_spawner_navArea)) )
                     pos = zm_spawner_pos;
-                else if (can_any_alive_survivor_see_cheap(pos))
+                else if (can_any_alive_survivor_see_cheap(pos,zm_spawner_cluster,zm_spawner_navArea,zm_spawner_cellIdx))
                     pos = zm_spawner_pos;
                 else if (IsObstructed(pos,_,_,true))
                 {
