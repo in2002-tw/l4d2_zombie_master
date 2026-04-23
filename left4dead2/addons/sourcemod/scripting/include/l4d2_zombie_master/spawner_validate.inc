@@ -250,9 +250,6 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
     //LogMessage("can_any_alive_survivor_see_cheap spawner mode: %d cluster %d navArea %d cell %d", g_iSpawnerMode, cellCluster, cellNavArea, cellIdx);
     
     int i;
-    bool check_nav = hNavIsPotentiallyVisibleToTeam!=null || hNavIsPotentiallyVisible!=null;
-    if (check_nav && cellNavArea == Address_Null) cellNavArea = L4D_GetNearestNavArea(vecPos, 300.0, false, false, true, TEAM_INFECTED);
-    check_nav = cellNavArea != Address_Null; // check IsPotentiallyVisibleToTeam and IsPotentiallyVisible
     
     // Check saferoom door to prevent ZM abusing survivors not looking out door.
     if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor))
@@ -278,6 +275,10 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
             g_LosMs_safe += (GetEngineTime() - t_safe) * 1000.0;
         }
     }
+    
+    bool check_nav = hNavIsPotentiallyVisibleToTeam!=null || hNavIsPotentiallyVisible!=null;
+    if (check_nav && cellNavArea == Address_Null) cellNavArea = L4D_GetNearestNavArea(vecPos, 300.0, false, false, true, TEAM_INFECTED);
+    check_nav = cellNavArea != Address_Null; // check IsPotentiallyVisibleToTeam and IsPotentiallyVisible
 
     // Nav-area visibility pre-reject: if the director's recent-visibility list for the survivor team
     // does not include this area, no survivor has marked it as seeable.
