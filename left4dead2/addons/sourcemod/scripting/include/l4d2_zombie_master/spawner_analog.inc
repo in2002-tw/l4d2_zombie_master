@@ -337,11 +337,11 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
             if (can_ZM_see(newPos) && Analog_CanSpawnPos(newPos,zClass,false,false,true)==SPAWNER_OK)
                 fail = false;
         }
-        if (fail && !skip_gridlib) // ask gridlib for a better position
-        {
-            if (FindNearbyValidSpawnCell(vPos_spawner,newPos,check_dist,zClass))
-                fail = false;
-        }
+        //if (fail && !skip_gridlib) // ask gridlib for a better position
+        //{
+        //    if (FindNearbyValidSpawnCell(vPos_spawner,newPos,check_dist,zClass))
+        //        fail = false;
+        //}
         
         if (!fail) // we fixed it!! YIPPEEEEEEEEEEEEEEEEEEE
         {
@@ -486,50 +486,50 @@ int SpawnerCellFilter(int cellIdx)
  * @param radius    Search radius, defaults to g_fGridSearchRadius
  * @return          true if a valid cell was found, false otherwise
  */
-bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -1.0, int zClass = ZOMBIECLASS_COMMON)
-{
-    if (radius <= 0.0) radius = g_fGridSearchRadius;
-    if (radius <= 0.0)
-    {
-        if (DEBUG_SPAWNER) LogMessage("[zm] radius %f skipped", radius);
-        return false;
-    }
+//bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -1.0, int zClass = ZOMBIECLASS_COMMON)
+//{
+ //   if (radius <= 0.0) radius = g_fGridSearchRadius;
+ //   if (radius <= 0.0)
+ //   {
+ //       if (DEBUG_SPAWNER) LogMessage("[zm] radius %f skipped", radius);
+//        return false;
+//    }
 
-    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell origin=(%.0f,%.0f,%.0f) radius=%.0f", origin[0], origin[1], origin[2], radius);
+//    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell origin=(%.0f,%.0f,%.0f) radius=%.0f", origin[0], origin[1], origin[2], radius);
 
-    if (!GridLib_IsReady())
-    {
-        if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: GridLib not ready");
-        return false;
-    }
+//    if (!GridLib_IsReady())
+//    {
+//        if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: GridLib not ready");
+//        return false;
+//    }
 
-    float t_start = GetEngineTime(); // for profiling
+//    float t_start = GetEngineTime(); // for profiling
 
     // Set up filter context and batch PVS
     //g_SpawnerFilterOrigin = origin;
     //g_SpawnerFilterRadius = radius;
-    g_iSpawnerZombieClass = zClass;
-    g_bLastDoorValid = IsValidEntity(lastdoor);
-    Spawner_CacheSurvivorData();
+//    g_iSpawnerZombieClass = zClass;
+//    g_bLastDoorValid = IsValidEntity(lastdoor);
+ //   Spawner_CacheSurvivorData();
 
-    float t_gridlib = GetEngineTime();
-    int cells[1];
-    reset_SpawnerCellFilter();
-    g_bSpawnerFilterZM = true;
-    int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 1, SpawnerCellFilter, GRID_BUDGET_MS);
-    float gridlib_ms = (GetEngineTime() - t_gridlib) * 1000.0;
+//    float t_gridlib = GetEngineTime();
+//    int cells[1];
+//    reset_SpawnerCellFilter();
+//    g_bSpawnerFilterZM = true;
+//    int count = GridLib_FindNearbyCells(origin, radius, 200.0, cells, 1, SpawnerCellFilter, GRID_BUDGET_MS);
+//    float gridlib_ms = (GetEngineTime() - t_gridlib) * 1000.0;
 
-    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: %d pre-validated candidates (gridlib=%.2f ms)", count, gridlib_ms);
+//    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: %d pre-validated candidates (gridlib=%.2f ms)", count, gridlib_ms);
 
     // All returned cells passed nav/obstruction/travel/distance/visibility checks.
     // Only the expensive Analog_CanSpawnPos check remains.
     //int expensive_fails = 0;
-    for (int i = 0; i < count; i++)
-    {
-        float cellPos[3], normal[3];
-        Address navArea;
-        bool obstructed;
-        GridLib_GetCellData(cells[i], cellPos, normal, navArea, obstructed);
+//    for (int i = 0; i < count; i++)
+//    {
+//        float cellPos[3], normal[3];
+//        Address navArea;
+//        bool obstructed;
+//        GridLib_GetCellData(cells[i], cellPos, normal, navArea, obstructed);
         //if (Analog_CanSpawnPos(cellPos, g_iSpawnerZombieClass, false, false, true) != SPAWNER_OK)
         //{
         //    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: cell %d Analog_CanSpawnPos fail", i);
@@ -562,27 +562,27 @@ bool FindNearbyValidSpawnCell(float origin[3], float outPos[3], float radius = -
         //    continue;
         //}
         
-        if (IsObstructed(cellPos,_,_,zClass==ZOMBIECLASS_COMMON))
-        {
-            if (!obstruction_rescue_hull_up(cellPos,_,zClass))
-                return false;
-        }
+//        if (IsObstructed(cellPos,_,_,zClass==ZOMBIECLASS_COMMON))
+//        {
+//            if (!obstruction_rescue_hull_up(cellPos,_,zClass))
+//                return false;
+//        }
 
-        if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: valid cell %d at (%.0f,%.0f,%.0f)", i, cellPos[0], cellPos[1], cellPos[2]);
-        outPos = cellPos;
-        float total_ms = (GetEngineTime() - t_start) * 1000.0;
-        if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: done (gridlib=%.2f ms, total=%.2f ms)", gridlib_ms, total_ms);
-        if (DEBUG_SPAWNER && total_ms > 10.0)
-            LogMessage("[zm] WARNING: FindNearbyValidSpawnCell took %.1f ms (gridlib=%.1f ms, %d results)", total_ms, gridlib_ms, count);
-        return true;
-    }
+//        if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: valid cell %d at (%.0f,%.0f,%.0f)", i, cellPos[0], cellPos[1], cellPos[2]);
+//        outPos = cellPos;
+//        float total_ms = (GetEngineTime() - t_start) * 1000.0;
+//        if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: done (gridlib=%.2f ms, total=%.2f ms)", gridlib_ms, total_ms);
+//        if (DEBUG_SPAWNER && total_ms > 10.0)
+//            LogMessage("[zm] WARNING: FindNearbyValidSpawnCell took %.1f ms (gridlib=%.1f ms, %d results)", total_ms, gridlib_ms, count);
+//        return true;
+//    }
 
-    float total_ms = (GetEngineTime() - t_start) * 1000.0;
-    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: no valid cell found (gridlib=%.2f ms, total=%.2f ms)", gridlib_ms, total_ms);
-    if (DEBUG_SPAWNER && total_ms > 10.0)
-        LogMessage("[zm] WARNING: FindNearbyValidSpawnCell took %.1f ms (gridlib=%.1f ms, %d results)", total_ms, gridlib_ms, count);
-    return false;
-}
+//    float total_ms = (GetEngineTime() - t_start) * 1000.0;
+//    if (DEBUG_SPAWNER) LogMessage("[zm] FindNearbyValidSpawnCell: no valid cell found (gridlib=%.2f ms, total=%.2f ms)", gridlib_ms, total_ms);
+//    if (DEBUG_SPAWNER && total_ms > 10.0)
+//        LogMessage("[zm] WARNING: FindNearbyValidSpawnCell took %.1f ms (gridlib=%.1f ms, %d results)", total_ms, gridlib_ms, count);
+//    return false;
+//}
 
 /**
  * Determine which survivor to target for random spawn placement (L4D_GetRandomPZSpawnPosition).
@@ -772,13 +772,17 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         int tries = (count <= 10) ? 5 : 3;
         int resolved = 0;
         float randomPos[3];
+        Address navArea = Address_Null;
         for (int i = 0; i < count && resolved < maxOut; i++)
         {
             if (!IsValidClient(target_client) || !IsPlayerAlive(target_client))
                 break;
             if (!L4D_GetRandomPZSpawnPosition(target_client, ZOMBIECLASS_COMMON, tries, randomPos))
                 continue;
-            if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(randomPos,_,_,_))
+            navArea = L4D_GetNearestNavArea(randomPos, 300.0, false, false, true, TEAM_INFECTED);
+            if (navArea != Address_Null && !nav_can_spawn_zombies(ZOMBIECLASS_COMMON,navArea))
+                continue;
+            if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(randomPos,_,navArea,_))
                 continue;
             if (valid_last)
             {

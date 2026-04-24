@@ -217,8 +217,8 @@ public void OnPluginStart()
     g_hGrid = CreateConVar("zm_grid", "1", "Integrate GridLib into ZM spawner.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
     g_hGrid.AddChangeHook(ConVarChanged_Cvars_ZMenu);
     
-    g_hGridSearchRadius = CreateConVar("zm_grid_search_radius", "500", "Search radius (units) for GridLib fallback spawn when indicator is blue.",FCVAR_PROTECTED, true, 0.0, true, 5000.0);
-    g_hGridSearchRadius.AddChangeHook(ConVarChanged_Cvars);
+    //g_hGridSearchRadius = CreateConVar("zm_grid_search_radius", "500", "Search radius (units) for GridLib fallback spawn when indicator is blue.",FCVAR_PROTECTED, true, 0.0, true, 5000.0);
+    //g_hGridSearchRadius.AddChangeHook(ConVarChanged_Cvars);
     
     g_hGridCooldown = CreateConVar("zm_grid_cooldown", "0.0", "Invalid cell cooldown time. This is an optimization. Do not change unless you know what you are doing.",FCVAR_PROTECTED, true, 0.0, true, 10000.0);
     g_hGridCooldown.AddChangeHook(ConVarChanged_Cvars);
