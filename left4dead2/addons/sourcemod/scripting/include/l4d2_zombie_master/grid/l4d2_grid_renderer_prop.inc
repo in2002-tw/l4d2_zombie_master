@@ -245,7 +245,7 @@ stock int GridRendererProp_DrawCells(int client,
 			int color[4];
 			bool isClosest = (i == closestValidIdx);
 			GridRenderer_ResolveColor(cellValid[i], isClosest, color, g_GridCellContext[i]);
-			color[3] = GridRendererProp_ComputeAlpha(i, count, isClosest);
+			color[3] = GridRendererProp_ComputeAlpha(i, count, isClosest, g_GridCellContext[i]);
 
 			float angles[3];
 			GridRendererProp_NormalToAngles(normal, angles);
@@ -267,7 +267,7 @@ stock int GridRendererProp_DrawCells(int client,
 		int color[4];
 		bool isClosest = (dataIdx == closestValidIdx);
 		GridRenderer_ResolveColor(cellValid[dataIdx], isClosest, color, g_GridCellContext[dataIdx]);
-		color[3] = GridRendererProp_ComputeAlpha(dataIdx, count, isClosest);
+		color[3] = GridRendererProp_ComputeAlpha(dataIdx, count, isClosest, g_GridCellContext[dataIdx]);
 
 		bool glowThis = isClosest && cellValid[dataIdx] && g_iSpawnerMode==2;
 
@@ -336,13 +336,11 @@ stock int GridRendererProp_DrawCells(int client,
  * @param isClosest     Whether this is the highlighted (closest valid) cell
  * @return              Alpha value (0-255)
  */
-static int GridRendererProp_ComputeAlpha(int dataIdx, int count, bool isClosest)
+static int GridRendererProp_ComputeAlpha(int dataIdx, int count, bool isClosest, int state = SPAWNER_OK)
 {
-	if (isClosest && g_iSpawnerMode==2)
-		return 220;
-
-	if (!g_PropAlphaFade)
-		return 50;
+	if (state==SPAWNER_BUDGET) return 0;
+	if (isClosest && g_iSpawnerMode==2) return 220;
+	if (!g_PropAlphaFade) return 50;
 
 	// Fade from ALPHA_CENTER (nearest) to ALPHA_EDGE (furthest)
 	static const int ALPHA_CENTER = 150;

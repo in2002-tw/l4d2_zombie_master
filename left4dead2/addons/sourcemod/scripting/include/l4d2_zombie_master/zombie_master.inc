@@ -50,6 +50,7 @@
 #define SPAWNER_SIGHT 4
 #define SPAWNER_OTHER 5
 #define SPAWNER_FLOW 6 // ZM is looking at a survivor with intent -> request flow spawn.
+#define SPAWNER_BUDGET 7 // location could not be verified due to exceeding CPU budget
 
 #define RGB_ZM 16777215 // white for outlines
 #define RGB_FLOW 16711680 // blue for flow target survivor
@@ -914,7 +915,7 @@ stock bool nav_can_spawn_zombies(const int zClass = ZOMBIECLASS_COMMON,
     if (zClass!=ZOMBIECLASS_WITCH)
     {
         if (navAttributeFlags & NAV_BASE_OUTSIDE_WORLD) return false;
-        if (navSpawnAttributes & NAV_SPAWN_BATTLESTATION) return false;
+        //if (navSpawnAttributes & NAV_SPAWN_BATTLESTATION) return false;
     }
     // some Valve maps have messed up navmeshes: rescue closets in crazy places, survivor player start in finale areas...
     if (navSpawnAttributes & NAV_SPAWN_BATTLEFIELD) return true;

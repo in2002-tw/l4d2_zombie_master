@@ -17,7 +17,15 @@ void update_hint_spawner(int spawner_state, int zClass = ZOMBIECLASS_COMMON)
 {
     switch (spawner_state)
     {
-        case SPAWNER_DISTANCE: update_hint("%T %d", "Too close", zm_client, RoundFloat(latest_distance));
+        case SPAWNER_DISTANCE:
+        {
+            if (latest_distance<0.0)
+            {
+                update_hint_spawner(SPAWNER_SIGHT,zClass);
+                return;
+            }
+            update_hint("%T %d", "Too close", zm_client, RoundFloat(latest_distance));
+        }
         case SPAWNER_SIGHT:
         {
             update_hint("%T", "Visible survivors", zm_client);

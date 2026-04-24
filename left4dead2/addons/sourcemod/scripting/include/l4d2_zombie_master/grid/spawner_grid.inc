@@ -391,7 +391,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         if (over_budget || !GridLib_GetCellData(nearbyCells[i], pos, normal, navArea, obstructed))
         {
             cellValid[i] = false;
-            g_GridCellContext[i] = SPAWNER_INVALID;
+            g_GridCellContext[i] = SPAWNER_BUDGET;
             continue;
         }
 
