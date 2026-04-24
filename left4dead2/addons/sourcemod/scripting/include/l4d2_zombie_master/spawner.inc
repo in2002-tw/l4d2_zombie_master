@@ -13,6 +13,28 @@
 
 // --- Visual feedback ---
 
+void update_hint_spawner(int spawner_state, int zClass = ZOMBIECLASS_COMMON)
+{
+    switch (spawner_state)
+    {
+        case SPAWNER_DISTANCE: update_hint("%T %d", "Too close", zm_client, RoundFloat(latest_distance));
+        case SPAWNER_SIGHT:
+        {
+            update_hint("%T", "Visible survivors", zm_client);
+            if (zm_allow_spawns && !zm_flow_notify && IsValidClientZM()) PrintHintText(zm_client, "%t", "Flow hint");
+        }
+        case SPAWNER_OTHER: update_hint("%T", "Obstacle", zm_client);
+        case SPAWNER_INVALID: update_hint("%T", "Bad location", zm_client);
+        default: // SPAWNER_NAV 
+        {
+            if (zClass==ZOMBIECLASS_WITCH) update_hint("%T", "Witches illegal", zm_client);
+            else update_hint("%T", "Zombies illegal", zm_client);
+        }
+    }
+}
+
+
+
 // Is it legal for ANY spawner to spawn zombies? Reduces needless computation.
 bool Spawner_Can_Spawn(int client)
 {

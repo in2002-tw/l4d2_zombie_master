@@ -357,25 +357,7 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
     }
     if (fail)
     {
-        if (hint)
-        {
-            switch (spawner_state)
-            {
-                case SPAWNER_DISTANCE: update_hint("%T %d", "Too close", zm_client, RoundFloat(min_distance));
-                case SPAWNER_SIGHT:
-                {
-                    update_hint("%T", "Visible survivors", zm_client);
-                    if (zm_allow_spawns && !zm_flow_notify && IsValidClientZM()) PrintHintText(zm_client, "%t", "Flow hint");
-                }
-                case SPAWNER_OTHER: update_hint("%T", "Obstacle", zm_client);
-                case SPAWNER_INVALID: update_hint("%T", "Bad location", zm_client);
-                default: // SPAWNER_NAV 
-                {
-                    if (zClass==ZOMBIECLASS_WITCH) update_hint("%T", "Witches illegal", zm_client);
-                    else update_hint("%T", "Zombies illegal", zm_client);
-                }
-            }
-        }
+        if (hint) update_hint_spawner(spawner_state);
         if (draw)
         {
             if (!DEBUG) vPos_spawner = vPos; // reduce jumpiness which can look disorienting. good for debugging though.

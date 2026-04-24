@@ -609,6 +609,7 @@ float t_last_spawner_update; // analog spawner
 float t_last_spawner_grid_update; // grid spawner
 float t_last_spawner_sound;
 
+// Flow detection
 int spawner_nearest_survivor = -1;
 float latest_distance = 0.0;
 

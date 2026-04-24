@@ -191,7 +191,7 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
     
     if (cell_cooldown(g_GridCellIndices[idx]))
     {
-       g_iGridValidateContext = SPAWNER_OTHER;
+       g_iGridValidateContext = SPAWNER_SIGHT;
        return false;
     }
     
@@ -362,8 +362,11 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
     bool cellValid[GRID_MAX_CELLS];
     int closestValidIdx = -1;
+    int closestIdx = -1;
+    float closestPos[3];
     g_GridValidCellCount = 0;
     float closestDist = 999999.0;
+    float closestValidDist = 999999.0;
     Address closestNavArea;
 
     for (int i = 0; i < GRID_MAX_CELLS; i++)
@@ -388,7 +391,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         if (over_budget || !GridLib_GetCellData(nearbyCells[i], pos, normal, navArea, obstructed))
         {
             cellValid[i] = false;
-            g_GridCellContext[i] = SPAWNER_OTHER;
+            g_GridCellContext[i] = SPAWNER_INVALID;
             continue;
         }
 
@@ -397,14 +400,20 @@ Action Grid_TimerUpdate(Handle timer, int userid)
 
         cellValid[i] = Grid_ValidateCell(i, pos, navArea, obstructed);
         g_GridCellContext[i] = g_iGridValidateContext;
+        float dist = GetVectorDistance(aimPos, pos);
+        if (dist<closestDist)
+        {
+            closestIdx = i;
+            closestDist = dist;
+            closestPos = pos;
+        }
 
         if (cellValid[i])
         {
-            float dist = GetVectorDistance(aimPos, pos);
-            if (closestValidIdx == -1 || dist < closestDist)
+            if (dist < closestValidDist)
             {
                 closestValidIdx = i;
-                closestDist = dist;
+                closestValidDist = dist;
                 closestNavArea = navArea;
             }
         }
@@ -446,17 +455,21 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         if (g_iSpawnerMode==2)
         {
             zm_spawner_pos = g_GridClosestValidPos;
-            zm_spawner_state = SPAWNER_OK;
+            zm_spawner_state = g_GridCellContext[closestValidIdx];
             zm_spawner_navArea = closestNavArea;
         }
         g_GridValidCellIdx = closestValidIdx;
     }
-    else
+    else if (g_iSpawnerMode==2)
     {
-        if (g_iSpawnerMode==2) zm_spawner_state = SPAWNER_SIGHT;
+        zm_spawner_state = g_GridCellContext[closestIdx];
+        zm_spawner_pos = closestPos;
     }
-
-    if (g_iSpawnerMode==2) zm_target_pos = aimPos;
+    
+    if (g_iSpawnerMode==2)
+    {
+        zm_target_pos = aimPos;
+    }
     t_last_spawner_grid_update = GetGameTime();
 
     // Render
@@ -534,7 +547,10 @@ int Grid_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
     g_bGridBatchMode = true;
 
     if (!g_GridHasValidCell)
+    {
+        if (hint) update_hint_spawner(zm_spawner_state,ZOMBIECLASS_COMMON);
         return 0;
+    }
 
     // Return valid cell positions from last timer update
     int resolved = 0;
@@ -568,7 +584,10 @@ bool Grid_ResolveWitchPosition(bool flow, float outPos[3])
     g_bGridHint = true;
 
     if (!g_GridHasValidCell)
+    {
+        if (g_iSpawnerMode == 2) update_hint_spawner(zm_spawner_state,ZOMBIECLASS_WITCH);
         return false;
+    }
 
     outPos = g_GridClosestValidPos;
     Grid_InvalidateClosestValid();
@@ -591,7 +610,10 @@ bool Grid_ResolveSpecialPosition(int zombieclass, bool flow, float outPos[3])
     g_bGridHint = true;
 
     if (!g_GridHasValidCell)
+    {
+        if (g_iSpawnerMode == 2) update_hint_spawner(zm_spawner_state,zombieclass);
         return false;
+    }
 
     outPos = g_GridClosestValidPos;
     Grid_InvalidateClosestValid();
