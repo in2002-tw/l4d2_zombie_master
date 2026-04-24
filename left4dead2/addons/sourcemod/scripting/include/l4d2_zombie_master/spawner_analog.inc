@@ -274,10 +274,10 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
     }
     if (!fail || draw) // nav area travel distance is expensive, skip if not needed
     {
-        float t = GetEngineTime();
+        //float t = GetEngineTime();
         min_distance = min_distance_to_survivors(vPos_spawner,draw,_,navArea);
-        float t_ms = (GetEngineTime()-t)*1000.0;
-        if (t_ms>1.0) LogMessage("min_distance_to_survivors took %f ms", t_ms);
+        //float t_ms = (GetEngineTime()-t)*1000.0;
+        //if (t_ms>1.0) LogMessage("min_distance_to_survivors took %f ms", t_ms);
         if (min_distance>=0.0 && draw) latest_distance = min_distance; // to trigger flow
         if (distance_too_close(min_distance))
         {
