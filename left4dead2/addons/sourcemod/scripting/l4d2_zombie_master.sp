@@ -921,6 +921,7 @@ Action zm_new_round(Handle timer = null)
     cellcache_clear_all();
 
     if (g_hRandomizer.IntValue==2) random_gamemode();
+    GetCvars();
     
     spawner_last_valid = false;
     
