@@ -356,17 +356,16 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
             if (use_PVS_SameCluster && (cellCluster >= 0 && cellCluster == g_BatchSurvivorCluster[s]) )
             {
                 g_LosN_shortcut++;
-                return true;
             }
-            //else
-            //{
+            else
+            {
                 // Legacy per-survivor PVS byte-buffer check
                 if (!g_BatchSurvivorValidPVS[s] || !PVS_CheckOriginInPVS(vecPos, g_BatchSurvivorPVS[s]))
                 {
                     g_LosN_pvs_rej++;
                     continue;
                 }
-            //}
+            }
             
             // per-area-pair bitset lookup. Engine's own fast path.
             // Falls back to legacy per-survivor PVS byte-buffer check when:
