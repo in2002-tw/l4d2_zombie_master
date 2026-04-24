@@ -213,7 +213,15 @@ stock void transfer_SI_properties(int entity_new, char[] modelname, float vOrigi
 void reset_available_zombies()
 {
   available_SI = max_SI;
-  available_zombie_arr = max_zombie_arr;
+  available_zombie_arr[ZOMBIECLASS_COMMON] = max_zombie_arr[ZOMBIECLASS_COMMON];
+  available_zombie_arr[ZOMBIECLASS_WITCH] = max_zombie_arr[ZOMBIECLASS_WITCH];
+  available_zombie_arr[ZOMBIECLASS_SMOKER] = max_zombie_arr[ZOMBIECLASS_SMOKER];
+  available_zombie_arr[ZOMBIECLASS_BOOMER] = max_zombie_arr[ZOMBIECLASS_BOOMER];
+  available_zombie_arr[ZOMBIECLASS_HUNTER] = max_zombie_arr[ZOMBIECLASS_HUNTER];
+  available_zombie_arr[ZOMBIECLASS_SPITTER] = max_zombie_arr[ZOMBIECLASS_SPITTER];
+  available_zombie_arr[ZOMBIECLASS_JOCKEY] = max_zombie_arr[ZOMBIECLASS_JOCKEY];
+  available_zombie_arr[ZOMBIECLASS_CHARGER] = max_zombie_arr[ZOMBIECLASS_CHARGER];
+  available_zombie_arr[ZOMBIECLASS_TANK] = max_zombie_arr[ZOMBIECLASS_TANK];
 }
 
 bool is_zombie_available_cooldown(int zClass)
