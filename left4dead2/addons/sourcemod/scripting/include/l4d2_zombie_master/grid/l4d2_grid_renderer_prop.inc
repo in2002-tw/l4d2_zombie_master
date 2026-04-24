@@ -247,9 +247,12 @@ stock int GridRendererProp_DrawCells(int client,
 			GridRenderer_ResolveColor(cellValid[i], isClosest, color, g_GridCellContext[i]);
 			color[3] = GridRendererProp_ComputeAlpha(i, count, isClosest, g_GridCellContext[i]);
 
+			bool glowThis = (isClosest && cellValid[i] && g_iSpawnerMode==2)
+			             || GridLib_IsCellUnderwater(cellIndices[i]);
+
 			float angles[3];
 			GridRendererProp_NormalToAngles(normal, angles);
-			GridRendererProp_UpdateEntity(client, freeIdx, position, angles, color, isClosest && cellValid[i] && g_iSpawnerMode==2);
+			GridRendererProp_UpdateEntity(client, freeIdx, position, angles, color, glowThis);
 		}
 
 		freeIdx++;
@@ -269,7 +272,8 @@ stock int GridRendererProp_DrawCells(int client,
 		GridRenderer_ResolveColor(cellValid[dataIdx], isClosest, color, g_GridCellContext[dataIdx]);
 		color[3] = GridRendererProp_ComputeAlpha(dataIdx, count, isClosest, g_GridCellContext[dataIdx]);
 
-		bool glowThis = isClosest && cellValid[dataIdx] && g_iSpawnerMode==2;
+		bool glowThis = (isClosest && cellValid[dataIdx] && g_iSpawnerMode==2)
+		             || GridLib_IsCellUnderwater(cellIndices[dataIdx]);
 
 		// If this cell has a rescue position override, teleport to the adjusted position
 		if (hasOverride[dataIdx])

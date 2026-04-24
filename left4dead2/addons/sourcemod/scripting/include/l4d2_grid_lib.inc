@@ -144,6 +144,7 @@ enum struct GridCell
 	bool isObstructed;     // Hull trace result (pre-computed)
 	float normal[3];       // Surface normal
 	int cluster;           // PVS leaf cluster for position (-1 if PVS native unavailable)
+	bool isUnderwater;     // Submerged in water brush (pre-computed at bake time)
 }
 
 /**
@@ -553,6 +554,22 @@ stock int GridLib_GetCellCluster(int cellIdx)
 	GridCell cell;
 	g_GridCells.GetArray(cellIdx, cell, sizeof(GridCell));
 	return cell.cluster;
+}
+
+/**
+ * Check whether a cell is submerged in water.
+ *
+ * @param cellIdx    Cell index
+ * @return           true if submerged, false otherwise or on invalid index
+ */
+stock bool GridLib_IsCellUnderwater(int cellIdx)
+{
+	if (!g_IsReady || cellIdx < 0 || cellIdx >= g_TotalCells)
+		return false;
+
+	GridCell cell;
+	g_GridCells.GetArray(cellIdx, cell, sizeof(GridCell));
+	return cell.isUnderwater;
 }
 
 /**
@@ -1908,6 +1925,7 @@ static bool GridLib_CheckAndStoreCell(float cellPos[3],
 	cell.normal[1] = surfaceNormal[1];
 	cell.normal[2] = surfaceNormal[2];
 	cell.cluster = (hGetClusterForOrigin != null) ? PVS_GetClusterForOrigin(cellPos) : -1;
+	cell.isUnderwater = GridLib_IsUnderwater(cellPos);
 
 	int cellIndex = g_GridCells.PushArray(cell);
 	GridLib_AddCellToHash(cellIndex, cellPos);
@@ -2026,6 +2044,30 @@ static void GridLib_AddCellToNavMap(int cellIndex, Address navArea)
 		g_NavAreaCells.SetValue(navKey, cellList);
 	}
 	cellList.Push(cellIndex);
+}
+
+/**
+ * Check whether a position is inside a water brush.
+ *
+ * @param pos    Floor-level position to test (typically a cell position)
+ * @return       true if the sample point is submerged
+ */
+static bool GridLib_IsUnderwater(const float pos[3])
+{
+	float sample[3];
+	sample[0] = pos[0];
+	sample[1] = pos[1];
+	sample[2] = pos[2] + 8.0;
+
+	float endPos[3];
+	endPos[0] = sample[0];
+	endPos[1] = sample[1];
+	endPos[2] = sample[2] + 1.0;
+
+	Handle trace = TR_TraceRayEx(sample, endPos, MASK_WATER, RayType_EndPoint);
+	bool underwater = TR_StartSolid(trace);
+	delete trace;
+	return underwater;
 }
 
 static bool GridLib_IsObstructed(const float pos[3])
