@@ -41,7 +41,23 @@ void update_hint_spawner(int spawner_state, int zClass = ZOMBIECLASS_COMMON)
     }
 }
 
+// Define groups with different spawn rules.
+// Commons cannot spawn in areas marked by IsBlocked
+// Witches are allowed to spawn in weird places without nav
 
+#define GROUP_COMMON 0 // ZOMBIECLASS_COMMON
+#define GROUP_WITCH 1 // ZOMBIECLASS_WITCH
+#define GROUP_SPECIAL 2 // everything else
+
+int get_zombieclass_group(int zClass)
+{
+    switch (zClass)
+    {
+        case ZOMBIECLASS_COMMON: return GROUP_COMMON;
+        case ZOMBIECLASS_WITCH: return GROUP_WITCH;
+        default: return GROUP_SPECIAL;
+    }
+}
 
 // Is it legal for ANY spawner to spawn zombies? Reduces needless computation.
 bool Spawner_Can_Spawn(int client)

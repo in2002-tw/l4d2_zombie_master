@@ -744,14 +744,15 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
     Analog_BeginSpawn();
     g_bAnalogHint = hint;
     g_bAnalogBatchMode = true;
-    static float min_distance_last;
+    //static float min_distance_last;
     bool valid_last = IsValidEntity(lastdoor);
     
-    float t = GetEngineTime();
-
     int spawner_state;
     if (flow) spawner_state = SPAWNER_DISTANCE;
-    else spawner_state = Analog_CanSpawn(false, hint);
+    else spawner_state = Analog_CanSpawn(ZOMBIECLASS_COMMON, hint);
+    
+    float t = GetEngineTime();
+    int resolved = 0;
 
     if (flow || spawner_state != SPAWNER_OK)
     {
@@ -770,9 +771,9 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         }
 
         int tries = (count <= 10) ? 5*count : 3*count;
-        int resolved = 0;
+        resolved = 0;
         float randomPos[3];
-        Address navArea = Address_Null;
+        Address navArea;
         int i = 0;
         while (i<tries && resolved<count && resolved<maxOut)
         {
@@ -780,19 +781,16 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             i += 1;
             if (!L4D_GetRandomPZSpawnPosition(target_client,ZOMBIECLASS_COMMON,1,randomPos))
                 continue;
-            if (zm_stage == ZM_STARTED && !expected_angry)
-            {
-                if (flow_survivor_fraction <= 0.91 && L4D_GetFlowFromPoint(randomPos) < flow_survivor)
-                    continue;
-            }
-            if (valid_last)
-            {
-                min_distance_last = distance_last_saferoom(randomPos);
-                if (min_distance_last>=0.0 && min_distance_last<DISTANCE_LAST_SAFEROOM)
-                    continue;
-            }
+            if (!expected_angry && zm_stage == ZM_STARTED && flow_survivor_fraction <= 0.91 && L4D_GetFlowFromPoint(randomPos) < flow_survivor)
+                continue;
+            //if (valid_last)
+            //{
+            //    min_distance_last = distance_last_saferoom(randomPos);
+            //    if (min_distance_last>=0.0 && min_distance_last<DISTANCE_LAST_SAFEROOM)
+            //        continue;
+            //}
             navArea = L4D_GetNearestNavArea(randomPos, 300.0, false, false, true, TEAM_INFECTED);
-            if (navArea != Address_Null && !nav_can_spawn_zombies(ZOMBIECLASS_COMMON,navArea))
+            if (navArea == Address_Null || !nav_can_spawn_zombies(ZOMBIECLASS_COMMON,navArea)) // commons without nav will stand in place
                 continue;
             if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(randomPos,_,navArea,_))
                 continue;
@@ -812,8 +810,6 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
     int gridlib_cell_count = 0;
     bool use_gridlib = false;
 
-    int resolved = 0;
-
     if (count > 1 && g_bGrid && GridLib_IsReady())
     {
         if (g_iSpawnerMode>0 && g_GridValidCellCount>=count && GetVectorDistance(g_GridClosestValidPos,zm_spawner_pos)<150.0
@@ -829,7 +825,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         }
         
         bool try_gridlib = true;
-        if (zm_spawner_navArea)
+        if (zm_spawner_navArea) // is navmesh roughly the right size to fit all the zombies about to spawn?
         {
             float navSize[3];
             L4D_GetNavAreaSize(zm_spawner_navArea, navSize);
@@ -838,7 +834,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             float count_navmesh = (navSize[0] * navSize[1]) / AREA_COMMON + 1.0;
             try_gridlib = count_navmesh < count || count_navmesh > (4.0 * count);
         }
-        if (try_gridlib && (GetEngineTime()-t)*1000.0<GRID_BUDGET_MS)
+        if (try_gridlib && (GetEngineTime()-t)*1000.0<GRID_BUDGET_MS) // if not, ask gridlib for better positions
         {
             reset_SpawnerCellFilter();
             g_bSpawnerFilterZM = false;
@@ -848,7 +844,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         
     }
 
-    Spawner_CacheSurvivorData();
+    //Spawner_CacheSurvivorData();
     static float pos[3];
     for (int i = 0; i < count && resolved < maxOut; i++)
     {
@@ -863,34 +859,9 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
                 fallback_original_navmesh = true;
             if (IsObstructed(pos,_,_,true))
             {
-                if (!obstruction_rescue_hull_up(pos,_,ZOMBIECLASS_COMMON))
+                if (!obstruction_rescue_hull_up(pos,_,ZOMBIECLASS_COMMON)) // use zyiks obstruction rescue
                     fallback_original_navmesh = true;
             }
-
-            //// PVS + single ray trace visibility check
-            //if (g_iBatchSurvivorCount > 0)
-            //{
-            //    bool actuallyVisible = false;
-            //    static float cellEye[3];
-            //    cellEye[0] = pos[0];
-            //    cellEye[1] = pos[1];
-            //    cellEye[2] = pos[2] + 36.0;
-            //    for (int s = 0; s < g_iBatchSurvivorCount; s++)
-            //    {
-            //        if (!PVS_CheckOriginInPVS(pos,g_BatchSurvivorPVS[s]))
-            //            continue;
-            //        Handle trace = TR_TraceRayFilterEx(cellEye, g_fBatchSurvivorPos[s],
-            //            MASK_VISIBLE, RayType_EndPoint, FilterSpawner, -1);
-            //        bool hit = TR_DidHit(trace);
-            //        delete trace;
-            //        if (!hit)
-            //        {
-            //            actuallyVisible = true;
-            //            break;
-            //        }
-            //    }
-            //    if (actuallyVisible) continue;
-            //}
         }
         else fallback_original_navmesh = true;
 
@@ -901,15 +872,12 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
                 L4D_FindRandomSpot(zm_spawner_navArea, pos);
                 if (valid_last && distance_last_saferoom(pos)<DISTANCE_LAST_SAFEROOM)
                     pos = zm_spawner_pos;
+                else if (IsObstructed(pos,_,_,true) && !obstruction_rescue_hull_up(pos,_,ZOMBIECLASS_COMMON)) // use zyiks obstruction correction
+                    pos = zm_spawner_pos;
                 else if ( g_fSpawnMinDistance>0.0 && distance_too_close(min_distance_to_survivors(pos,false,_,zm_spawner_navArea)) )
                     pos = zm_spawner_pos;
                 else if (can_any_alive_survivor_see_cheap(pos,zm_spawner_cluster,zm_spawner_navArea,zm_spawner_cellIdx))
                     pos = zm_spawner_pos;
-                else if (IsObstructed(pos,_,_,true))
-                {
-                    if (!obstruction_rescue_hull_up(pos,_,ZOMBIECLASS_COMMON))
-                        pos = zm_spawner_pos;
-                }
             }
             else pos = zm_spawner_pos;
         }
@@ -932,30 +900,43 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
 {
     Analog_BeginSpawn();
     g_bAnalogHint = true;
-
+    
     int spawner_state;
     if (flow) spawner_state = SPAWNER_DISTANCE;
     else spawner_state = Analog_CanSpawn(ZOMBIECLASS_WITCH);
     outPos = zm_spawner_pos;
+    
+    float t = GetEngineTime();
 
     if (spawner_state != SPAWNER_OK)
     {
         int target_client = get_spawner_target_survivor(flow, spawner_state);
-        if (target_client < 0) return false;
-
-        bool fail = false;
-        if (!L4D_GetRandomPZSpawnPosition(target_client, ZOMBIECLASS_WITCH, 10, outPos)) fail = true;
-        if (!fail && zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(outPos)) fail = true;
-        if (!fail)
+        if (!IsValidClient(target_client) || !IsPlayerAlive(target_client)) return false;
+        bool check_flow = !L4D_IsSurvivalMode(); // spawn witches only ahead of survivors in campaign mode
+        float flow_survivor_fraction, flow_survivor;
+        if (check_flow)
         {
-            float flow_survivor_fraction = get_survivor_flow_fraction(target_client);
-            if (flow_survivor_fraction <= 0.91 && L4D_GetFlowFromPoint(outPos) < L4D2Direct_GetFlowDistance(target_client))
-                fail = true;
-            if (!fail && IsObstructed(outPos,_,_,false)) fail = true;
+            flow_survivor_fraction = get_survivor_flow_fraction(target_client);
+            flow_survivor = L4D2Direct_GetFlowDistance(target_client);
         }
-        if (fail) return false;
-        g_bAnalogFlowUsed = true;
-        g_iAnalogTargetClient = target_client;
+        int tries = 10;
+        int i = 0;
+        Address navArea;
+        while (i<tries)
+        {
+            if ((GetEngineTime()-t)*1000.0>GRID_BUDGET_MS) break;
+            i += 1;
+            if (!L4D_GetRandomPZSpawnPosition(target_client, ZOMBIECLASS_WITCH, 1, outPos)) continue;
+            if (check_flow && flow_survivor_fraction <= 0.91 && L4D_GetFlowFromPoint(outPos) < flow_survivor) continue;
+            if (IsObstructed(outPos,_,_,false)) continue; // use zyiks obstruction correction
+            navArea = L4D_GetNearestNavArea(outPos, 300.0, false, false, true, TEAM_INFECTED);
+            if (navArea == Address_Null || !nav_can_spawn_zombies(ZOMBIECLASS_WITCH,navArea)) continue;
+            if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(outPos,_,navArea,_)) continue;
+            g_bAnalogFlowUsed = true;
+            g_iAnalogTargetClient = target_client;
+            return true;
+        }
+        return false;
     }
     return true;
 }
@@ -974,21 +955,32 @@ bool Analog_ResolveSpecialPosition(int zombieclass, bool flow, float outPos[3])
     int spawner_state;
     if (flow) spawner_state = SPAWNER_DISTANCE;
     else spawner_state = Analog_CanSpawn(zombieclass);
-    outPos = zm_spawner_pos;
-
+    
+    float t = GetEngineTime();
+    
     if (spawner_state != SPAWNER_OK)
     {
         int target_client = get_spawner_target_survivor(flow, spawner_state);
-        if (target_client < 0) return false;
-
-        if (!L4D_GetRandomPZSpawnPosition(target_client, zombieclass, 10, outPos) || IsObstructed(outPos,_,_,false))
-            return false;
-
-        if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(outPos))
-            return false;
-
-        g_bAnalogFlowUsed = true;
-        g_iAnalogTargetClient = target_client;
+        if (!IsValidClient(target_client) || !IsPlayerAlive(target_client)) return false;
+        
+        int tries = 10;
+        int i = 0;
+        Address navArea;
+        while (i<tries)
+        {
+            if ((GetEngineTime()-t)*1000.0>GRID_BUDGET_MS) break;
+            i += 1;
+            if (!L4D_GetRandomPZSpawnPosition(target_client, zombieclass, 1, outPos)) continue;
+            if (IsObstructed(outPos,_,_,false)) continue; // use zyiks obstruction correction
+            navArea = L4D_GetNearestNavArea(outPos, 300.0, false, false, true, TEAM_INFECTED);
+            if (navArea == Address_Null || !nav_can_spawn_zombies(zombieclass,navArea)) continue;
+            if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(outPos,_,navArea,_)) continue;
+            g_bAnalogFlowUsed = true;
+            g_iAnalogTargetClient = target_client;
+            return true;
+        }
+        return false;
     }
+    else outPos = zm_spawner_pos;
     return true;
 }
