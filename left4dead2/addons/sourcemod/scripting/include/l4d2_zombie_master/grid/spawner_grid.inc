@@ -588,6 +588,9 @@ int Grid_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
     for (int i = 0; i < g_GridCellCount && resolved < count && resolved < maxOut; i++)
     {
         if (!g_GridValidFlags[i]) continue;
+        
+        // Check nav_can_spawn_zombies here for specific rules.
+        // Update grid cell context here.
 
         int idx = resolved * 3;
         outPositions[idx] = g_GridValidPositions[i][0];

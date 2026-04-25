@@ -756,7 +756,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
     if (flow || spawner_state != SPAWNER_OK)
     {
         int target_client = get_spawner_target_survivor(flow, spawner_state);
-        if (target_client < 0) return 0;
+        if (!IsValidClient(target_client) || !IsPlayerAlive(target_client)) return 0;
 
         g_bAnalogFlowUsed = true;
         g_iAnalogTargetClient = target_client;
@@ -769,39 +769,39 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             flow_survivor_fraction = get_survivor_flow_fraction(target_client);
         }
 
-        int tries = (count <= 10) ? 5 : 3;
+        int tries = (count <= 10) ? 5*count : 3*count;
         int resolved = 0;
         float randomPos[3];
         Address navArea = Address_Null;
-        for (int i = 0; i < count && resolved < maxOut; i++)
+        int i = 0;
+        while (i<tries && resolved<count && resolved<maxOut)
         {
-            if (!IsValidClient(target_client) || !IsPlayerAlive(target_client))
-                break;
-            if (!L4D_GetRandomPZSpawnPosition(target_client, ZOMBIECLASS_COMMON, tries, randomPos))
+            if ((GetEngineTime()-t)*1000.0>GRID_BUDGET_MS) break;
+            i += 1;
+            if (!L4D_GetRandomPZSpawnPosition(target_client,ZOMBIECLASS_COMMON,1,randomPos))
                 continue;
+            if (zm_stage == ZM_STARTED && !expected_angry)
+            {
+                if (flow_survivor_fraction <= 0.91 && L4D_GetFlowFromPoint(randomPos) < flow_survivor)
+                    continue;
+            }
+            if (valid_last)
+            {
+                min_distance_last = distance_last_saferoom(randomPos);
+                if (min_distance_last>=0.0 && min_distance_last<DISTANCE_LAST_SAFEROOM)
+                    continue;
+            }
             navArea = L4D_GetNearestNavArea(randomPos, 300.0, false, false, true, TEAM_INFECTED);
             if (navArea != Address_Null && !nav_can_spawn_zombies(ZOMBIECLASS_COMMON,navArea))
                 continue;
             if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(randomPos,_,navArea,_))
                 continue;
-            if (valid_last)
-            {
-                min_distance_last = distance_last_saferoom(randomPos);
-                if (min_distance_last>0.0 && min_distance_last<DISTANCE_LAST_SAFEROOM)
-                    continue;
-            }
-            if (!expected_angry)
-            {
-                if (flow_survivor_fraction <= 0.91 && L4D_GetFlowFromPoint(randomPos) < flow_survivor)
-                    continue;
-            }
 
             int idx = resolved * 3;
             outPositions[idx] = randomPos[0];
             outPositions[idx+1] = randomPos[1];
             outPositions[idx+2] = randomPos[2];
             resolved++;
-            if ((GetEngineTime()-t)*1000.0>GRID_BUDGET_MS) return resolved;
         }
 
         return resolved;
