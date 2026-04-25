@@ -1410,6 +1410,7 @@ bool TraceFilter_Spawner(int entity, int contentsMask, int ignore_entity)
 {
 	if (entity==ignore_entity) return false;
 	if (entity==0) return true;
+	if (!entity_solid(entity)) return false;
 	if (IsValidClient(entity))
 	{
 	 if (IsValidClient(ignore_entity) && GetClientTeam(entity)==TEAM_SURVIVOR && GetClientTeam(ignore_entity)==TEAM_SURVIVOR)
@@ -1418,7 +1419,6 @@ bool TraceFilter_Spawner(int entity, int contentsMask, int ignore_entity)
 	}
 	if (entity>MaxClients)
 	{
-    	if (GetEntProp(entity, Prop_Data, "m_nSolidType")==0) return false;
     	static char class[32];
         GetEntityClassname(entity, class, sizeof(class));
         if (strcmp(class,"infected")==0) return false;
@@ -1430,11 +1430,25 @@ bool TraceFilter_Spawner(int entity, int contentsMask, int ignore_entity)
 	return true;
 }
 
+// Determine if entity is solid to players and zombies from m_CollisionGroup, m_nSolidType and m_usSolidFlags
+bool entity_solid(int entity)
+{
+    if (GetEntProp(entity, Prop_Send, "m_nSolidType") == 0) return false;
+    if (GetEntProp(entity, Prop_Send, "m_usSolidFlags") & 0x0004) return false; // FSOLID_NOT_SOLID 
+    switch (GetEntProp(entity, Prop_Send, "m_CollisionGroup"))
+    {
+        case 1: return false; // COLLISION_GROUP_DEBRIS
+        case 2: return false; // COLLISION_GROUP_DEBRIS_TRIGGER
+    }
+    return true;
+}
+
 // TraceFilter for predicting if an infected entity might be stuck: ignore infected, witches and special infected
 bool TraceFilter_Stuck_IgnoreZombies(int entity, int contentsMask, int ignore_entity)
 {
 	if (entity==ignore_entity) return false;
 	if (entity==0) return true;
+	if (!entity_solid(entity)) return false;
 	if (IsValidClient(entity))
 	{
 	 if (IsValidClient(ignore_entity) && GetClientTeam(entity)==TEAM_SURVIVOR && GetClientTeam(ignore_entity)==TEAM_SURVIVOR)
@@ -1482,7 +1496,7 @@ stock bool IsObstructed(float pos[3], int entity = -1, bool debug=false, bool ig
     	{
 		     static char classname[64];
              GetEntityClassname(g_iObstructingEntity, classname, sizeof(classname));
-             LogMessage("IsObstructed hit %d %s", g_iObstructingEntity, classname);
+             LogMessage("IsObstructed hit %d %s %d %d %d",g_iObstructingEntity, classname);
         }
 		if (g_iObstructingEntity == 0) // Hit world
 		{

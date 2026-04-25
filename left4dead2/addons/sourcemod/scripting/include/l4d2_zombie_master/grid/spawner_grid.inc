@@ -16,10 +16,17 @@
 // Lifecycle
 // ==========================================================================
 
+// Cache latest cell positions.
+int nearbyCells_cache[GRID_MAX_CELLS];
+float aimPos_cache[3];
+int cellCount_cache;
+#define AIMPOS_CACHE_TOL_SQ 100.0
+
 void Grid_Init()
 {
     GridRenderer_Init();
     g_bGridReady = true;
+    cellCount_cache = 0;
 }
 
 void Grid_Cleanup()
@@ -37,6 +44,7 @@ void Grid_Cleanup()
         GridRenderer_Cleanup();
         g_bGridReady = false;
     }
+    cellCount_cache = 0;
 }
 
 void Grid_OnEnabled(int client)
@@ -53,6 +61,7 @@ void Grid_OnEnabled(int client)
     g_GridCellCount = 0;
     g_GridHasValidCell = false;
     g_GridValidCellCount = 0;
+    cellCount_cache = 0;
 }
 
 void Grid_OnDisabled(int client)
@@ -67,6 +76,7 @@ void Grid_OnDisabled(int client)
     g_GridValidCellCount = 0;
     if (client > 0 && client <= MaxClients)
         GridRenderer_OnClientDisabled(client);
+    cellCount_cache = 0;
 }
 
 static bool Grid_CheckObstruction(int idx, float pos[3], bool obstructed)
@@ -309,7 +319,19 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     //int cellCount = GridLib_FindNearbyCells(aimPos, GRID_SEARCH_RADIUS,
     //    GRID_MAX_Z_DIFF, nearbyCells, GRID_MAX_CELLS, _, GRID_BUDGET_MS);
     
-    int cellCount = GridLib_FindCellsConnected(aimPos, GRID_MAX_CELLS, nearbyCells, GRID_MAX_CELLS, 300.0, _, GRID_BUDGET_MS, false);
+    int cellCount;
+    bool use_cache = false;
+    if (cellCount_cache==GRID_MAX_CELLS && GetVectorDistance(aimPos,aimPos_cache,true)<AIMPOS_CACHE_TOL_SQ)
+    {
+        cellCount = cellCount_cache;
+        use_cache = true;
+    }
+    else
+    {
+        cellCount = GridLib_FindCellsConnected(aimPos,GRID_MAX_CELLS,nearbyCells,GRID_MAX_CELLS,300.0,_,GRID_BUDGET_MS,false);
+        aimPos_cache = aimPos;
+        cellCount_cache = cellCount;
+    }
     
     float ms_find = (GetEngineTime() - t_find) * 1000.0;
     
@@ -376,11 +398,20 @@ Action Grid_TimerUpdate(Handle timer, int userid)
     }
 
     // Validate each cell
+    float pos[3], normal[3];
+    Address navArea;
+    bool obstructed;
+    int cell;
+    
     for (int i = 0; i < cellCount; i++)
     {
-        float pos[3], normal[3];
-        Address navArea;
-        bool obstructed;
+        
+        if (use_cache) cell = nearbyCells_cache[i];
+        else
+        {
+            cell = nearbyCells[i];
+            nearbyCells_cache[i] = cell;
+        } 
         
         if (!over_budget && ((GetEngineTime()-t_start)*1000.0)>=GRID_BUDGET_MS)
         {
@@ -388,7 +419,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
             over_budget = true;
         }
 
-        if (over_budget || !GridLib_GetCellData(nearbyCells[i], pos, normal, navArea, obstructed))
+        if (over_budget || !GridLib_GetCellData(cell, pos, normal, navArea, obstructed))
         {
             cellValid[i] = false;
             g_GridCellContext[i] = SPAWNER_BUDGET;
@@ -396,7 +427,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         }
 
         g_GridValidPositions[i] = pos;
-        g_GridCellIndices[i] = nearbyCells[i];
+        g_GridCellIndices[i] = cell;
 
         cellValid[i] = Grid_ValidateCell(i, pos, navArea, obstructed);
         g_GridCellContext[i] = g_iGridValidateContext;
@@ -434,9 +465,9 @@ Action Grid_TimerUpdate(Handle timer, int userid)
                     GridRenderer_HideAll(client);
                     break;
                 }
-                else set_cell_cooldown(nearbyCells[i]);
+                else set_cell_cooldown(cell);
             }
-            else set_cell_cooldown(nearbyCells[i]);
+            else set_cell_cooldown(cell);
         }
         
     }
