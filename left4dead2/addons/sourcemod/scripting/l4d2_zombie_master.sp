@@ -488,6 +488,7 @@ void IsAllowed()
 		HookEvent("revive_success", EvtPlayerHeal, EventHookMode_Post); // subject was healed
 		
 		HookEvent("survivor_rescued", EvtPlayerRescued, EventHookMode_Post); // victim was rescued
+		HookEvent("rescue_door_open", EvtRescueDoorOpen, EventHookMode_Post);
 		HookEvent("survivor_call_for_help", EvtPlayerCallHelp, EventHookMode_Post); //userid -> actual player entity
 		HookEvent("player_bot_replace", EvtBotReplacePlayer, EventHookMode_Post);
         HookEvent("bot_player_replace", EvtPlayerReplaceBot, EventHookMode_Post);
@@ -562,6 +563,7 @@ void IsAllowed()
 		UnhookEvent("revive_success", EvtPlayerHeal, EventHookMode_Post); // subject was healed
 		
 		UnhookEvent("survivor_rescued", EvtPlayerRescued, EventHookMode_Post); // victim was rescued
+		UnhookEvent("rescue_door_open", EvtRescueDoorOpen, EventHookMode_Post);
 		UnhookEvent("survivor_call_for_help", EvtPlayerCallHelp, EventHookMode_Post); // userid -> actual player entity
 		UnhookEvent("player_bot_replace", EvtBotReplacePlayer, EventHookMode_Post);
         UnhookEvent("bot_player_replace", EvtPlayerReplaceBot, EventHookMode_Post);
@@ -796,11 +798,23 @@ Action zm_update(Handle timer = null)
    if (g_iAliveSurvivors!=bank_track_numplayers)
    {
         int player_diff = g_iAliveSurvivors - bank_track_numplayers;
-        if (player_diff>0 || zm_stage<ZM_STARTED)
+        if (player_diff!=0 && (player_diff>0 || zm_stage<ZM_STARTED))
         {
-            if (L4D_IsSurvivalMode()) bank += g_iBonusSurvival*player_diff;
-            else if (ZM_finale_announced) bank += g_iBonusFinaleStage*player_diff;
-            else bank += g_iBankInitialPlayer*player_diff;
+            int d_bank;
+            if (L4D_IsSurvivalMode()) d_bank = g_iBonusSurvival*player_diff;
+            else if (ZM_finale_announced) d_bank = g_iBonusFinaleStage*player_diff;
+            else d_bank = g_iBankInitialPlayer*player_diff;
+            if (player_diff>0 && g_bRescueDoor && zm_stage==ZM_STARTED)
+            {
+                g_bRescueDoor = false;
+                reset_available_zombies();
+                if (IsValidClientZM())
+                {
+                    update_hint("Survivors rescued");
+                    PrintToChat(zm_client, "[zm] Survivors rescued: bank added, cooldowns reset.");
+                }
+            }
+            bank += d_bank;
         }
         bank_track_numplayers = g_iAliveSurvivors;
    }
@@ -910,6 +924,7 @@ Action zm_new_round(Handle timer = null)
         zm_stage = ZM_END;
         return Plugin_Stop;
     }
+    g_bRescueDoor = false;
     
     if (g_bGrid && !GridLib_IsReady())
     {
@@ -1761,6 +1776,7 @@ public void OnMapEnd()
 	Spawner_Cleanup();
 	if (GridLib_IsReady()) GridLib_Cleanup();
 	if (!g_bCvarAllow) return;
+	g_bRescueDoor = false;
 	g_iLockedDoor = INVALID_ENT_REFERENCE; // we don't know if there's gonna be a door next map
 	ResetTimer();
 	zm_stage = ZM_END;
@@ -1999,7 +2015,19 @@ Action EvtPlayerReplaceBot(Event event, const char[] name, bool dontBroadcast)
 void EvtPlayerRescued(Event event, const char[] name, bool dontBroadcast)
 {
     int victim = event.GetInt("victim");
-    request_update_glow(victim);
+    if (IsValidClient(victim)) request_update_glow(victim);
+}
+
+void EvtRescueDoorOpen(Event event, const char[] name, bool dontBroadcast)
+{
+    g_bRescueDoor = true;
+    CreateTimer(g_fUpdateRate,Timer_reset_rescue_door,TIMER_FLAG_NO_MAPCHANGE);
+}
+
+Action Timer_reset_rescue_door(Handle timer)
+{
+    g_bRescueDoor = false;
+    return Plugin_Stop;
 }
 
 void EvtPlayerCallHelp(Event event, const char[] name, bool dontBroadcast)

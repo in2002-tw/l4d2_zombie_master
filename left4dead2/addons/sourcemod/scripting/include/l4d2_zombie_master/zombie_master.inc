@@ -316,6 +316,24 @@ stock void get_uncommon_model(char label[16], char model[64])
 #define ZOMBIECLASS_WITCH	7
 #define ZOMBIECLASS_TANK	8
 
+// Define groups with different spawn rules.
+// Commons cannot spawn in areas marked by IsBlocked
+// Witches are allowed to spawn in weird places without nav
+
+#define GROUP_COMMON 0 // ZOMBIECLASS_COMMON
+#define GROUP_WITCH 1 // ZOMBIECLASS_WITCH
+#define GROUP_SPECIAL 2 // everything else
+
+int get_zombieclass_group(int zClass)
+{
+    switch (zClass)
+    {
+        case ZOMBIECLASS_COMMON: return GROUP_COMMON;
+        case ZOMBIECLASS_WITCH: return GROUP_WITCH;
+        default: return GROUP_SPECIAL;
+    }
+}
+
 // ZM stages
 #define ZM_NEWROUND 0 // Survivors in start area, no ZM picked.
 #define ZM_PREP 1 // Survivors in start area, ZM is placing units and getting ready, or players still joining. Survivors cannot leave yet.
@@ -327,6 +345,8 @@ bool l4dhooks_updated = false; // check if native L4D_FindEntityByClassnameWithi
 ConVar g_hCvarDebug, g_hCvarAllow, z_max_player_zombies, infectedbots_enable, jukebox_horde, shoot_alert_enable, clown_world_enable;
 bool g_bCvarAllow;
 bool g_bSpawnWitchBride = false; // avoid crash
+
+bool g_bRescueDoor; // rescue door was opened
 
 int zm_stage = ZM_END;
 

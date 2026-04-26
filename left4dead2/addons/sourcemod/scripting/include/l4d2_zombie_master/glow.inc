@@ -237,6 +237,7 @@ void request_update_glow(int i, bool force = false, float delay=0.1)
 {
     if (!IsValidEntity(i)) return;
     if (!force && hp_timers[i]!=null) return;
+    if (DEBUG) LogMessage("request_update_glow %d force %d delay %f", i, force, delay)
     if (delay<0.1) update_glow(i);
     else hp_timers[i] = CreateTimer(delay,Timer_update_glow,EntIndexToEntRef(i));
 }
@@ -352,9 +353,9 @@ void UpdateSurvivorGlow(int client)
     
     if (DEBUG)
     {
-        char name[MAX_NAME_LENGTH]; 
+        static char name[MAX_NAME_LENGTH]; 
         GetClientName(client,name,sizeof(name));
-        LogMessage("[zm] UpdateSurvivorGlow %s alive %d SurvivorGlow %d",name,alive,survivor_glow);
+        LogMessage("[zm] UpdateSurvivorGlow %d %s alive %d SurvivorGlow %d",client,name,alive,survivor_glow);
     }
     
     if (alive && survivor_glow) L4D2_RemoveEntityGlow(client);
@@ -379,6 +380,7 @@ void UpdateSurvivorGlow(int client)
        	   L4D2_SetEntityGlow(client,
                               L4D2Glow_Constant,
                               999999,0,color,flashing);
+           if (DEBUG) LogMessage("UpdateSurvivorGlow %d color %d %d %d", client, color[0],color[1],color[2]);
         }
         else L4D2_RemoveEntityGlow(client);
 	}
