@@ -440,7 +440,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
                 return true;
             }
         }
-        LogMessage("%d fired %d TraceRays", s, temp_traces);
+        //LogMessage("%d fired %d TraceRays", s, temp_traces);
         if (num_traces>MIN_TRACES && temp_traces>=num_traces) num_traces -= 1;
         // All testpoints blocked for this survivor.
         if (cacheEligible)
