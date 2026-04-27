@@ -5,7 +5,7 @@
 #define _zm_panic_included
 ///////////////////////////////////////
 
-bool DEBUG_PANIC = true;
+bool DEBUG_PANIC = false;
 #define PANIC_SPACING_SEC 5.0 // minimum time in seconds between panic refills
 #define NATURAL_TIMEOUT 30.0 // how long to wait for director-initiated natural mob to reset after round start
 
