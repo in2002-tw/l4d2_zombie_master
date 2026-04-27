@@ -803,6 +803,11 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             outPositions[idx+2] = randomPos[2];
             resolved++;
         }
+        
+        if (resolved==0)
+        {
+            if (zm_allow_spawns && hint && IsValidClientZM()) update_hint("%T", "Spawn failed", zm_client);
+        }
 
         return resolved;
     }
@@ -935,6 +940,7 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
             g_iAnalogTargetClient = target_client;
             return true;
         }
+        if (zm_allow_spawns && IsValidClientZM()) update_hint("%T", "Spawn failed", zm_client);
         return false;
     }
     return true;
@@ -978,6 +984,7 @@ bool Analog_ResolveSpecialPosition(int zombieclass, bool flow, float outPos[3])
             g_iAnalogTargetClient = target_client;
             return true;
         }
+        if (zm_allow_spawns && IsValidClientZM()) update_hint("%T", "Spawn failed", zm_client);
         return false;
     }
     else outPos = zm_spawner_pos;
