@@ -271,7 +271,10 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
             {
                 Address navArea_saferoom = L4D_GetNearestNavArea(saferoom_pos, 300.0, true, false, true, TEAM_SURVIVOR);
                 if (navArea_saferoom != Address_Null && !NavArea_IsPotentiallyVisible(cellNavArea,navArea_saferoom,false))
-                temp_traces = 1;
+                {
+                    //LogMessage("nav saferoom: not potentially visible, 1 trace ray");
+                    temp_traces = 1;
+                }
             }
             g_LosN_safe_enter++;
             int door = EntRefToEntIndex(g_iLockedDoor);
@@ -300,10 +303,12 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
             //num_traces = MIN_TRACES;
             num_traces = 1;
             check_nav = false; // MIN_TRACES already reduced
+            //LogMessage("nav team: not potentially visible, 1 trace ray");
             //return false;
         }
         else if (hNavIsCompletelyVisibleToTeam!=null && NavArea_IsCompletelyVisibleToTeam(cellNavArea,TEAM_SURVIVOR))
         {
+            //LogMessage("nav team: fully visible");
             g_LosN_nav_rej++;
             return true;
         }
@@ -374,7 +379,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
             if (use_PVS_SameCluster && (cellCluster >= 0 && cellCluster == g_BatchSurvivorCluster[s]) )
             {
                 g_LosN_shortcut++;
-                //LogMessage("%d same-cluster", s);
+                //LogMessage("%d same-cluster, skip trace rays", s);
             }
             else
             {
@@ -411,7 +416,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
             
         }
         
-        if (check_nav && temp_traces>MIN_TRACES && g_CachedSurvNavArea[s] != Address_Null && !NavArea_IsPotentiallyVisible(cellNavArea, g_CachedSurvNavArea[s], false))
+        if (check_nav && temp_traces>1 && g_CachedSurvNavArea[s] != Address_Null && !NavArea_IsPotentiallyVisible(cellNavArea, g_CachedSurvNavArea[s], false))
         {
             //LogMessage("%d IsPotentiallyVisible false, reduce temp_traces", s);
             //temp_traces = MIN_TRACES;
@@ -435,6 +440,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
                 return true;
             }
         }
+        LogMessage("%d fired %d TraceRays", s, temp_traces);
         if (num_traces>MIN_TRACES && temp_traces>=num_traces) num_traces -= 1;
         // All testpoints blocked for this survivor.
         if (cacheEligible)
