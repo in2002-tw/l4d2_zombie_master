@@ -285,7 +285,9 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
     if (check_nav && hNavIsPotentiallyVisibleToTeam!=null && !NavArea_IsPotentiallyVisibleToTeam(cellNavArea, TEAM_SURVIVOR))
     {
         g_LosN_nav_rej++;
-        num_traces = MIN_TRACES;
+        //num_traces = MIN_TRACES;
+        num_traces = 1;
+        //LogMessage("IsPotentiallyVisibleToTeam false, num_traces reduced");
         check_nav = false; // MIN_TRACES already reduced
         //return false;
     }
@@ -356,6 +358,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
             if (use_PVS_SameCluster && (cellCluster >= 0 && cellCluster == g_BatchSurvivorCluster[s]) )
             {
                 g_LosN_shortcut++;
+                //LogMessage("%d same-cluster", s);
             }
             else
             {
@@ -363,6 +366,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
                 if (!g_BatchSurvivorValidPVS[s] || !PVS_CheckOriginInPVS(vecPos, g_BatchSurvivorPVS[s]))
                 {
                     g_LosN_pvs_rej++;
+                    //LogMessage("%d not in PVS, skip trace rays", s);
                     continue;
                 }
             }
@@ -393,14 +397,16 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         
         if (check_nav && temp_traces>MIN_TRACES && g_CachedSurvNavArea[s] != Address_Null && !NavArea_IsPotentiallyVisible(cellNavArea, g_CachedSurvNavArea[s], false))
         {
-            temp_traces = MIN_TRACES;
+            //LogMessage("%d IsPotentiallyVisible false, reduce temp_traces", s);
+            //temp_traces = MIN_TRACES;
+            temp_traces = 1;
         }
         
         
         for (i = 0; i < temp_traces; i++)
         {
             g_LosN_surv_trace++;
-            bool blocked = los_blocked(g_fBatchSurvivorEyePos[s], testPoints[i], g_iBatchSurvivorClients[s]);
+            bool blocked = los_blocked(g_fBatchSurvivorEyePos[s],testPoints[i],g_iBatchSurvivorClients[s]);
             if (!blocked)
             {
                 g_LosN_trace_hit++;
