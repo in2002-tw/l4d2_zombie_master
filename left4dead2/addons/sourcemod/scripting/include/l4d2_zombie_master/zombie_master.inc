@@ -396,7 +396,7 @@ bool force_started = false;
 bool g_bMapStarted = false;
 bool clients_in_server = false; // track whether HUD needs to be updated
 float t_round_start = 0.0;
-bool natural_first_wait = true; // wait for first natural mob timer reset, when survivors leave saferoom usually.
+bool natural_first_wait = false; // wait for first natural mob timer reset, when survivors leave saferoom usually.
 bool clients_active[MAXPLAYERS+1] = {false,...};
 bool first_active = false; // track whether ANY player has shown signs of life before starting to offer ZM
 bool dominated[MAXPLAYERS+1] = {false,...};
@@ -2386,6 +2386,7 @@ void start_zm_round(bool play_sound = true)
      CreateTimer(0.1,infinite_delay_natural_mob,TIMER_FLAG_NO_MAPCHANGE);
      CountClients();
      update_EMS_HUD(true,0.0);
+     natural_first_wait = true;
      if (shoot_alert_enable) ServerCommand("l4d2_shoot_alert_common_resetcvars");
  }
  zm_allow_spawns = true;

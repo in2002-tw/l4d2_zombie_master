@@ -28,13 +28,16 @@ Handle hCreateTank = null;
 //hTankEnterStasis, hTankLeaveStasis = null;
 
 // https://github.com/Ilusion9/entityIO-sm
-Handle g_DHook_AcceptInput = null;
+Handle g_DHook_AcceptInput;
 
 // TerrorNavArea::IsPotentiallyVisibleToTeam(int) -> bool
-Handle hNavIsPotentiallyVisibleToTeam = null;
+Handle hNavIsPotentiallyVisibleToTeam;
+
+// TerrorNavArea::IsCompletelyVisibleToTeam(int team) -> bool
+Handle hNavIsCompletelyVisibleToTeam;
 
 // TerrorNavArea::IsPotentiallyVisible(const TerrorNavArea*, bool) -> bool
-Handle hNavIsPotentiallyVisible = null;
+Handle hNavIsPotentiallyVisible;
 
 GameData hGameData;
 //GameData hGameData_l4dhooks;
@@ -186,6 +189,20 @@ void PrepSDKCall()
 		LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisibleToTeam EndPrepSDKCall returned null; nav filter disabled");
 	//else
 	//	LogMessage("[zm] INFO: TerrorNavArea::IsPotentiallyVisibleToTeam SDKCall ready");
+	
+	// TerrorNavArea::IsCompletelyVisibleToTeam(int team) -> bool
+	StartPrepSDKCall(SDKCall_Raw);
+	navSigOk = PrepSDKCall_SetFromConf(hGameData, SDKConf_Signature, "TerrorNavArea::IsCompletelyVisibleToTeam");
+	if (navSigOk)
+	{
+		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+		PrepSDKCall_SetReturnInfo(SDKType_Bool, SDKPass_Plain);
+		hNavIsCompletelyVisibleToTeam = EndPrepSDKCall();
+	}
+	if (!navSigOk)
+		LogMessage("[zm] INFO: TerrorNavArea::IsCompletelyVisibleToTeam SetFromConf failed; nav filter disabled (gamedata sig not found or binary mismatch)");
+	else if (hNavIsPotentiallyVisibleToTeam == null)
+		LogMessage("[zm] INFO: TerrorNavArea::IsCompletelyVisibleToTeam EndPrepSDKCall returned null; nav filter disabled");
 
 	// TerrorNavArea::IsPotentiallyVisible(const TerrorNavArea*, bool) -> bool (signature-based, non-virtual)
 	StartPrepSDKCall(SDKCall_Raw);
@@ -211,6 +228,12 @@ stock bool NavArea_IsPotentiallyVisibleToTeam(Address navArea, int team)
 {
 	if (hNavIsPotentiallyVisibleToTeam == null || navArea == Address_Null) return true;
 	return SDKCall(hNavIsPotentiallyVisibleToTeam, navArea, team);
+}
+
+stock bool NavArea_IsCompletelyVisibleToTeam(Address navArea, int team)
+{
+	if (hNavIsCompletelyVisibleToTeam == null || navArea == Address_Null) return true;
+	return SDKCall(hNavIsCompletelyVisibleToTeam, navArea, team);
 }
 
 stock bool NavArea_IsPotentiallyVisible(Address cellArea, Address survivorArea, bool checkAttributes)

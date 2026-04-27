@@ -32,7 +32,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.09 2026-04-24"
+#define PLUGIN_VERSION 			"0.9.091 2026-04-26"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -98,7 +98,7 @@ public Plugin myinfo =
 // 29. Some game logic related checks were referencing GetEngineTime and not GameTime.Whoops!
 // 30. Spawner memory.
 // 31. PVS (Potentially Visible Set) added to survivor visiblity checks for performance.
-// 32. 
+// 32. Note down github...
 
 // TO DO LIST:
 // 5. Gas station tornado (done by zyiks, not implemented)

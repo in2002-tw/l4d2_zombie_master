@@ -5,6 +5,10 @@
 #define _zm_panic_included
 ///////////////////////////////////////
 
+bool DEBUG_PANIC = true;
+#define PANIC_SPACING_SEC 5.0 // minimum time in seconds between panic refills
+#define NATURAL_TIMEOUT 30.0 // how long to wait for director-initiated natural mob to reset after round start
+
 Action ZMPanic(int client, int args)
 {
     if (!g_bCvarAllow || !IsValidClientZM() || zm_client!=client) return Plugin_Continue;
@@ -16,7 +20,7 @@ Action ZMPanic(int client, int args)
 void update_panic()
 {
     // No panic before round start, in survival, and finales.
-    if (zm_stage!=ZM_STARTED || L4D_IsSurvivalMode() || ZM_finale_announced) return;
+    if (zm_stage!=ZM_STARTED || ZM_finale_announced || L4D_IsSurvivalMode()) return;
     
     if (DEBUG) LogMessage("[zm] update_panic triggered");
     
@@ -24,13 +28,14 @@ void update_panic()
     else
     {
         t_last_panic = GetGameTime();
+        manual_panic = false;
         if (g_bPanicRefill) available_zombie_arr[ZOMBIECLASS_COMMON]=max_zombie_arr[ZOMBIECLASS_COMMON];
     }
     
     int pending_mob = L4D2Direct_GetPendingMobCount();
     if (pending_mob>0)
     {
-        if (pending_mob>10 && (g_iCostCommon>=0 || g_iCostUncommon>=0)) pending_mob = 10;
+        if (pending_mob>10 && (g_iCostCommon>=0 || g_iCostUncommon>=0)) pending_mob = 10; // if commons are enabled, assist ZM minimally.
         CreateTimer(2.5, Timer_Free_Angry_Zombies, pending_mob, TIMER_FLAG_NO_MAPCHANGE);
         L4D2Direct_SetPendingMobCount(0);
     }
@@ -41,7 +46,7 @@ void update_panic()
 
 void toggle_panic(bool state = true, bool overwrite = false, bool free = false)
 {
-    if (L4D_IsSurvivalMode() || ZM_finale_announced || g_iPanicCost<0)
+    if (ZM_finale_announced || g_iPanicCost<0 || L4D_IsSurvivalMode())
     {
         update_hint("%T", "Panic is automatic", zm_client);
         if (panic)
@@ -60,6 +65,13 @@ void toggle_panic(bool state = true, bool overwrite = false, bool free = false)
     
     if ( zm_stage>=ZM_STARTED && actual_state )
     {
+       
+       if ( manual_panic && panic_conditions(_,true) ) // automatically fallback to free panic
+       {
+           manual_panic = false;
+           free = true;
+       }
+       
        if (!free)
        {
            if ((bank-g_iPanicCost)<0)
@@ -83,6 +95,7 @@ void toggle_panic(bool state = true, bool overwrite = false, bool free = false)
        if (strcmp(g_sCvarMPGameMode,"zm_clowns",false)==0 && clown_world_enable && (t_now-t_last_panic)>=30.0) ServerCommand("clown_world_randomize");
        t_last_panic = t_now;
        t_last_autocommon = t_last_panic - 5.0; // immediately start spawning autocommon PANIC zombies
+       L4D2Direct_SetPendingMobCount(0);
        if (manual_panic)
        {
            if (DEBUG) LogMessage("[zm] Manual panic");
@@ -96,7 +109,6 @@ void toggle_panic(bool state = true, bool overwrite = false, bool free = false)
     }
     else
     {
-        L4D2Direct_SetPendingMobCount(0);
         if (DEBUG) LogMessage("[zm] Panic OFF");
         manual_panic = false;
         if (zm_stage<ZM_STARTED) update_hint("Round not started");
@@ -112,8 +124,8 @@ void toggle_panic(bool state = true, bool overwrite = false, bool free = false)
     else SetConVarInt(FindConVar("director_panic_forever"), 0);
     RequestFrame(create_common_menu);
     RequestFrame(create_uncommon_menu);
+    L4D2Direct_SetPendingMobCount(0);
     zm_update();
-    
 }
 
 stock void infected_panic(Handle InfectedAttackSurvivorTeam,bool update_look = false)
@@ -146,64 +158,105 @@ stock Action infinite_delay_natural_mob(Handle timer = null)
 float mob_timestamp;
 
 // use zm_debug_mob to print these
-bool panic_conditions(bool mob_just_spawned=false)
+bool panic_conditions(bool mob_just_spawned=false, bool ignore_spacing = false)
 {
-    if (zm_stage!=ZM_STARTED) return false;
-    if (L4D_IsSurvivalMode() || ZM_finale_announced) return false;
+    if ( ZM_finale_announced || L4D_IsSurvivalMode() )
+    {
+        if (DEBUG_PANIC) LogMessage("panic_conditions: early exit");
+        return false;
+    }
+    
+    if (natural_first_wait && zm_stage>=ZM_STARTED && (GetGameTime()-t_round_start)>NATURAL_TIMEOUT) natural_first_wait = false;
+    
     bool natural_mob = false;
     CountdownTimer MobSpawnTimer = L4D2Direct_GetMobSpawnTimer();
     if (MobSpawnTimer)
     {
+        float mob_timer_elapsed = CTimer_GetElapsedTime(MobSpawnTimer);
+        if ( (zm_stage!=ZM_STARTED || natural_first_wait) && mob_timer_elapsed<g_fPanicDuration)
+        {
+            // Director tends to reset natural mob timer when survivors first leave safe area which may trigger panic, fight this.
+            CreateTimer(0.1,infinite_delay_natural_mob,TIMER_FLAG_NO_MAPCHANGE);
+            if (zm_stage >= ZM_STARTED) natural_first_wait = false;
+            if (DEBUG_PANIC) LogMessage("panic_conditions: natural_first_wait exit");
+            return false;
+        }
         float new_timestamp = CTimer_GetTimestamp(MobSpawnTimer);
         float mob_timer_left = CTimer_GetRemainingTime(MobSpawnTimer);
-        float mob_timer_elapsed = CTimer_GetElapsedTime(MobSpawnTimer);
-        if (new_timestamp!=mob_timestamp)
+        if ( FloatAbs(new_timestamp-mob_timestamp)>=0.001 )
         {
-            mob_timestamp = new_timestamp;
-            if (DEBUG) LogMessage("[zm] MobSpawnTimer jumped %.2f, %.2f", mob_timer_left, mob_timer_elapsed);
+            if (DEBUG_PANIC) LogMessage("[zm] MobSpawnTimer jumped %.2f, %.2f", mob_timer_left, mob_timer_elapsed);
             if (mob_timer_left<=5.0 && mob_timer_left>=(-1.0) && mob_timer_elapsed<g_fPanicDuration)
-                natural_mob=true;
+            {
+                if (ignore_spacing || (GetGameTime()-t_last_panic)>PANIC_SPACING_SEC) natural_mob=true;
+            }
         }
+        mob_timestamp = new_timestamp;
         
-        if (natural_first_wait && L4D_HasAnySurvivorLeftSafeArea() && mob_timer_elapsed<g_fPanicDuration)
+        if (mob_timer_left>=5.0)
         {
-            CreateTimer(0.1,infinite_delay_natural_mob,TIMER_FLAG_NO_MAPCHANGE);
-            natural_first_wait = false;
+            if (DEBUG_PANIC) LogMessage("panic_conditions: mob_timer_left >= 5.0");
+            return false;
+        }
+        if (mob_timer_elapsed>=g_fPanicDuration)
+        {
+            if (DEBUG_PANIC) LogMessage("panic_conditions: mob_timer_elapsed >= %f", g_fPanicDuration);
             return false;
         }
         
-        if (mob_timer_left>5.0) return false;
-        if (mob_timer_elapsed>g_fPanicDuration) return false;
-        
     }
-    else return false;
+    else
+    {
+        if (DEBUG_PANIC) LogMessage("panic_conditions: bad timer");
+        return false;
+    }
     
-    if (panic && manual_panic) return false;
-    if (script_CommonLimit<=0) return false;
-    if (L4D2Direct_GetPendingMobCount()<=0 && !mob_just_spawned && !natural_mob) return false;
+    if (panic && manual_panic)
+    {
+        if (DEBUG_PANIC) LogMessage("panic_conditions: manual_panic");
+        return false;
+    }
+    if (script_CommonLimit<=0)
+    {
+        LogMessage("panic_conditions: script_CommonLimit");
+        return false;
+    }
+    if (!natural_mob)
+    {
+        if (DEBUG_PANIC) LogMessage("panic_conditions: no natural mob");
+        return false;
+    }
+    if (L4D2Direct_GetPendingMobCount()<=0 && !mob_just_spawned)
+    {
+        if (DEBUG_PANIC) LogMessage("panic_conditions: no mob");
+        return false;
+    }
+    if (DEBUG_PANIC) LogMessage("panic_conditions: SATISFIED!");
     return true;
 }
 
 void check_panic(bool mob_spawned = false)
 {
-    if (!L4D_IsSurvivalMode() && !ZM_finale_announced)
+    //if (DEBUG_PANIC) LogMessage("check_panic");
+    if (ZM_finale_announced || L4D_IsSurvivalMode())
     {
-        float t_now = GetGameTime();
-        if ( (t_now-t_round_start)>10.0 && (t_now-t_last_panic)>0.0 && panic_conditions(mob_spawned) ) update_panic();
-        else if (panic && (t_now-t_last_panic)>=g_fPanicDuration ) toggle_panic(false,true,true);
-        else if (!panic)
+        if (DEBUG_PANIC) LogMessage("check_panic: exit early");
+        return;
+    }
+    if (panic_conditions(mob_spawned)) update_panic();
+    else if (panic && (GetGameTime()-t_last_panic)>=g_fPanicDuration ) toggle_panic(false,true,true);
+    else if (!panic && !mob_spawned)
+    {
+        CountdownTimer MobSpawnTimer = L4D2Direct_GetMobSpawnTimer();
+        if (MobSpawnTimer)
         {
-            CountdownTimer MobSpawnTimer = L4D2Direct_GetMobSpawnTimer();
-            if (MobSpawnTimer)
+            float elapsed = CTimer_GetElapsedTime(MobSpawnTimer);
+            if ( elapsed>1000.0 || (elapsed<100.0 && elapsed>g_fPanicDuration) )
             {
-                float elapsed = CTimer_GetElapsedTime(MobSpawnTimer);
-                if ( elapsed>1000.0 || (elapsed<100.0 && elapsed>g_fPanicDuration) )
-                {
-                    infinite_delay_natural_mob();
-                    CreateTimer(0.1,infinite_delay_natural_mob,TIMER_FLAG_NO_MAPCHANGE);
-                }
-                
+                infinite_delay_natural_mob();
+                CreateTimer(0.1,infinite_delay_natural_mob,TIMER_FLAG_NO_MAPCHANGE);
             }
+            
         }
     }
 }
@@ -249,6 +302,7 @@ Action zm_debug_mob(int client, int args)
     PrintToChat(client, "commons %d panic forever %d pending_mob %d finale_active %d CommonLimit %d",
                 commons, panic_forever, pending_mob, finale_active, script_CommonLimit);
     PrintToChat(client, "MobTimer Remaining Elapsed %.2f %.2f", mob_timer_left, mob_timer_elapsed);
+    PrintToChat(client, "natural wait %d dt_last_panic %f", natural_first_wait, GetGameTime()-t_last_panic);
     PrintToChat(client, "DirectorScriptScope %d %d %d %d %d", scope0, scope1, scope2, scope3, scope4);
     return Plugin_Continue;
 }
@@ -338,7 +392,7 @@ MRESReturn DHook_Director_AcceptInput(int pThis, DHookReturn hReturn, DHookParam
 	if (DEBUG) LogMessage("[zm] DHook_Director_AcceptInput");
 	if (!g_bCvarAllow) return MRES_Ignored;
 	
-	char inputName[256];
+	char inputName[32];
 	hParams.GetString(1, inputName, sizeof(inputName));
 	int activator = hParams.IsNull(2) ? -1 : hParams.Get(2);
 	int caller = hParams.IsNull(3) ? -1 : hParams.Get(3);	
@@ -362,7 +416,7 @@ MRESReturn DHook_Director_AcceptInput(int pThis, DHookReturn hReturn, DHookParam
         	update_panic();
 	}
 	
-	if (survival_activated && L4D_IsSurvivalMode() && zm_stage<ZM_STARTED && !IsValidClientZM())
+	if (survival_activated && zm_stage<ZM_STARTED && L4D_IsSurvivalMode() && !IsValidClientZM())
 	{
         	PrintToChatAll("[zm] %t", "Start delay notify");
         	hReturn.Value = true;

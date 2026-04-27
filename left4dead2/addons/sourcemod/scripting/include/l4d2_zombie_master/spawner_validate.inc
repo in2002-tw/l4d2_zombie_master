@@ -252,7 +252,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
     int i;
     int temp_traces = num_traces;
     
-    bool check_nav = hNavIsPotentiallyVisibleToTeam!=null || hNavIsPotentiallyVisible!=null;
+    bool check_nav = hNavIsPotentiallyVisibleToTeam!=null || hNavIsPotentiallyVisible!=null || hNavIsCompletelyVisibleToTeam!=null;
     if (check_nav) // check visibility between two navmeshes
     {
         if (cellNavArea == Address_Null) cellNavArea = L4D_GetNearestNavArea(vecPos, 300.0, true, false, true, TEAM_INFECTED);
@@ -289,17 +289,22 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
             g_LosMs_safe += (GetEngineTime() - t_safe) * 1000.0;
         }
     }
-
-    // Nav-area visibility pre-reject: if the director's recent-visibility list for the survivor team
-    // does not include this area, no survivor has marked it as seeable.
-    if (check_nav && hNavIsPotentiallyVisibleToTeam!=null && !NavArea_IsPotentiallyVisibleToTeam(cellNavArea, TEAM_SURVIVOR))
+    
+    if (check_nav)
     {
-        g_LosN_nav_rej++;
-        //num_traces = MIN_TRACES;
-        num_traces = 1;
-        //LogMessage("IsPotentiallyVisibleToTeam false, num_traces reduced");
-        check_nav = false; // MIN_TRACES already reduced
-        //return false;
+        // Nav-area visibility pre-reject: if the director's recent-visibility list for the survivor team
+        // does not include this area, no survivor has marked it as seeable.
+        if (hNavIsPotentiallyVisibleToTeam!=null && !NavArea_IsPotentiallyVisibleToTeam(cellNavArea, TEAM_SURVIVOR))
+        {
+            g_LosN_nav_rej++;
+            if (hNavIsCompletelyVisibleToTeam!=null && NavArea_IsCompletelyVisibleToTeam(cellNavArea,TEAM_SURVIVOR))
+                return true;
+            //num_traces = MIN_TRACES;
+            num_traces = 1;
+            //LogMessage("IsPotentiallyVisibleToTeam false, num_traces reduced");
+            check_nav = false; // MIN_TRACES already reduced
+            //return false;
+        }
     }
     
     Spawner_CacheSurvivorData(); // optimization - load survivor data or read cached values
