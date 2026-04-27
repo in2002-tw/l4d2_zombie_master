@@ -923,16 +923,22 @@ stock void get_zombieclass_name(int ZOMBIECLASS, char name[32])
 bool hit_trigger;
 // Check if navArea is legal for zombies. Allow witches to be spawned in weird places
 // You may provide all attributes or automatically get them from navArea.
+// flow: do not spawn zombies in locations where there should be no zombies.
 stock bool nav_can_spawn_zombies(const int zClass = ZOMBIECLASS_COMMON,
                                  Address navArea = Address_Null,
                                  int &navAttributeFlags = -1, int &navSpawnAttributes = -1,
-                                 float navCenter[3] = {0.0,0.0,0.0}, float navSize[3] = {0.0,0.0,0.0})
+                                 float navCenter[3] = {0.0,0.0,0.0}, float navSize[3] = {0.0,0.0,0.0},
+                                 bool flow = false)
 {
     if (navArea!=Address_Null && zClass==ZOMBIECLASS_COMMON && l4dhooks_updated && L4D_NavArea_IsBlocked(navArea,TEAM_INFECTED,false)) return false;
     if (navAttributeFlags<0) navAttributeFlags = L4D_GetNavArea_AttributeFlags(navArea);
     if (navSpawnAttributes<0) navSpawnAttributes = L4D_GetNavArea_SpawnAttributes(navArea);
-    //if (navSpawnAttributes&NAV_SPAWN_EMPTY && navSpawnAttributes&NAV_SPAWN_NOTHREAT) return false;
-    if (zClass!=ZOMBIECLASS_WITCH)
+    if (flow)
+    {
+        if (navSpawnAttributes&NAV_SPAWN_EMPTY) return false;
+        if (navSpawnAttributes&NAV_SPAWN_NOTHREAT) return false;
+    }
+    if (flow || zClass!=ZOMBIECLASS_WITCH)
     {
         if (navAttributeFlags & NAV_BASE_OUTSIDE_WORLD) return false;
         if (navSpawnAttributes & NAV_SPAWN_BATTLESTATION) return false;

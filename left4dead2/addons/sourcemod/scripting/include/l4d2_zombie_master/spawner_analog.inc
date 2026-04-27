@@ -790,7 +790,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             //        continue;
             //}
             navArea = L4D_GetNearestNavArea(randomPos, 300.0, true, false, true, TEAM_INFECTED);
-            if (navArea == Address_Null || !nav_can_spawn_zombies(ZOMBIECLASS_COMMON,navArea)) // commons without nav will stand in place
+            if (navArea == Address_Null || !nav_can_spawn_zombies(ZOMBIECLASS_COMMON,navArea,_,_,_,_,!expected_angry))
                 continue;
             if (!expected_angry && !Survivors_CanTravelTo_Pos(randomPos,navArea)) // automatic zombies should slow down survivors
                 continue;
@@ -915,12 +915,8 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
         int target_client = get_spawner_target_survivor(flow, spawner_state);
         if (!IsValidClient(target_client) || !IsPlayerAlive(target_client)) return false;
         bool check_flow = !L4D_IsSurvivalMode(); // spawn witches only ahead of survivors in campaign mode
-        float flow_survivor_fraction, flow_survivor;
-        if (check_flow)
-        {
-            flow_survivor_fraction = get_survivor_flow_fraction(target_client);
-            flow_survivor = L4D2Direct_GetFlowDistance(target_client);
-        }
+        float flow_survivor;
+        if (check_flow) flow_survivor = L4D2Direct_GetFlowDistance(target_client);
         int tries = 10;
         int i = 0;
         Address navArea;
@@ -929,10 +925,10 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
             if ((GetEngineTime()-t)*1000.0>GRID_BUDGET_MS) break;
             i += 1;
             if (!L4D_GetRandomPZSpawnPosition(target_client, ZOMBIECLASS_WITCH, 1, outPos)) continue;
-            if (check_flow && flow_survivor_fraction <= 0.91 && L4D_GetFlowFromPoint(outPos) < flow_survivor) continue;
+            if (check_flow && L4D_GetFlowFromPoint(outPos) < flow_survivor) continue;
             if (IsObstructed(outPos,_,_,false)) continue; // use zyiks obstruction correction
             navArea = L4D_GetNearestNavArea(outPos, 300.0, true, false, true, TEAM_INFECTED);
-            if (navArea == Address_Null || !nav_can_spawn_zombies(ZOMBIECLASS_WITCH,navArea)) continue;
+            if (navArea == Address_Null || !nav_can_spawn_zombies(ZOMBIECLASS_WITCH,navArea,_,_,_,_,true)) continue;
             if (!Survivors_CanTravelTo_Pos(outPos,navArea)) continue; // witch must be a potential obstacle
             if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(outPos,_,navArea,_)) continue;
             g_bAnalogFlowUsed = true;

@@ -469,7 +469,7 @@ bool Survivors_CanTravelTo_Pos(float pos[3],
                                Address navAreaSurv = Address_Null,
                                float max_distance = 5000.0)
 {
-    if (navArea == Address_Null) navArea = L4D_GetNearestNavArea(pos, 300.0, true, false, true, TEAM_INFECTED);
+    if (navArea == Address_Null) navArea = L4D_GetNearestNavArea(pos, 300.0, true, false, true, TEAM_SURVIVOR);
     if (navArea == Address_Null) return false;
     if (navAreaSurv == Address_Null)
     {
