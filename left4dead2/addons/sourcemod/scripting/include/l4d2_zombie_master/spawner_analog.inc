@@ -792,6 +792,8 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             navArea = L4D_GetNearestNavArea(randomPos, 300.0, false, false, true, TEAM_INFECTED);
             if (navArea == Address_Null || !nav_can_spawn_zombies(ZOMBIECLASS_COMMON,navArea)) // commons without nav will stand in place
                 continue;
+            if (!expected_angry && !Survivors_CanTravelTo_Pos(randomPos,navArea)) // automatic zombies should slow down survivors
+                continue;
             if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(randomPos,_,navArea,_))
                 continue;
 
@@ -931,6 +933,7 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
             if (IsObstructed(outPos,_,_,false)) continue; // use zyiks obstruction correction
             navArea = L4D_GetNearestNavArea(outPos, 300.0, false, false, true, TEAM_INFECTED);
             if (navArea == Address_Null || !nav_can_spawn_zombies(ZOMBIECLASS_WITCH,navArea)) continue;
+            if (!Survivors_CanTravelTo_Pos(outPos,navArea)) continue; // witch must be a potential obstacle
             if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(outPos,_,navArea,_)) continue;
             g_bAnalogFlowUsed = true;
             g_iAnalogTargetClient = target_client;

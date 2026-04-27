@@ -442,6 +442,45 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
     return false;
 }
 
+// Find nearest s-index of cached survivor to a given vector position
+int nearest_cached_survivor_index(float pos[3])
+{
+    Spawner_CacheSurvivorData();
+    int s_best = -1;
+    float dsq;
+    float dsq_best = -1.0;
+    for (int s = 0; s < g_iBatchSurvivorCount; s++)
+    {
+        if (!IsValidClient(g_iBatchSurvivorClients[s])) continue;
+        dsq = GetVectorDistance(g_fBatchSurvivorPos[s],pos,true);
+        if (dsq_best<0.0 || dsq<dsq_best)
+        {
+            dsq_best = dsq;
+            s_best = s;
+        }
+    }
+    return s_best;
+}
+
+// Can survivor team travel to a given vector position where a zombie is about to spawn?
+// Optional navAreaSurv: when you know the nearest survivor navmesh. If null wil be calculated automatically
+bool Survivors_CanTravelTo_Pos(float pos[3],
+                               Address navArea = Address_Null,
+                               Address navAreaSurv = Address_Null,
+                               float max_distance = 5000.0)
+{
+    if (navArea == Address_Null) navArea = L4D_GetNearestNavArea(pos, 300.0, false, false, true, TEAM_INFECTED);
+    if (navArea == Address_Null) return false;
+    if (navAreaSurv == Address_Null)
+    {
+        int s_best = nearest_cached_survivor_index(pos);
+        if (s_best<0) return false;
+        navAreaSurv = GetCachedSurvivorNavArea(s_best);
+    }
+    if (navAreaSurv == Address_Null) return false;
+    return L4D2_NavAreaBuildPath(navAreaSurv,navArea,max_distance,TEAM_SURVIVOR,false);
+}
+
 // Should we exit min_distance_to_survivors early?
 // If safe distance is larger than 150.0, we need to check if we satisfy flow conditions.
 // If store_client is false means we don't care about flow.
