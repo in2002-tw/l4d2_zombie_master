@@ -305,6 +305,8 @@
             {
                 "library"   "server"
                 "linux" "@_ZNK13TerrorNavArea26IsPotentiallyVisibleToTeamEi"
+                "windows"   "\x55\x8B\xEC\x83\xEC\x1C\xA1\x2A\x2A\x2A\x2A\x53\x33\xDB\x56\x89\x5D\xF4\x89\x5D\xF8\x57\x89\x4D\xFC\x39\x58\x08\x74\x37\x8B\x40\x08\x68\x2A\x2A\x2A\x2A"
+                /* 55 8B EC 83 EC 1C A1 ? ? ? ? 53 33 DB 56 89 5D F4 89 5D F8 57 89 4D FC 39 58 08 74 37 8B 40 08 68 ? ? ? ? */
             }
 
             /*
@@ -314,6 +316,30 @@
             {
                 "library"   "server"
                 "linux"     "@_ZNK13TerrorNavArea20IsPotentiallyVisibleEPKS_b"
+                "windows"   "\x55\x8B\xEC\x53\x8B\x5D\x08\x56\x8B\xF1\x85\xDB\x0F\x84\xFA\x00\x00\x00\x3B\xDE\x75\x08\x5E\xB0\x01\x5B\x5D\xC2\x08\x00"
+                /* 55 8B EC 53 8B 5D 08 56 8B F1 85 DB 0F 84 FA 00 00 00 3B DE 75 08 5E B0 01 5B 5D C2 08 00 */
+            }
+
+            /*
+             * TerrorNavArea::IsCompletelyVisibleToTeam(int team) -> bool
+             */
+            "TerrorNavArea::IsCompletelyVisibleToTeam"
+            {
+                "library"   "server"
+                "linux"     "@_ZNK13TerrorNavArea25IsCompletelyVisibleToTeamEi"
+                "windows"   "\x55\x8B\xEC\x51\x8B\x45\x08\x53\x56\x57\x50\x8B\xD9\xE8\x2A\x2A\x2A\x2A\x8B\xF8\x8B\x17\x8B\x82\x50\x03\x00\x00\x33\xF6\x83\xC4\x04\x8B\xCF\x89\x75\xFC\xFF\xD0"
+                /* 55 8B EC 51 8B 45 08 53 56 57 50 8B D9 E8 ? ? ? ? 8B F8 8B 17 8B 82 50 03 00 00 33 F6 83 C4 04 8B CF 89 75 FC FF D0 */
+            }
+
+            /*
+             * TerrorNavArea::IsCompletelyVisible(const TerrorNavArea* other) -> bool
+             */
+            "TerrorNavArea::IsCompletelyVisible"
+            {
+                "library"   "server"
+                "linux"     "@_ZNK13TerrorNavArea19IsCompletelyVisibleEPKS_"
+                "windows"   "\x55\x8B\xEC\x53\x8B\x5D\x08\x56\x8B\xF1\x85\xDB\x0F\x84\xEF\x00\x00\x00\x3B\xDE\x75\x08\x5E\xB0\x01\x5B\x5D\xC2\x04\x00"
+                /* 55 8B EC 53 8B 5D 08 56 8B F1 85 DB 0F 84 EF 00 00 00 3B DE 75 08 5E B0 01 5B 5D C2 04 00 */
             }
 
 		}
