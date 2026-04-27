@@ -297,13 +297,15 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         if (hNavIsPotentiallyVisibleToTeam!=null && !NavArea_IsPotentiallyVisibleToTeam(cellNavArea, TEAM_SURVIVOR))
         {
             g_LosN_nav_rej++;
-            if (hNavIsCompletelyVisibleToTeam!=null && NavArea_IsCompletelyVisibleToTeam(cellNavArea,TEAM_SURVIVOR))
-                return true;
             //num_traces = MIN_TRACES;
             num_traces = 1;
-            //LogMessage("IsPotentiallyVisibleToTeam false, num_traces reduced");
             check_nav = false; // MIN_TRACES already reduced
             //return false;
+        }
+        else if (hNavIsCompletelyVisibleToTeam!=null && NavArea_IsCompletelyVisibleToTeam(cellNavArea,TEAM_SURVIVOR))
+        {
+            g_LosN_nav_rej++;
+            return true;
         }
     }
     

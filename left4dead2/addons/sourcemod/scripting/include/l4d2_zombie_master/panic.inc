@@ -7,7 +7,7 @@
 
 bool DEBUG_PANIC = false;
 #define PANIC_SPACING_SEC 5.0 // minimum time in seconds between panic refills
-#define NATURAL_TIMEOUT 30.0 // how long to wait for director-initiated natural mob to reset after round start
+#define NATURAL_TIMEOUT 30.0 // how long to wait for natural mob reset after round start
 
 Action ZMPanic(int client, int args)
 {
