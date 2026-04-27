@@ -100,6 +100,7 @@ void toggle_panic(bool state = true, bool overwrite = false, bool free = false)
        {
            if (DEBUG) LogMessage("[zm] Manual panic");
            L4D_ForcePanicEvent();
+           CreateTimer(0.1,infinite_delay_natural_mob,TIMER_FLAG_NO_MAPCHANGE);
        }
        if (!manual_panic && IsValidClientZM()) PrintHintText(zm_client, "%t", "ZM panic notify");
        if (manual_panic) update_hint("%T", "panic_rate_reduced", zm_client);
