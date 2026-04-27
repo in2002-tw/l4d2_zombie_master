@@ -612,7 +612,8 @@ Action zm_update(Handle timer = null)
    }
    if (timer && zm_timer && timer != zm_timer) return Plugin_Stop; // cancel timer if it's not zm_timer
    
-   if (DEBUG) LogMessage("[zm] zm_update %d %d", zm_timer, timer);
+   float t_now = GetGameTime();
+   if (DEBUG) LogMessage("[zm] zm_update %d %d %f", zm_timer, timer, t_now);
    
    if (L4D_HasMapStarted())
    {
@@ -621,7 +622,6 @@ Action zm_update(Handle timer = null)
        check_panic();
    }
    
-   float t_now = GetGameTime();
    float dt = t_now - t_last_update;
    if (dt>0.0)
    {
