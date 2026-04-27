@@ -606,10 +606,11 @@ Action zm_update(Handle timer = null)
    
    if (!g_bCvarAllow || zm_stage>=ZM_END)
    {
-      if (zm_timer && timer==zm_timer) zm_timer = INVALID_HANDLE;
+      if (timer==zm_timer) zm_timer = INVALID_HANDLE;
       if (IsValidClientZM()) QuitZM_Force(zm_client);
       return Plugin_Stop;
    }
+   if (timer && zm_timer && timer != zm_timer) return Plugin_Stop; // cancel timer if it's not zm_timer
    
    if (DEBUG) LogMessage("[zm] zm_update %d %d", zm_timer, timer);
    
@@ -912,7 +913,6 @@ Action zm_update(Handle timer = null)
       zm_timer = CreateTimer(g_fUpdateRate,zm_update,_,TIMER_REPEAT);
       return Plugin_Stop;
    }
-   if (timer && timer!=zm_timer) return Plugin_Stop; // prevent repeating timer from doubling
    return Plugin_Continue;
 }
 

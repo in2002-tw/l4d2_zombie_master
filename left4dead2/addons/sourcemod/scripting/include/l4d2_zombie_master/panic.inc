@@ -232,6 +232,7 @@ bool panic_conditions(bool mob_just_spawned=false, bool ignore_spacing = false)
         return false;
     }
     if (DEBUG_PANIC) LogMessage("panic_conditions: SATISFIED!");
+    manual_panic = false;
     return true;
 }
 
