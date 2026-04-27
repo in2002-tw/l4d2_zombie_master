@@ -250,6 +250,14 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
     //LogMessage("can_any_alive_survivor_see_cheap spawner mode: %d cluster %d navArea %d cell %d", g_iSpawnerMode, cellCluster, cellNavArea, cellIdx);
     
     int i;
+    int temp_traces = num_traces;
+    
+    bool check_nav = hNavIsPotentiallyVisibleToTeam!=null || hNavIsPotentiallyVisible!=null;
+    if (check_nav) // check visibility between two navmeshes
+    {
+        if (cellNavArea == Address_Null) cellNavArea = L4D_GetNearestNavArea(vecPos, 300.0, false, false, true, TEAM_INFECTED);
+        check_nav = cellNavArea != Address_Null; // check IsPotentiallyVisibleToTeam and IsPotentiallyVisible
+    }
     
     // Check saferoom door to prevent ZM abusing survivors not looking out door.
     if (zm_stage<ZM_STARTED && !L4D_IsSurvivalMode() && IsValidEntRef(g_iLockedDoor))
@@ -259,9 +267,15 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         if (GetVectorDistance(saferoom_pos,vecPos,true) <= fog_distance_sq)
         {
             float t_safe = GetEngineTime();
+            if (check_nav) // reduce number of traces if both navs can't see each other
+            {
+                Address navArea_saferoom = L4D_GetNearestNavArea(saferoom_pos, 300.0, false, false, true, TEAM_INFECTED);
+                if (navArea_saferoom != Address_Null && !NavArea_IsPotentiallyVisible(cellNavArea,navArea_saferoom,false))
+                temp_traces = 1;
+            }
             g_LosN_safe_enter++;
             int door = EntRefToEntIndex(g_iLockedDoor);
-            for (i = 0; i < num_traces; i++)
+            for (i = 0; i < temp_traces; i++)
             {
                 g_LosN_safe_trace++;
                 if (!los_blocked(saferoom_pos, testPoints[i], door))
@@ -271,14 +285,10 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
                     return true;
                 }
             }
-            if (num_traces>MIN_TRACES) num_traces -= 1;
+            if (num_traces>MIN_TRACES && temp_traces>=num_traces) num_traces -= 1;
             g_LosMs_safe += (GetEngineTime() - t_safe) * 1000.0;
         }
     }
-    
-    bool check_nav = hNavIsPotentiallyVisibleToTeam!=null || hNavIsPotentiallyVisible!=null;
-    if (check_nav && cellNavArea == Address_Null) cellNavArea = L4D_GetNearestNavArea(vecPos, 300.0, false, false, true, TEAM_INFECTED);
-    check_nav = cellNavArea != Address_Null; // check IsPotentiallyVisibleToTeam and IsPotentiallyVisible
 
     // Nav-area visibility pre-reject: if the director's recent-visibility list for the survivor team
     // does not include this area, no survivor has marked it as seeable.
@@ -324,7 +334,6 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
         surv_n++;
     }
     
-    int temp_traces;
     for (int o = 0; o < surv_n; o++)
     {
         int s = surv_order[o];
