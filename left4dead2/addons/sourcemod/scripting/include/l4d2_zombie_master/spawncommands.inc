@@ -124,6 +124,7 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 	if (!(client==zm_client || client==0)) return;
 	if (DEBUG) LogMessage("[zm] ZM_Horde");
 	
+	if (client == zm_client) update_spawner_zombieclass(ZOMBIECLASS_COMMON);
 	float t_start = GetEngineTime(); // for profiling
 	
 	if (hint && is_zm_spamming()) return;
@@ -334,6 +335,7 @@ void ZM_Witch(int client,int witch_type, bool free = false, bool flow = false)
 
 	if (!g_bCvarAllow) return;
 	if (!(client==zm_client || client==0)) return;
+	if (client == zm_client) update_spawner_zombieclass(ZOMBIECLASS_WITCH);
 
 	if (DEBUG) LogMessage("[zm] ZM_Witch");
 
@@ -684,7 +686,8 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
     }
 
 	//LogMessage("[zm] ZM_Spawn_SI %d %d", ZOMBIECLASS, flow);
-
+    if (client == zm_client) update_spawner_zombieclass(ZOMBIECLASS);
+    
 	if (!setpos && is_zm_spamming()) return -1;
 
 	int cost_SI;

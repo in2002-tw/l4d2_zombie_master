@@ -172,13 +172,13 @@ static bool Grid_CheckObstruction(int idx, float pos[3], bool obstructed)
 // Run min_distance_to_survivors with store_client set to True until a valid survivor is hit with the grid cells. Then call the rest with
 // This will allow flow spawns to function as intended.
 int g_iGridValidateContext; // spawner context state
-static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstructed)
+static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstructed, int zClass = ZOMBIECLASS_BOOMER)
 {
     
     // Nav area attributes
     int navSpawnAttrs = -1; // skip LOS checks for obscured navmeshes
     float t = GetEngineTime();
-    if (!nav_can_spawn_zombies(_,navArea,_,navSpawnAttrs))
+    if (!nav_can_spawn_zombies(zClass,navArea,_,navSpawnAttrs))
     {
         g_GridMs_nav += (GetEngineTime() - t) * 1000.0;
         g_GridN_nav++;
@@ -272,11 +272,13 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         return Plugin_Continue;
     
     g_iGridTargetClient = -1;
+    int zClass = get_spawner_zombieclass(); // either last spawn attempt zombie class or updated by ZM changing menus
+    g_iGridLastZombieClass = zClass;
     
     // Hide grid when menu is closed or flow survivor glow is active
     if (zm_menu_state == ZM_MENU_CLOSED ||
        (g_iSpawnerMode<2 && get_spawner_target_survivor(false,_)>0) ||
-       (g_iSpawnerMode==2 && Analog_CanSpawn(_,false,true)==SPAWNER_FLOW) )
+       (g_iSpawnerMode==2 && Analog_CanSpawn(zClass,false,true)==SPAWNER_FLOW) )
     {
         if (g_GridCellCount > 0)
         {
@@ -429,7 +431,7 @@ Action Grid_TimerUpdate(Handle timer, int userid)
         g_GridValidPositions[i] = pos;
         g_GridCellIndices[i] = cell;
 
-        cellValid[i] = Grid_ValidateCell(i, pos, navArea, obstructed);
+        cellValid[i] = Grid_ValidateCell(i, pos, navArea, obstructed, zClass);
         g_GridCellContext[i] = g_iGridValidateContext;
         float dist = GetVectorDistance(aimPos, pos);
         if (dist<closestDist)

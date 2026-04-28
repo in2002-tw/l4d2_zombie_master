@@ -316,24 +316,6 @@ stock void get_uncommon_model(char label[16], char model[64])
 #define ZOMBIECLASS_WITCH	7
 #define ZOMBIECLASS_TANK	8
 
-// Define groups with different spawn rules.
-// Commons cannot spawn in areas marked by IsBlocked
-// Witches are allowed to spawn in weird places without nav
-
-#define GROUP_COMMON 0 // ZOMBIECLASS_COMMON
-#define GROUP_WITCH 1 // ZOMBIECLASS_WITCH
-#define GROUP_SPECIAL 2 // everything else
-
-int get_zombieclass_group(int zClass)
-{
-    switch (zClass)
-    {
-        case ZOMBIECLASS_COMMON: return GROUP_COMMON;
-        case ZOMBIECLASS_WITCH: return GROUP_WITCH;
-        default: return GROUP_SPECIAL;
-    }
-}
-
 // ZM stages
 #define ZM_NEWROUND 0 // Survivors in start area, no ZM picked.
 #define ZM_PREP 1 // Survivors in start area, ZM is placing units and getting ready, or players still joining. Survivors cannot leave yet.
@@ -458,6 +440,7 @@ int    g_GridValidCellCount;
 float  g_GridClosestValidPos[3];
 bool   g_GridHasValidCell;
 int    g_GridValidCellIdx;
+int    g_iGridLastZombieClass = -1; // last zombieclass grid was validated for
 
 // Runtime-adjusted cell positions written by Grid_TryRescueObstruction when a cell
 // has to spawn on top of a prop/entity instead of its native ground position.
@@ -641,6 +624,48 @@ TopMenuObject obj_zmcommands, zm_enable, zm_gamemode_menu, zm_kick_topmenu, zm_r
 
 int zm_menu_state = ZM_MENU_CLOSED;
 Menu menu_main,menu_common,menu_uncommon,menu_special,menu_boss,menu_cleanup,menu_other,menu_autocommon = null;
+
+// Define groups with different spawn rules.
+// Commons cannot spawn in areas marked by IsBlocked
+// Witches are allowed to spawn in weird places without nav
+#define GROUP_COMMON 0 // ZOMBIECLASS_COMMON
+#define GROUP_WITCH 1 // ZOMBIECLASS_WITCH
+#define GROUP_SPECIAL 2 // everything else
+
+int get_zombieclass_group(int zClass)
+{
+    switch (zClass)
+    {
+        case ZOMBIECLASS_COMMON: return GROUP_COMMON;
+        case ZOMBIECLASS_WITCH: return GROUP_WITCH;
+        default: return GROUP_SPECIAL;
+    }
+}
+
+int g_iLastZombieClass = -1; // ZM spawner context
+int get_spawner_zombieclass()
+{
+   	int zClass = g_iLastZombieClass;
+   	if (zClass<0)
+   	{
+       	if (zm_menu_state==ZM_MENU_COMMON || zm_menu_state==ZM_MENU_UNCOMMON || zm_menu_state==ZM_MENU_AUTOCOMMON)
+           	zClass = ZOMBIECLASS_COMMON;
+        else
+            zClass = ZOMBIECLASS_BOOMER;
+    }
+    return zClass;
+}
+
+// Update spawner zombie class. Invalidate current grid cells.
+void update_spawner_zombieclass(int zClass)
+{
+    if (get_zombieclass_group(zClass)!=get_zombieclass_group(g_iGridLastZombieClass))
+    {
+        g_GridHasValidCell = false;
+        g_GridValidCellCount = 0;
+    }
+    g_iLastZombieClass = zClass;
+}
 
 // Data structure for player stats
 enum struct zm_data
@@ -2661,6 +2686,7 @@ Action JoinZM(int client, int args)
     
     if (!g_bGrid) g_iSpawnerMode = 0;
     else g_iSpawnerMode = g_hSpawnerMode.IntValue;
+    g_iLastZombieClass = -1;
     
     ChangeClientTeam(client,TEAM_ZM);
     L4D_State_Transition(client, STATE_OBSERVER_MODE);

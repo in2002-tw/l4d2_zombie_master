@@ -139,6 +139,7 @@ int Analog_CanSpawn(int zClass=ZOMBIECLASS_BOOMER, bool hint = true, bool look_o
 	else GetClientAbsOrigin(zm_client,vPos);
 	delete trace;
 	if (look_only) return SPAWNER_INVALID;
+	if (zClass<0) zClass = get_spawner_zombieclass();
     int spawner_state = Analog_CanSpawnPos(vPos,zClass,hint,true);
     if (spawner_state==SPAWNER_OK && !zm_allow_spawns)
 	{
@@ -731,12 +732,12 @@ void Analog_EndSpawn()
         mark_flow_survivor_and_zombie(g_iAnalogTargetClient, -1);
 }
 
-stock bool Analog_ValidatePosition(float pos[3], bool checkLOS = true)
-{
-    if (IsObstructed(pos,_,_,g_iSpawnerZombieClass==ZOMBIECLASS_COMMON)) return false;
-    if (checkLOS && can_any_alive_survivor_see_cheap(pos)) return false;
-    return true;
-}
+//stock bool Analog_ValidatePosition(float pos[3], bool checkLOS = true)
+//{
+//    if (IsObstructed(pos,_,_,g_iSpawnerZombieClass==ZOMBIECLASS_COMMON)) return false;
+//    if (checkLOS && can_any_alive_survivor_see_cheap(pos)) return false;
+//    return true;
+//}
 
 int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
     float[] outPositions, int maxOut)
@@ -849,6 +850,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         {
             reset_SpawnerCellFilter();
             g_bSpawnerFilterZM = false;
+            g_iSpawnerZombieClass = ZOMBIECLASS_COMMON;
             gridlib_cell_count = GridLib_FindCellsFromClosest(zm_spawner_pos, count, gridlib_cells, 500, SpawnerCellFilter, GRID_BUDGET_MS, false);
             if (gridlib_cell_count > 0) use_gridlib = true;
         }

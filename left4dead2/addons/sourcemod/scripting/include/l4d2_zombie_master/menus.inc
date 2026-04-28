@@ -76,13 +76,29 @@ void open_menu(int client, int MENU=ZM_MENU_MAIN, int time=MENU_TIME_FOREVER)
     switch(MENU)
     {
         case ZM_MENU_MAIN: menu_main.Display(zm_client,time);
-        case ZM_MENU_COMMON: menu_common.Display(zm_client,time);
-        case ZM_MENU_UNCOMMON: menu_uncommon.Display(zm_client,time);
-        case ZM_MENU_SPECIAL: menu_special.Display(zm_client,time);
+        case ZM_MENU_COMMON:
+        {
+            update_spawner_zombieclass(ZOMBIECLASS_COMMON);
+            menu_common.Display(zm_client,time);
+        }
+        case ZM_MENU_UNCOMMON:
+        {
+            update_spawner_zombieclass(ZOMBIECLASS_COMMON);
+            menu_uncommon.Display(zm_client,time);
+        }
+        case ZM_MENU_SPECIAL:
+        {
+            update_spawner_zombieclass(ZOMBIECLASS_BOOMER);
+            menu_special.Display(zm_client,time);
+        }
         case ZM_MENU_BOSS: menu_boss.Display(zm_client,time);
         case ZM_MENU_CLEANUP: menu_cleanup.Display(zm_client,time);
         case ZM_MENU_OTHER: menu_other.Display(zm_client,time);
-        case ZM_MENU_AUTOCOMMON: menu_autocommon.Display(zm_client,time);
+        case ZM_MENU_AUTOCOMMON:
+        {
+            update_spawner_zombieclass(ZOMBIECLASS_COMMON);
+            menu_autocommon.Display(zm_client,time);
+        }
         case ZM_MENU_CLOSED: close_menus(zm_client);
         default: menu_main.Display(zm_client,time);
     }

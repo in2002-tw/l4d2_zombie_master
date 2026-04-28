@@ -272,8 +272,8 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
                 Address navArea_saferoom = L4D_GetNearestNavArea(saferoom_pos, 300.0, true, false, true, TEAM_SURVIVOR);
                 if (navArea_saferoom != Address_Null && !NavArea_IsPotentiallyVisible(cellNavArea,navArea_saferoom,false))
                 {
-                    //LogMessage("nav saferoom: not potentially visible, 1 trace ray");
-                    temp_traces = 1;
+                    //LogMessage("nav saferoom: not potentially visible, 3 trace rays");
+                    temp_traces = 3;
                 }
             }
             g_LosN_safe_enter++;

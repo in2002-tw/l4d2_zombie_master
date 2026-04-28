@@ -925,6 +925,7 @@ Action zm_new_round(Handle timer = null)
         return Plugin_Stop;
     }
     g_bRescueDoor = false;
+    g_iLastZombieClass = -1;
     
     if (g_bGrid && !GridLib_IsReady())
     {

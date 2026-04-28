@@ -63,7 +63,7 @@ void Spawner_Update()
     if ( (g_iSpawnerMode<2 || !g_bGrid) && (t_now-t_last_spawner_update)>=g_fUpdateRate )
         update_analog = true;
     if (update_grid) Grid_Update();
-    if (update_analog) Analog_CanSpawn(ZOMBIECLASS_BOOMER, false);
+    if (update_analog) Analog_CanSpawn(-1, false);
 }
 
 // --- Position resolution ---
@@ -73,6 +73,7 @@ int Spawner_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
     float[] outPositions, int maxOut)
 {
     if (!Spawner_Can_Spawn(-1)) return 0;
+    if (hint && IsValidClientZM()) update_spawner_zombieclass(ZOMBIECLASS_COMMON);
     switch (g_iSpawnerMode)
     {
         case 2: return Grid_ResolveCommonPositions(count, flow, angry, hint,
@@ -86,6 +87,7 @@ int Spawner_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
 bool Spawner_ResolveWitchPosition(bool flow, float outPos[3])
 {
     if (!Spawner_Can_Spawn(-1)) return false;
+    if (IsValidClientZM()) update_spawner_zombieclass(ZOMBIECLASS_WITCH);
     switch (g_iSpawnerMode)
     {
         case 2: return Grid_ResolveWitchPosition(flow, outPos);
@@ -97,6 +99,7 @@ bool Spawner_ResolveWitchPosition(bool flow, float outPos[3])
 bool Spawner_ResolveSpecialPosition(int zombieclass, bool flow, float outPos[3])
 {
     if (!Spawner_Can_Spawn(-1)) return false;
+    if (IsValidClientZM()) update_spawner_zombieclass(zombieclass);
     switch (g_iSpawnerMode)
     {
         case 2: return Grid_ResolveSpecialPosition(zombieclass, flow, outPos);
