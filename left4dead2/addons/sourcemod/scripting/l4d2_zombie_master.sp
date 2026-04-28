@@ -32,7 +32,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.091 2026-04-26"
+#define PLUGIN_VERSION 			"0.9.092 2026-04-28"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -2411,41 +2411,4 @@ public void OnEntityDestroyed(int entity)
  	         
     }
 	
-}
-
-void command_infected_attack(const int infected, const int client)
-{
-    L4D2_CommandABot(infected,client,BOT_CMD_ATTACK);
-    SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // this probably does nothing useful
-    DataPack pack;
-    CreateDataTimer(0.1,refresh_rush_client,pack,TIMER_FLAG_NO_MAPCHANGE);
-    pack.WriteCell(EntIndexToEntRef(infected));
-    pack.WriteCell(EntIndexToEntRef(client));
-    pack.WriteCell(0);
-}
-
-// CommandABot command may get overwritten, spam it a couple times to be safe.
-Action refresh_rush_client(Handle timer, DataPack pack)
-{
-    pack.Reset();
-    int entref_zombie = pack.ReadCell();
-    if (!IsValidEntRef(entref_zombie)) return Plugin_Stop;
-    int entref_client = pack.ReadCell();
-    if (!IsValidEntRef(entref_client)) return Plugin_Stop;
-    int client = EntRefToEntIndex(entref_client);
-    if (!IsValidClient(client) || !IsPlayerAlive(client)) return Plugin_Stop;
-    int infected = EntRefToEntIndex(entref_zombie);
-    L4D2_CommandABot(infected,client,BOT_CMD_ATTACK); // rush client if it makes sense for zombie to know that's the alert source.
-    SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // this probably does nothing useful
-    int repeats = pack.ReadCell();
-    repeats += 1;
-    if (repeats<10)
-    {
-        DataPack pack2;
-        CreateDataTimer(0.5,refresh_rush_client,pack2,TIMER_FLAG_NO_MAPCHANGE);
-        pack2.WriteCell(entref_zombie);
-        pack2.WriteCell(entref_client);
-        pack2.WriteCell(repeats);
-    }
-    return Plugin_Stop;
 }

@@ -779,15 +779,29 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         float flow_pos;
         while (i<tries && resolved<count && resolved<maxOut)
         {
-            if ((GetEngineTime()-t)*1000.0>GRID_BUDGET_MS) break;
+            if ((GetEngineTime()-t)*1000.0>GRID_BUDGET_MS)
+            {
+                //LogMessage("%d over budget", i);
+                break;
+            }
             i += 1;
             if (!L4D_GetRandomPZSpawnPosition(target_client,ZOMBIECLASS_COMMON,1,randomPos))
+            {
+                
+                //LogMessage("%d GetRandomPZSpawnPosition failed", i);
                 continue;
+            }
             flow_pos = L4D_GetFlowFromPoint(randomPos);
             if (flow_pos<=0.0)
+            {
+                //LogMessage("%d flow <= 0.0", i);
                 continue;
+            }
             if (!expected_angry && zm_stage == ZM_STARTED && flow_survivor_fraction <= 0.91 && flow_pos <= flow_survivor)
+            {
+                //LogMessage("%d Flow behind", i);
                 continue;
+            }
             //if (valid_last)
             //{
             //    min_distance_last = distance_last_saferoom(randomPos);
@@ -796,11 +810,20 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             //}
             navArea = L4D_GetNearestNavArea(randomPos, 300.0, true, false, true, TEAM_INFECTED);
             if (navArea == Address_Null || !nav_can_spawn_zombies(ZOMBIECLASS_COMMON,navArea,_,_,_,_,!expected_angry))
+            {
+                //LogMessage("%d Bad nav", i);
                 continue;
+            }
             if (!expected_angry && !Survivors_CanTravelTo_Pos(randomPos,navArea)) // automatic zombies should slow down survivors
+            {
+                //LogMessage("%d No travel", i);
                 continue;
+            }
             if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(randomPos,_,navArea,_))
+            {
+                //LogMessage("%d LOS", i);
                 continue;
+            }
 
             int idx = resolved * 3;
             outPositions[idx] = randomPos[0];

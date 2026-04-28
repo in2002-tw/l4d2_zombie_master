@@ -410,8 +410,8 @@ Address g_CachedSurvNavArea[MAXPLAYERS+1];
 bool    g_SurvNavAreaComputed[MAXPLAYERS+1];
 float   g_GridEffectiveMinDist;
 
-#define HORDE_BUDGET_MS 20.0
-#define GRID_BUDGET_MS 10.0
+#define HORDE_BUDGET_MS 30.0
+#define GRID_BUDGET_MS 15.0
 #define GRID_SEARCH_RADIUS  150.0
 #define GRID_MAX_Z_DIFF     100.0
 #define GRID_MAX_CELLS      25
@@ -657,12 +657,14 @@ int get_spawner_zombieclass()
 }
 
 // Update spawner zombie class. Invalidate current grid cells.
-void update_spawner_zombieclass(int zClass)
+// revalidate: if grid spawner is active, immediately revalidate
+void update_spawner_zombieclass(int zClass, bool revalidate = false)
 {
     if (get_zombieclass_group(zClass)!=get_zombieclass_group(g_iGridLastZombieClass))
     {
         g_GridHasValidCell = false;
         g_GridValidCellCount = 0;
+        if (revalidate && g_iSpawnerMode>0) Grid_Update(); // this is expensive, could iterate over cells and check nav rules and context instead...
     }
     g_iLastZombieClass = zClass;
 }
@@ -2516,7 +2518,7 @@ void update_ZM_looktarget(bool draw = true)
    int health = GetEntProp(target,Prop_Data,"m_iHealth");
    if (health<=0) return;
    entref_lastlook = EntIndexToEntRef(target);
-   char class[32];
+   char class[16];
    GetEntityClassname(target, class, sizeof(class));
    if (class[0]=='i' || class[0]=='w' || class[0]=='p')
    {
@@ -2959,4 +2961,41 @@ stock bool FilterLOS(int entity, int mask, int self = -1)
     	}
 	}
 	return true;
+}
+
+void command_infected_attack(const int infected, const int client)
+{
+    L4D2_CommandABot(infected,client,BOT_CMD_ATTACK);
+    SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // this probably does nothing useful
+    DataPack pack;
+    CreateDataTimer(0.1,refresh_rush_client,pack,TIMER_FLAG_NO_MAPCHANGE);
+    pack.WriteCell(EntIndexToEntRef(infected));
+    pack.WriteCell(EntIndexToEntRef(client));
+    pack.WriteCell(0);
+}
+
+// CommandABot command may get overwritten, spam it a couple times to be safe.
+Action refresh_rush_client(Handle timer, DataPack pack)
+{
+    pack.Reset();
+    int entref_zombie = pack.ReadCell();
+    if (!IsValidEntRef(entref_zombie)) return Plugin_Stop;
+    int entref_client = pack.ReadCell();
+    if (!IsValidEntRef(entref_client)) return Plugin_Stop;
+    int client = EntRefToEntIndex(entref_client);
+    if (!IsValidClient(client) || !IsPlayerAlive(client)) return Plugin_Stop;
+    int infected = EntRefToEntIndex(entref_zombie);
+    L4D2_CommandABot(infected,client,BOT_CMD_ATTACK); // rush client if it makes sense for zombie to know that's the alert source.
+    SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // this probably does nothing useful
+    int repeats = pack.ReadCell();
+    repeats += 1;
+    if (repeats<10)
+    {
+        DataPack pack2;
+        CreateDataTimer(0.5,refresh_rush_client,pack2,TIMER_FLAG_NO_MAPCHANGE);
+        pack2.WriteCell(entref_zombie);
+        pack2.WriteCell(entref_client);
+        pack2.WriteCell(repeats);
+    }
+    return Plugin_Stop;
 }

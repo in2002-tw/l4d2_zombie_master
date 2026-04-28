@@ -231,6 +231,9 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 	char set_model[64] = "";
 	if (strcmp(type,"random")==0) random = true;
     else if (g_bClownGlow && strcmp(type,"clown")==0) glow = true;
+    
+    int target_client = -1;
+    if (angry && !flow && IsValidClientZM()) target_client = get_spawner_target_survivor(flow);
 
 	for( int i = 0; i < count; i++  )
 	{
@@ -269,6 +272,7 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
            {
                //if (hInfectedAttackSurvivorTeam) SDKCall(hInfectedAttackSurvivorTeam,zombie);
                SetEntProp(zombie, Prop_Send, "m_mobRush", 1);
+               if (target_client>0) command_infected_attack(zombie,target_client);
            }
            if (g_hCursed.BoolValue)
            {
@@ -317,7 +321,7 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 	}
 	
 	float elapsed_ms = (GetEngineTime()-t_start)*1000.0;
-	if (elapsed_ms>t_budget_ms) LogMessage("ZM_Horde ct=%d %s angry=%d flow=%d took %f ms",count,type,angry,flow,elapsed_ms);
+	if (elapsed_ms>t_budget_ms) LogMessage("ZM_Horde ct=%d(%d) %s angry=%d flow=%d took %f ms",count,spawned,type,angry,flow,elapsed_ms);
 	
 }
 
@@ -442,6 +446,15 @@ void dissolve_forcekill(int entity)
     CreateTimer(2.0,kill_entity,EntIndexToEntRef(entity),TIMER_FLAG_NO_MAPCHANGE);
 }
 
+bool pipe_bomb_active()
+{
+    while (FindEntityByClassname(-1,"pipe_bomb_projectile")!=INVALID_ENT_REFERENCE)
+    {
+        return true;
+    }
+    return false;
+}
+
 /**
  * Delete all ZM-spawned infected entities by category. Iterates all entities,
  * removes glows, dissolves commons/witches, and kills special infected bots.
@@ -454,9 +467,16 @@ void dissolve_forcekill(int entity)
 void delete_all_infected(bool common=true, bool witch=true, bool special=true)
 {
    	bool anything_to_delete = false;
-   	if (common && live_zombie_arr[ZOMBIECLASS_COMMON]>0) anything_to_delete = true;
+   	
+   	if (common && live_zombie_arr[ZOMBIECLASS_COMMON]>0 && !pipe_bomb_active()) anything_to_delete = true;
+   	else common = false;
+   	
    	if (witch && live_zombie_arr[ZOMBIECLASS_WITCH]>0) anything_to_delete = true;
+   	else witch = false;
+   	
    	if (special && live_SI>0) anything_to_delete = true;
+   	else special = false;
+   	
    	if (!anything_to_delete) return;
 
    	reset_live_zombie_arr(common,witch,special);
@@ -544,6 +564,9 @@ Action ZM_Spawn_Witch(int client, int args)
 	return Plugin_Continue;
 }
 
+// asdf
+// 4. pipe bomb and bile no commons delete
+
 /**
  * Delete the entity the ZM is currently pointing at (tracked via entref_delete).
  * Validates the target, protects non-ZM tanks during finale/survival,
@@ -566,36 +589,60 @@ void zm_del_pointing(int client)
        return;
    }
    int target = EntRefToEntIndex(entref_delete);
-   if ( !IsValidEntity(target) || (target<=MaxClients && !IsFakeClient(target)) )
+   if (!IsValidEntity(target))
+   {
+       update_hint("%T", "Invalid target", zm_client);
+       return;
+   }
+   
+   int group = -1; // Determine GROUP_COMMON or GROUP_WITCH or GROUP_SPECIAL
+   if (IsValidClient(target))
+   {
+       if (IsFakeClient(target) && GetClientTeam(target)==TEAM_INFECTED)
+       {
+           if ( (ZM_finale_announced || L4D_IsSurvivalMode()) &&
+               GetEntProp(target, Prop_Send, "m_zombieClass")==ZOMBIECLASS_TANK )
+           {
+               char targetName[16];
+               GetEntPropString(target, Prop_Data, "m_iName", targetName, sizeof(targetName));
+               if (strcmp(targetName,"zm_unit")!=0) group = -1;
+           }
+           else group = GROUP_SPECIAL;
+       }
+   }
+   else
+   {
+       static char class[16];
+       GetEntityClassname(entref_delete, class, sizeof(class));
+       switch (class[0])
+       {
+           case 'i':
+           {
+               if (strncmp(class,"infected",8,false)==0 && !pipe_bomb_active()) group = GROUP_COMMON;
+           }
+           case 'w':
+           {
+               if (strncmp(class,"witch",5,false)==0) group = GROUP_WITCH;
+           }
+       }
+   }
+   if (group<0)
    {
        update_hint("%T", "Invalid target", zm_client);
        return;
    }
 
-   static char class[32];
-   GetEntityClassname(target, class, sizeof(class));
-
-   if ( (ZM_finale_announced || L4D_IsSurvivalMode()) && strcmp(class,"player")==0 &&
-       GetEntProp(target, Prop_Send, "m_zombieClass")==ZOMBIECLASS_TANK )
+   if (group == GROUP_SPECIAL)
    {
-       static char targetName[20];
-       GetEntPropString(target, Prop_Data, "m_iName", targetName, sizeof(targetName));
-       if (strcmp(targetName,"zm_unit")!=0)
-       {
-           update_hint("%T", "Cannot delete", zm_client);
-           return;
-       }
-   }
-
-   if (strcmp(class,"player")==0) AcceptEntityInput(target,"Kill");
-   else dissolve_forcekill(target);
-
-   if (strcmp(class,"player")==0)
-   {
+       AcceptEntityInput(target,"Kill");
        if (clients_timer==INVALID_HANDLE) clients_timer = CreateTimer(0.1,CountClients);
    }
-   else if (strcmp(class,"witch")==0) CountWitches();
-   else CountCommons();
+   else
+   {
+       dissolve_forcekill(target);
+       if (group == GROUP_WITCH) RequestFrame(CountWitches);
+       else CreateTimer(0.1,CountCommons);
+   }
 
 }
 
