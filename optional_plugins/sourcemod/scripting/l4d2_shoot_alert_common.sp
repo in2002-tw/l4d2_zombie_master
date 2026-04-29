@@ -8,7 +8,7 @@
 #include <left4dhooks>
 
 #define PLUGIN_NAME			"l4d2_shoot_alert_common"
-#define PLUGIN_VERSION 		"2.10 2026-04-28"
+#define PLUGIN_VERSION 		"2.10 2026-04-29"
 #define CONFIG_FILENAME      PLUGIN_NAME
 
 public Plugin myinfo =
@@ -42,18 +42,18 @@ int g_iLaser;
 #endif
 
 // Optimizations
-Handle timer_hook; // reduce weapon_fire hook/unhook spam
-Handle timers[MAXPLAYERS+1]; // reduce weapon_fire and NormalSoundHook spam
-bool ignore[MAXENTITIES+1] = {true,...}; // ignore non-infected, and rushing or road worker infected
-float multipliers[MAXPLAYERS+1] = {1.0,...}; // client dynamic range multipliers based on weapon type and speech volume
+Handle timer_hook; // weapon_fire hook/unhook
+Handle timers[MAXPLAYERS+1]; // one pending alert for each client on a timer
+bool ignore[MAXENTITIES+1] = {true,...}; // ignore non-infected entities, and mob rushing or road worker infected
+float multipliers[MAXPLAYERS+1] = {1.0,...}; // client alert/rush range multipliers based on weapon type and speech volume
 bool weapon_fire_hooked = false; // track weapon_fire hook
 bool speech_hooked = false; // track NormalSoundHook
 bool finale_active = false; // do nothing during survival and finales
-int commons = 0; // track only non-rushing commons
-float pos_arr[MAXPLAYERS+1][3]; // calculate position of survivor only once before callback
-int alerts[MAXENTITIES+1]; // track how many times infected alerted; force rush if alerted too many times
+int commons = 0; // take into account only non-rushing, non-road-worker commons
+float pos_arr[MAXPLAYERS+1][3]; // position of alert. not centered on client for grenade explosions
+int alerts[MAXENTITIES+1]; // track infected alerts in memory; force rush if alerted too many times
 Handle timer_calm; // periodically calm down non-rushing infected
-int shots[MAXPLAYERS+1]; // accumulate gunfire before callback
+int shots[MAXPLAYERS+1]; // accumulate gunfire before callback, if accumulate cvar is 1.0
 float weaponid_multipliers[L4D2WeaponId_MAX] = {-1.0,...}; // multipliers for each weaponID; -1.0 to use default value.
 bool local[MAXPLAYERS+1]; // true if alert is localized at client position. false for grenade and pipe bomb detonation
 int nearest[MAXPLAYERS+1]; // nearest client to alert center (for pipe bomb, grenade detonation)
@@ -222,7 +222,7 @@ public void L4D_OnFirstSurvivorLeftSafeArea_Post()
 
 void late_enable() // If plugin just enabled, check if there are any infected entities to alarm.
 {
-    for(int entity = 1; entity<=MAXENTITIES; entity++) { ignore[entity] = true; }
+    for(int entity = 0; entity<=MAXENTITIES; entity++) { ignore[entity] = true; }
     get_commons(false,true);
     if (!weapon_fire_hooked && commons>0) check_hooks();
     else reset_timers();
@@ -352,13 +352,14 @@ void alert_constructor(int entity, int client, float multiplier = 1.0, bool forc
     if (IsValidClient(client) && timers[client]!=null) return; // alert already pending
     if (!force && pipe_bomb_active()) return; // pipe bombs are louder than any gun or voice.
     static float pos[3];
-    GetEntPropVector(entity,Prop_Send,"m_vecOrigin",pos); // for consistency with L4D_FindEntityByClassname
+    if (entity==client) GetClientEyePosition(client,pos); // if local, use client eye position
+    else GetEntPropVector(entity,Prop_Send,"m_vecOrigin",pos); // otherwise use explosion origin
     if (!IsValidAliveSurvivor(client)) // if owner is not a valid survivor, assign nearest survivor as owner.
     {
         #if DEBUG
         int client_old = client;
         #endif
-        client = NearestAliveSurvivor(pos,_,true); // find nearest alive survivor without pending alert
+        client = NearestAliveSurvivor(pos,_,client==entity); // find nearest alive survivor without pending alert; if alert is explosion, any survivor
         if (client<=0) return;
         #if DEBUG
         LogMessage("alert_constructor: %d hotswapped to %d", client_old, client);
@@ -372,9 +373,9 @@ void alert_constructor(int entity, int client, float multiplier = 1.0, bool forc
 }
 
 #if DEBUG
-int g_iEnumerated; // how many entities were enumerated
+int g_iEnumerated, g_iAlert, g_iRush; // how many entities were enumerated
 #endif
-float g_fEnumerateStart; // track CPU budget
+float g_fTimeAlertStart; // track CPU budget
 
 Action alert_update(Handle timer, int client) // Delayed alert nearby infected.
 {
@@ -384,47 +385,52 @@ Action alert_update(Handle timer, int client) // Delayed alert nearby infected.
         return Plugin_Stop;
     }
     timers[client] = null;
+    
     #if DEBUG
     g_iEnumerated = 0;
+    g_iAlert = 0;
+    g_iRush = 0;
     #endif
-    g_fEnumerateStart = GetEngineTime();
+    g_fTimeAlertStart = GetEngineTime();
+    
     float max_range = get_max_range(multipliers[client]);
-    if (max_range<=20.0) return Plugin_Stop; // range too small to catch anything.
-    if (local[client] && pipe_bomb_active()) return Plugin_Stop; // unless we are a grenade, pipe bombs are louder
+    if (max_range<=32.0) return Plugin_Stop; // range too small to catch anything.
+    //if (local[client] && pipe_bomb_active()) return Plugin_Stop; // unless we are a grenade, pipe bombs are louder
     static float pos[3];
     pos[0] = pos_arr[client][0]; pos[1] = pos_arr[client][1]; pos[2] = pos_arr[client][2];
     if (l4dhooks_updated && L4D_FindEntityByClassnameNearest("infected",pos,max_range)==INVALID_ENT_REFERENCE) return Plugin_Stop;
     //if (local[client] && rush_range>0.0 && l4dhooks_updated) L4D2_RushVictim(client,range_rush_effective/LOS_multiplier);
     
     int client_final = client; // final client for alerting.
+    bool undo_hotswap = false;
+    int result_nearest = -1; // cache NearestAliveSurvivor(pos,max_range) result which may be reused later
     if (!IsValidAliveSurvivor(client_final)) // If old client disconnected, died, swapped teams, went AFK, etc. -> swap to nearest alive survivor
     {
-        client_final = NearestAliveSurvivor(pos,_,true); // try nearest alive survivor without pending alert
-        if (client_final<=0) client_final = NearestAliveSurvivor(pos); // try nearest alive survivor
-        else multipliers[client_final] = multipliers[client];
-        if (client_final<=0) return Plugin_Stop; // no alive survivors
+        client_final = NearestAliveSurvivor(pos,max_range,true); // try nearest alive survivor without pending alert
+        if (client_final<=0)
+        {
+            client_final = NearestAliveSurvivor(pos,max_range); // try nearest alive survivor
+            undo_hotswap = true; // there is a pending alert, need to restore old parameters
+            result_nearest = client_final;
+        }
+        if (client_final<=0) return Plugin_Stop; // no alive survivors within range
         #if DEBUG
         LogMessage("%d hotswapped to %d", client, client_final);
         #endif
-        if (multipliers[client_final]>multipliers[client]) multipliers[client_final] = multipliers[client]; // maximize loudness
-        local[client_final] = local[client];
-        pos_arr[client_final][0] = pos_arr[client][0];
-        pos_arr[client_final][1] = pos_arr[client][1];
-        pos_arr[client_final][2] = pos_arr[client][2];
+        client_hotswap(client_final,client);
     }
     
     if (local[client_final]) nearest[client_final] = client_final;
-    else nearest[client_final] = NearestAliveSurvivor(pos,max_range);
+    else nearest[client_final] = (result_nearest>=0) ? result_nearest : NearestAliveSurvivor(pos,max_range);
     
     if (enumerate_new && l4dhooks_updated) EnumerateInfectedWithin(pos,max_range,client_final);
     else TR_EnumerateEntitiesSphere(pos,max_range,PARTITION_NON_STATIC_EDICTS,AlertCallback_Sphere,client_final);
     
     #if DEBUG
-    float t_elapsed_ms = (GetEngineTime()-g_fEnumerateStart)*1000.0;
+    float t_elapsed_ms = (GetEngineTime()-g_fTimeAlertStart)*1000.0;
     if (g_iLaser>0 && !IsFakeClient(client_final))
     {
         float range_alert_effective = alert_range/multipliers[client_final];
-        pos[2] += 36.0;
         if (range_alert_effective>1.0) // BLUE:ALERT,ALERT/LOS
         {
             TE_SetupBeamRingPoint(pos,range_alert_effective,range_alert_effective-1.0,g_iLaser,0,0,0,3.0,1.5,0.0,{0,0,255,255},0,0);
@@ -442,9 +448,32 @@ Action alert_update(Handle timer, int client) // Delayed alert nearby infected.
         }
     }
     if (g_iEnumerated<=0) g_iEnumerated = 1; // prevent division by 0
-    LogMessage("%d enumerated %d entities %f ms total %f ms avg", client_final, g_iEnumerated, t_elapsed_ms, t_elapsed_ms/g_iEnumerated);
+    LogMessage("%d -> %d entities (%d alert %d rush) %f ms %f ms avg", client_final, g_iEnumerated, g_iAlert, g_iRush, t_elapsed_ms, t_elapsed_ms/g_iEnumerated);
     #endif
+    if (undo_hotswap) client_hotswap(client_final); // restore pending alert
     return Plugin_Stop;
+}
+
+float hotswap_pos[3];
+float hotswap_multiplier;
+bool hotswap_local;
+// Send client_old params to client_new. Store client_new values for later restore
+// if client_old<0, restore cached values into client_new position
+void client_hotswap(int client_new, int client_old = -1)
+{
+    if (client_old>=0) // Cache
+    {
+        hotswap_pos[0] = pos_arr[client_new][0];
+        hotswap_pos[1] = pos_arr[client_new][1];
+        hotswap_pos[2] = pos_arr[client_new][2];
+        hotswap_local = local[client_new];
+        hotswap_multiplier = multipliers[client_new];
+    }
+    pos_arr[client_new][0] = (client_old>=0) ? pos_arr[client_old][0] : hotswap_pos[0];
+    pos_arr[client_new][1] = (client_old>=0) ? pos_arr[client_old][1] : hotswap_pos[1];
+    pos_arr[client_new][2] = (client_old>=0) ? pos_arr[client_old][2] : hotswap_pos[2];
+    local[client_new] = (client_old>=0) ? local[client_old] : hotswap_local;
+    multipliers[client_new] = (client_old>=0) ? multipliers[client_old] : hotswap_multiplier;
 }
 
 void EnumerateInfectedWithin(float pos[3], float range, int client)
@@ -465,9 +494,10 @@ bool AlertCallback_Sphere(int entity, int client) // For legacy function where w
 bool AlertCallback(int entity, int client) // Return true to continue enumerating, false to stop
 {
     if (!weapon_fire_hooked) return false;
+    if (ignore[entity]) return true;
     if (g_hCvarBudget.FloatValue>0.0)
     {
-        if ( (GetEngineTime()-g_fEnumerateStart)*1000.0 >= g_hCvarBudget.FloatValue )
+        if ( (GetEngineTime()-g_fTimeAlertStart)*1000.0 >= g_hCvarBudget.FloatValue )
         {
             #if DEBUG
             LogMessage("WARNING: CPU budget (%f ms) exceeded", g_hCvarBudget.FloatValue);
@@ -475,7 +505,6 @@ bool AlertCallback(int entity, int client) // Return true to continue enumeratin
             return false;
         }
     }
-    if (ignore[entity]) return true;
     #if DEBUG
     g_iEnumerated += 1;
     #endif
@@ -484,11 +513,12 @@ bool AlertCallback(int entity, int client) // Return true to continue enumeratin
         ignore_infected(entity);
         return true;
     }
-    static float pos[3], pos2[3];
-    pos[0] = pos_arr[client][0]; pos[1] = pos_arr[client][1]; pos[2] = pos_arr[client][2]+32.0;
-    GetEntPropVector(entity,Prop_Send,"m_vecOrigin",pos2);
+    static float pos[3], pos2[3]; // alert position and infected position
+    pos[0] = pos_arr[client][0]; pos[1] = pos_arr[client][1];
+    pos[2] = pos_arr[client][2];
+    GetEntPropVector(entity,Prop_Send,"m_vecOrigin",pos2); // infected position
     float range = GetVectorDistance(pos,pos2) * multipliers[client];
-    pos2[2] += 68.0; // check infected ear position
+    pos2[2] += 60.0; // move to infected ear position
     //bool LOS = L4D2_IsVisibleToPlayer(client,TEAM_SURVIVOR,3,0,pos2);
     bool LOS = !los_blocked(pos2,pos,entity);
     if (!LOS) range *= LOS_multiplier;
@@ -514,7 +544,10 @@ bool AlertCallback(int entity, int client) // Return true to continue enumeratin
         }
         int look = GetEntPropEnt(entity, Prop_Send, "m_clientLookatTarget");
         if ( LOS && ( look==client || IsValidAliveSurvivor(look) ) )
+        {
             infected_rush_client(entity,client,nearest[client]); // Aggro if LOS and was previously looking at any alive survivor.
+            return true;
+        }
         else if (look<=0)
         {
             SetEntPropEnt(entity, Prop_Send, "m_clientLookatTarget",client);
@@ -523,6 +556,9 @@ bool AlertCallback(int entity, int client) // Return true to continue enumeratin
             pack.WriteCell(EntIndexToEntRef(entity));
             pack.WriteCell(EntIndexToEntRef(client));
         }
+        #if DEBUG
+        g_iAlert += 1;
+        #endif
     }
     return true;
 }
@@ -538,6 +574,9 @@ void infected_rush_client(const int infected, const int client, int client_neare
     SetEntProp(infected,Prop_Send,"m_mobRush",1);
     if (client_rush>0) command_infected_attack(infected,client_rush);
     ignore_infected(infected);
+    #if DEBUG
+    g_iRush += 1;
+    #endif
 }
 
 void command_infected_attack(const int infected, const int client)
@@ -777,7 +816,7 @@ stock int NearestAliveSurvivor(float pos[3], float max_dist = -1.0, bool check_a
     float dist;
     static float pos2[3];
     float max_dist_sq = max_dist*max_dist;
-    for( int i = 1; i <= MAXPLAYERS; i++ ) // find survivor closest to pos where grenade detonated
+    for( int i = 1; i <= MAXPLAYERS; i++ )
     {
         if (!IsValidAliveSurvivor(i)) continue; // bad survivor
         if (check_alert && timers[i]!=null) continue; // alert pending
