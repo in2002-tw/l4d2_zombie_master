@@ -11,16 +11,17 @@
 
 // Made for the Knockout.chat community
 // Plugin authors: gvazdas, zyiks
-// HUGE THANKS TO TESTERS: Hatsune Miku Fan, Raykeno, IronBar, ngh, Lil Ole Fella, ShaunOfTheLive, zyiks
-// Chance, Skerion, Lett1, AGGA Lambo, Robotnik, AriesToffle, Shadowcat, Wicket, GARFIELD'S SKELETON, Perchance, 
-// Snake22, Mark9013100
+// HUGE THANKS TO TESTERS: Hatsune Miku Fan, Skerion, Raykeno, IronBar, ngh, Lil Ole Fella, ShaunOfTheLive, zyiks
+// Chance, Lett1, AGGA Lambo, Robotnik, AriesToffle, Shadowcat, Wicket, GARFIELD'S SKELETON, Perchance, 
+// Snake22, Mark9013100, Sarahtonin, Rex Bosworth
 // HUGE THANKS for scripting help: HarryPotter, xerox8521, Forgetest, little_froy, Lux, Marttt, Bacardi, Silvers
 // HUGE THANKS TO Reagy and IronBar for hosting the Knockout Left 4 Dead 2 Server
-// Sentence-mixed survivor voice lines: Skerion, Ellis voice line by zyiks
+// Sentence-mixed survivor voice lines: Skerion. Ellis voice line by zyiks
 
 #pragma semicolon 1
 #pragma newdecls required
 #pragma dynamic 131072
+
 #include <sourcemod>
 #include <sdktools>
 #include <dhooks>
@@ -32,7 +33,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.092 2026-04-28"
+#define PLUGIN_VERSION 			"0.9.093 2026-04-29"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 

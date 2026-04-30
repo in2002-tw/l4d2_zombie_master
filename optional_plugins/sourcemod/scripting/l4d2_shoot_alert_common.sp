@@ -8,7 +8,7 @@
 #include <left4dhooks>
 
 #define PLUGIN_NAME			"l4d2_shoot_alert_common"
-#define PLUGIN_VERSION 		"2.11 2026-04-29"
+#define PLUGIN_VERSION 		"2.12 2026-04-29"
 #define CONFIG_FILENAME      PLUGIN_NAME
 
 public Plugin myinfo =
@@ -314,7 +314,7 @@ void evtPlayerFired(Event event, const char[] name, bool dontBroadcast) // Survi
     alert_constructor(client,client,multiplier);
 }
 
-// This fires many times for the same file depending on number of clients!!!!!
+// This fires many times for the same voice line depending on number of clients!!!!!
 Action SurvivorSpeak(int clients[MAXPLAYERS], int &numClients, char sample[PLATFORM_MAX_PATH],
                      int &entity, int &channel, float &volume, int &level, int &pitch, int &flags,
                      char soundEntry[PLATFORM_MAX_PATH], int &seed) // Survivor said something.
@@ -539,11 +539,10 @@ bool AlertCallback(int entity, int client) // Return true to continue enumeratin
         return true;
     }
     static float pos[3], pos2[3]; // alert position and infected position
-    pos[0] = pos_arr[client][0]; pos[1] = pos_arr[client][1];
-    pos[2] = pos_arr[client][2];
+    pos[0] = pos_arr[client][0]; pos[1] = pos_arr[client][1]; pos[2] = pos_arr[client][2]; // alert position
     GetEntPropVector(entity,Prop_Send,"m_vecOrigin",pos2); // infected position
-    float range = GetVectorDistance(pos,pos2) * multipliers[client];
     pos2[2] += 60.0; // move to infected ear position
+    float range = GetVectorDistance(pos,pos2) * multipliers[client];
     //bool LOS = L4D2_IsVisibleToPlayer(client,TEAM_SURVIVOR,3,0,pos2);
     bool LOS = !los_blocked(pos2,pos,entity);
     if (!LOS) range *= LOS_multiplier;
@@ -588,6 +587,7 @@ bool AlertCallback(int entity, int client) // Return true to continue enumeratin
     return true;
 }
 
+// infected: rush client, or if alert is not local, rush client nearest to alert.
 void infected_rush_client(const int infected, const int client, int client_nearest = -1)
 {
     int client_rush = -1;
@@ -607,7 +607,7 @@ void infected_rush_client(const int infected, const int client, int client_neare
 void command_infected_attack(const int infected, const int client)
 {
     L4D2_CommandABot(infected,client,BOT_CMD_ATTACK);
-    SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // this probably does nothing useful
+    SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // probably useless
     DataPack pack;
     CreateDataTimer(0.1,refresh_rush_client,pack,TIMER_FLAG_NO_MAPCHANGE);
     pack.WriteCell(EntIndexToEntRef(infected));
@@ -624,13 +624,13 @@ Action refresh_rush_client(Handle timer, DataPack pack)
     int entref_client = pack.ReadCell();
     if (!IsValidEntRef(entref_client)) return Plugin_Stop;
     int client = EntRefToEntIndex(entref_client);
-    if (!IsValidClient(client) || !IsPlayerAlive(client)) return Plugin_Stop;
+    if (!IsValidAliveSurvivor(client)) return Plugin_Stop;
     int infected = EntRefToEntIndex(entref_zombie);
     L4D2_CommandABot(infected,client,BOT_CMD_ATTACK);
     #if DEBUG>1
     LogMessage("L4D2_CommandABot %d %d BOT_CMD_ATTACK", infected, client);
     #endif
-    SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client);
+    SetEntPropEnt(infected, Prop_Send, "m_clientLookatTarget", client); // probably useless
     int repeats = pack.ReadCell();
     repeats += 1;
     if (repeats<5)
@@ -684,6 +684,7 @@ public void OnMapStart()
 
 public void OnMapEnd()
 {
+    finale_active = false;
     roundcount += 1;
     if (!enabled) return;
     check_hooks(HOOKS_FORCE_OFF);
@@ -713,6 +714,9 @@ public void OnClientPutInServer(int client)
     timers[client] = null;
 }
 
+// Loop over all common infected.
+// calm: reduce alert count by 1 for each common.
+// late: reset all common infected information
 int get_commons(bool calm=false, bool late=false) // Counting ONLY non-aggro infected
 {
     int entity = INVALID_ENT_REFERENCE;
@@ -742,6 +746,7 @@ int get_commons(bool calm=false, bool late=false) // Counting ONLY non-aggro inf
     return commons;
 }
 
+// Periodic timer for calming commons.
 Action perform_calm(Handle timer=null, bool reset = false)
 {
     #if DEBUG
@@ -767,7 +772,7 @@ Action perform_calm(Handle timer=null, bool reset = false)
     return Plugin_Continue;
 }
 
-// force: cancel grenade (non-local) alerts
+// force: cancel all alerts, including grenade (non-local)
 // alerts_only: cancel only alerts, do not touch other timers.
 void reset_timers(bool force = true, bool alerts_only = false)
 {
@@ -896,14 +901,14 @@ stock float get_max_range(float multiplier = 1.0) // Find max of alert range and
 
 const int TR_MASK_LOS = MASK_VISIBLE;
 
-// Check if line-of-sight is blocked
+// Check if line-of-sight is blocked. ignore self entity index
 stock bool los_blocked(const float eyePos[3], const float testPoint[3], int self = -1)
 {
     TR_TraceRayFilter(eyePos, testPoint, TR_MASK_LOS, RayType_EndPoint, FilterLOS, self);
     return TR_DidHit(INVALID_HANDLE);
 }
 
-// Entity filter for LOS checks. Ignore players, infected, witches, and everything else that is see-through (transparent).
+// Entity filter for LOS checks. Ignore self, players, infected, witches, and everything else that is see-through (transparent).
 stock bool FilterLOS(int entity, int mask, int self = -1)
 {
 	if (entity==self) return false;

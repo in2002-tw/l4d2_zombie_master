@@ -16,15 +16,6 @@
 #define __zm_included
 ///////////////////////////////////////
 
-#pragma semicolon 1
-#pragma newdecls required
-#include <sourcemod>
-#include <sdktools>
-#include <dhooks>
-#include <sdkhooks>
-#include <left4dhooks>
-#include <adt_trie>
-
 #define FIRST_TANK_SPAWNED 1
 #define FIRST_TANK_DEAD 2
 
@@ -660,13 +651,15 @@ int get_spawner_zombieclass()
 // revalidate: if grid spawner is active, immediately revalidate
 void update_spawner_zombieclass(int zClass, bool revalidate = false)
 {
+    bool update_grid = false;
     if (get_zombieclass_group(zClass)!=get_zombieclass_group(g_iGridLastZombieClass))
     {
         g_GridHasValidCell = false;
         g_GridValidCellCount = 0;
-        if (revalidate && g_iSpawnerMode>0) Grid_Update(); // this is expensive, could iterate over cells and check nav rules and context instead...
+        update_grid = revalidate && g_iSpawnerMode>0;
     }
     g_iLastZombieClass = zClass;
+    if (update_grid) Grid_Update(); // this is expensive, could iterate over cells and check nav rules and context instead...
 }
 
 // Data structure for player stats
