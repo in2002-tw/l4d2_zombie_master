@@ -8,7 +8,7 @@
 #include <left4dhooks>
 
 #define PLUGIN_NAME			"l4d2_shoot_alert_common"
-#define PLUGIN_VERSION 		"2.10 2026-04-29"
+#define PLUGIN_VERSION 		"2.11 2026-04-29"
 #define CONFIG_FILENAME      PLUGIN_NAME
 
 public Plugin myinfo =
@@ -57,6 +57,8 @@ int shots[MAXPLAYERS+1]; // accumulate gunfire before callback, if accumulate cv
 float weaponid_multipliers[L4D2WeaponId_MAX] = {-1.0,...}; // multipliers for each weaponID; -1.0 to use default value.
 bool local[MAXPLAYERS+1]; // true if alert is localized at client position. false for grenade and pipe bomb detonation
 int nearest[MAXPLAYERS+1]; // nearest client to alert center (for pipe bomb, grenade detonation)
+int roundcount; // prevent alerts from firing next round
+int roundcounts[MAXPLAYERS+1];
 
 bool l4dhooks_updated; // check if l4dhooks is new enough
 bool enumerate_new = true; // 2026-03-15 new enumeration method using L4D_FindEntityByClassnameWithin 
@@ -172,11 +174,24 @@ void IsAllowed()
     else check_hooks();
 }
 
-void check_hooks() // Dynamically hook/unhook weapon_fire and NormalSoundHook for performance.
+#define HOOKS_AUTO 0
+#define HOOKS_FORCE_OFF 1
+#define HOOKS_FORCE_ON 2
+
+void check_hooks(int state = HOOKS_AUTO) // Dynamically hook/unhook weapon_fire and NormalSoundHook for performance.
 {
     timer_hook = null;
-    bool should_hook = enabled && !finale_active && !L4D_IsSurvivalMode() && L4D_IsInIntro()<=0 && (saferoom || L4D_HasAnySurvivorLeftSafeArea()) && get_commons()>0;
-    bool should_hook_speech = should_hook && speech;
+    if (!finale_active && L4D_IsSurvivalMode()) finale_active = true;
+    bool should_hook;
+    switch (state)
+    {
+        case HOOKS_AUTO:
+        {
+            should_hook = enabled && !finale_active && L4D_IsInIntro()<=0 && (saferoom || L4D_HasAnySurvivorLeftSafeArea()) && get_commons()>0;
+        }
+        case HOOKS_FORCE_OFF: should_hook = false;
+        case HOOKS_FORCE_ON: should_hook = enabled;
+    }
     if (should_hook!=weapon_fire_hooked)
     {
         if (should_hook)
@@ -188,9 +203,10 @@ void check_hooks() // Dynamically hook/unhook weapon_fire and NormalSoundHook fo
         weapon_fire_hooked = should_hook;
         if (alert_memory>=0.1 && alert_max>0) perform_calm(null,true); // reset calm timer
         #if DEBUG
-        LogMessage("weapon_fire hook %d; commons %d finale %d survival %d intro %d", weapon_fire_hooked, commons, finale_active, L4D_IsSurvivalMode(), L4D_IsInIntro());
+        LogMessage("commons %d finale/survival %d intro %d -> weapon_fire hook %d", commons, finale_active, L4D_IsInIntro(), weapon_fire_hooked);
         #endif
     }
+    bool should_hook_speech = should_hook && speech;
     if (should_hook_speech!=speech_hooked)
     {
         if (should_hook_speech) AddNormalSoundHook(SurvivorSpeak);
@@ -202,22 +218,22 @@ void check_hooks() // Dynamically hook/unhook weapon_fire and NormalSoundHook fo
     }
 }
 
-Action timer_check_hooks(Handle timer)
+Action timer_check_hooks(Handle timer, int state = HOOKS_AUTO)
 {
-    check_hooks();
+    check_hooks(state);
     return Plugin_Stop;
 }
 
 public void L4D_OnFinishIntro()
 {
     if (!enabled || weapon_fire_hooked || timer_hook!=null) return;
-    timer_hook = CreateTimer(0.1,timer_check_hooks,TIMER_FLAG_NO_MAPCHANGE);
+    timer_hook = CreateTimer(0.1,timer_check_hooks,_,TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public void L4D_OnFirstSurvivorLeftSafeArea_Post()
 {
     if (!enabled || weapon_fire_hooked || timer_hook!=null) return;
-    timer_hook = CreateTimer(0.1,timer_check_hooks,TIMER_FLAG_NO_MAPCHANGE);
+    timer_hook = CreateTimer(0.1,timer_check_hooks,_,TIMER_FLAG_NO_MAPCHANGE);
 }
 
 void late_enable() // If plugin just enabled, check if there are any infected entities to alarm.
@@ -233,7 +249,8 @@ public void OnEntityCreated(int entity, const char[] classname) // Check if this
 {
 	if (!enabled || !IsValidEdict(entity)) return;
 	ignore[entity] = true; // ignore alerts from before zombie spawned
-	if (finale_active || L4D_IsSurvivalMode()) return;
+    if (!finale_active && L4D_IsSurvivalMode()) finale_active = true;
+	if (finale_active) return;
 	if (strncmp(classname,"infected",8,false)==0 && GetEntProp(entity,Prop_Send,"m_mobRush")<=0)
 	{
        	CreateTimer(1.51,check_aggro,EntIndexToEntRef(entity),TIMER_FLAG_NO_MAPCHANGE); // prevent zombie from alerting retroactively
@@ -254,7 +271,7 @@ Action check_aggro(Handle timer, int entref) // Check again.
         ignore[entity] = false; alerts[entity] = 0; commons += 1;
     }
     if (weapon_fire_hooked || timer_hook!=null) return Plugin_Stop; // if already hooked, do nothing
-    timer_hook = CreateTimer(0.1,timer_check_hooks,TIMER_FLAG_NO_MAPCHANGE);
+    timer_hook = CreateTimer(0.1,timer_check_hooks,_,TIMER_FLAG_NO_MAPCHANGE);
     return Plugin_Stop;
 }
 
@@ -264,7 +281,7 @@ public void OnEntityDestroyed(int entity) // When infected is destroyed, check i
     if (is_infected(entity))
     {
         commons -= 1;
-        if (commons<=0 && timer_hook==null) timer_hook = CreateTimer(2.0,timer_check_hooks,TIMER_FLAG_NO_MAPCHANGE);
+        if (commons<=0 && timer_hook==null) timer_hook = CreateTimer(2.0,timer_check_hooks,_,TIMER_FLAG_NO_MAPCHANGE);
     }
 }
 
@@ -290,7 +307,7 @@ void evtPlayerFired(Event event, const char[] name, bool dontBroadcast) // Survi
         #if DEBUG>1
             LogMessage("%d timer already exists %d, valid %d", client, timers[client], timers[client]!=null);
         #endif
-        if (multipliers[client]>multiplier) multipliers[client] = multiplier; // prevent weapon swap exploit
+        if (multipliers[client]>multiplier) multipliers[client] = multiplier; // elevate to louder alert source
         if (accumulate) shots[client] += 1;
         return;
     }
@@ -302,12 +319,18 @@ Action SurvivorSpeak(int clients[MAXPLAYERS], int &numClients, char sample[PLATF
                      int &entity, int &channel, float &volume, int &level, int &pitch, int &flags,
                      char soundEntry[PLATFORM_MAX_PATH], int &seed) // Survivor said something.
 {
-    if (channel!=SNDCHAN_VOICE || volume<=0.1 || sample[0]!='p' || !IsValidAliveSurvivor(entity) || timers[entity]!=null) return Plugin_Continue;
+    if (channel!=SNDCHAN_VOICE || volume<=0.1 || sample[0]!='p' || !IsValidAliveSurvivor(entity)) return Plugin_Continue;
     if (strncmp(sample[16],"voice",5)!=0 || strncmp(sample[7],"survivor",8)!=0) return Plugin_Continue;
+    float multiplier = voice_multiplier/volume;
+    if (timers[entity]!=null)
+    {
+        if (multipliers[entity]>multiplier) multipliers[entity] = multiplier; // elevate to louder alert source
+        return Plugin_Continue;
+    }
     #if DEBUG>1 
     LogMessage("%d %s %d %f -> %f", entity, sample, level, volume, voice_multiplier/volume);
     #endif
-    alert_constructor(entity,entity,voice_multiplier/volume);
+    alert_constructor(entity,entity,multiplier);
     return Plugin_Continue;
 }
 
@@ -349,7 +372,7 @@ public void L4D_PipeBomb_Detonate_Post(int entity, int client)
 void alert_constructor(int entity, int client, float multiplier = 1.0, bool force = false)
 {
     if (multiplier<=0.0) return; // 0.0 multipliers mean silence.
-    if (IsValidClient(client) && timers[client]!=null) return; // alert already pending
+    if (IsValidClient(client) && entity==client && timers[client]!=null) return; // if local and alert already pending, skip
     if (!force && pipe_bomb_active()) return; // pipe bombs are louder than any gun or voice.
     static float pos[3];
     if (entity==client) GetClientEyePosition(client,pos); // if local, use client eye position
@@ -369,6 +392,7 @@ void alert_constructor(int entity, int client, float multiplier = 1.0, bool forc
     shots[client] = 1;
     multipliers[client] = multiplier;
     local[client] = client==entity;
+    roundcounts[client] = roundcount;
     timers[client] = CreateTimer(GetRandomFloat(0.5,1.5),alert_update,client,TIMER_FLAG_NO_MAPCHANGE);
 }
 
@@ -379,7 +403,7 @@ float g_fTimeAlertStart; // track CPU budget
 
 Action alert_update(Handle timer, int client) // Delayed alert nearby infected.
 {
-    if (!weapon_fire_hooked || (timer!=timers[client] && local[client]) ) // alert was cancelled.
+    if (!weapon_fire_hooked || roundcounts[client]!=roundcount || (timer!=timers[client] && local[client]) ) // alert was cancelled.
     {
         timers[client] = null;
         return Plugin_Stop;
@@ -402,7 +426,7 @@ Action alert_update(Handle timer, int client) // Delayed alert nearby infected.
     //if (local[client] && rush_range>0.0 && l4dhooks_updated) L4D2_RushVictim(client,range_rush_effective/LOS_multiplier);
     
     int client_final = client; // final client for alerting.
-    bool undo_hotswap = false;
+    bool undo_hotswap = false; // track if hotswap should be reversed
     int result_nearest = -1; // cache NearestAliveSurvivor(pos,max_range) result which may be reused later
     if (!IsValidAliveSurvivor(client_final)) // If old client disconnected, died, swapped teams, went AFK, etc. -> swap to nearest alive survivor
     {
@@ -448,7 +472,8 @@ Action alert_update(Handle timer, int client) // Delayed alert nearby infected.
         }
     }
     if (g_iEnumerated<=0) g_iEnumerated = 1; // prevent division by 0
-    LogMessage("%d -> %d entities (%d alert %d rush) %f ms %f ms avg", client_final, g_iEnumerated, g_iAlert, g_iRush, t_elapsed_ms, t_elapsed_ms/g_iEnumerated);
+    LogMessage("%d %f -> %d entities (%d alert %d rush) %f ms (%f avg)",
+    client_final, multipliers[client_final], g_iEnumerated, g_iAlert, g_iRush, t_elapsed_ms, t_elapsed_ms/g_iEnumerated);
     #endif
     if (undo_hotswap) client_hotswap(client_final); // restore pending alert
     return Plugin_Stop;
@@ -651,9 +676,17 @@ public void OnMapStart()
     g_iLaser = PrecacheModel("sprites/laserbeam.vmt", true);
     #endif
     finale_active = false;
+    roundcount += 1;
     if (!enabled) return;
     reset_timers();
-    RequestFrame(check_hooks);
+    check_hooks(HOOKS_FORCE_OFF);
+}
+
+public void OnMapEnd()
+{
+    roundcount += 1;
+    if (!enabled) return;
+    check_hooks(HOOKS_FORCE_OFF);
 }
 
 void evtFinaleStart(Event event, const char[] name, bool dontBroadcast)
@@ -662,15 +695,16 @@ void evtFinaleStart(Event event, const char[] name, bool dontBroadcast)
     commons = 0; // all rushing survivors
     if (!enabled) return;
     reset_timers();
-    check_hooks();
+    check_hooks(HOOKS_FORCE_OFF);
 }
 
 void evtRound(Event event, const char[] name, bool dontBroadcast)
 {
+    roundcount += 1;
     finale_active = false;
     if (!enabled) return;
     reset_timers();
-    check_hooks();
+    check_hooks(HOOKS_FORCE_OFF);
 }
 
 public void OnClientPutInServer(int client)
@@ -727,18 +761,20 @@ Action perform_calm(Handle timer=null, bool reset = false)
     if (pipe_bomb_active()) return Plugin_Continue; // do not calm if pipe bomb is active
     get_commons(true);
     #if DEBUG
-    LogMessage("perform_calm %f ms", (GetEngineTime()-t)*1000.0);
+    float t_ms = (GetEngineTime()-t)*1000.0;
+    if (t_ms>0.0) LogMessage("perform_calm %f ms", t_ms);
     #endif
     return Plugin_Continue;
 }
 
-// force: cancel grenade alerts
-// cancel: cancel only alerts, do not touch other timers.
-void reset_timers(bool force = true, bool cancel = false)
+// force: cancel grenade (non-local) alerts
+// alerts_only: cancel only alerts, do not touch other timers.
+void reset_timers(bool force = true, bool alerts_only = false)
 {
     #if DEBUG
     int num_reset = 0;
     #endif
+    if (force) roundcount += 1; // all alerts will cancel
     for( int i = 1; i <= MAXPLAYERS; i++ )
     {
         if (!force && !local[i]) continue; // skip for grenades
@@ -752,7 +788,7 @@ void reset_timers(bool force = true, bool cancel = false)
     #if DEBUG
     LogMessage("reset %d alert timers", num_reset);
     #endif
-    if (cancel) return;
+    if (alerts_only) return;
     timer_hook = null;
     perform_calm(null,true);
 }  
