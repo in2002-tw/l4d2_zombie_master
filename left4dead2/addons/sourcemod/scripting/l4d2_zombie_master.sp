@@ -33,7 +33,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.093 2026-04-29"
+#define PLUGIN_VERSION 			"0.9.1 2026-05-01"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -62,7 +62,7 @@ bool DEBUG = false;
 public Plugin myinfo =
 {
 	name = "[L4D2] Zombie Master",
-	author = "gvazdas, zyiks",
+	author = "gvazdas, zyiks, Skerion",
 	description = "[coop,survival] AI Game Director is replaced by an infected player, the Zombie Master.",
 	version = PLUGIN_VERSION,
 	url = "https://forums.alliedmods.net/showthread.php?t=352060, https://github.com/gvazdas/l4d2_zombie_master"
@@ -76,12 +76,8 @@ public Plugin myinfo =
 // 6. Compatibility with jukebox by Silvers.
 // 7. Improved compatibility with plugins that modify survivor_set.
 // 8. Custom maps tested: Daybreak, I Hate Mountains 2, Urban Flight, Warcelona
-// 9. Improved distance to survivors calculations. Should give less false positives.
-// 10. Make vomit target that specific survivor rather than whole team.
 // 11. Compatibility with l4d2_shoot_alert_common. Plugin gets disabled during prep stage and re-activated on round start.
-// 12. Optimizations thanks to Silvers.
 // 13. New cvar: zm_say_horde which makes survivors team chatting spawn horde.
-// 14. sm plugins reload called on plugins instead of resetting cvars which makes plugins reset to .cfg values.
 // 15. zm_tankrun, zm_onlycommons, zm_jockeys
 // 16. zm_randomizer
 // 17. ZM menus updated to better represent game rules, like no specials, no witches, no commons, no uncommons, etc.
@@ -97,9 +93,28 @@ public Plugin myinfo =
 // 27. Majority of code moved to /include
 // 28. Major spawner overhaul: GridLib implemented
 // 29. Some game logic related checks were referencing GetEngineTime and not GameTime.Whoops!
-// 30. Spawner memory.
+// 30. Spawner memory: the last valid spawn location is kept in the spawner memory, and used where applicable.
 // 31. PVS (Potentially Visible Set) added to survivor visiblity checks for performance.
-// 32. Note down github...
+// 32. Detection of free panic events triggered by the map were improved. Spontaneous panic should not happen anymore.
+// 33. Commons cannot be deleted when there is an active pipe bomb or vomit jar on the field.
+// 34. Witches and Specials cannot be deleted if they are afflicted by a vomit jar.
+// 35. Spawner will now properly visualize spawn rules for different zombie groups, i.e. commons, specials and witches. Witches can be placed almost anywhere!
+// 36. Angry (rushing) commons spawned by ZM targeting a survivor, will attempt to attack that specific survivor.
+// 37. Spawner will now remember the last valid spawn location.
+// 38. Flow spawn overhaul. Witches and non-angry commons will no longer spawn off the survivor path.
+// 39. Survivors rescued from a closet will trigger a zombie cooldown reset for zombie master.
+// 40. Obstruction rescue.
+// 41. Line-of-sight checks will now correctly pass through glass and windows.
+// 42. ZM look target is now more robust by doing trace hull instead of trace ray.
+// 43. Major performance improvements. Common zombie spawns have a dedicated 30 ms CPU budget to reduce server stutter.
+// 44. New spawner modes: Default, Default+Grid, Grid.
+// 45. For the custom gamemode zm_clowns, my plugin clown_world will activate if you have it installed, randomizing color of all entities on the map.
+// 46. New custom voicelines by Skerion: Coach, Nick, Zoey, Francis
+// 47. New cvar: zm_cursed, which makes spawned zombies have random proportions.
+// 48. Angry zombies, when given a survivor to chase, will attempt to chase that survivor.
+// 49. Better navmesh validation. Rescue closet navmeshes without rescue doors allow zombies to spawn. Navmeshes asking zombies not to be spawned will check for trigger_hurt nearby.
+// 50. Distance to last saferoom is checked to avoid exploits.
+// 51. Improved visibility to first saferoom checks.
 
 // TO DO LIST:
 // 5. Gas station tornado (done by zyiks, not implemented)
