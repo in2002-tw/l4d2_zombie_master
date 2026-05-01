@@ -527,7 +527,8 @@ static void GridRendererProp_SetGlow(int ent, bool glow, const int color[4])
 {
 	if (glow)
 	{
-		int rgb = (color[0] << 16) | (color[1] << 8) | color[2];
+		//int rgb = (color[0] << 16) | (color[1] << 8) | color[2];
+		int rgb = color[0] | (color[1] << 8) | (color[2] << 16);
 		SetEntProp(ent, Prop_Send, "m_iGlowType", 3);
 		SetEntProp(ent, Prop_Send, "m_glowColorOverride", rgb);
 		SetEntProp(ent, Prop_Send, "m_nGlowRangeMin", 0);
