@@ -582,6 +582,18 @@ int old_scope0, old_scope1, old_scope2, old_scope3, old_scope4;
 
 float t_last_hitmarker = 0.0;
 
+// Block common infected delection post jar detonation
+#define VOMIT_JAR_DURATION 20.0
+bool g_bVomitJar;
+Handle g_hVomitJarTimer;
+Action vomit_jar_reset(Handle timer)
+{
+    if (timer!=g_hVomitJarTimer) return Plugin_Stop; // another vomit jar was thrown later, or new round.
+    g_bVomitJar = false;
+    g_hVomitJarTimer = null;
+    return Plugin_Stop;
+}
+
 StringMap g_Steam;
 bool fair_exhausted = false; // let anyone become ZM if true
 int client_offer = -1;
@@ -656,7 +668,7 @@ void update_spawner_zombieclass(int zClass, bool revalidate = false)
     {
         g_GridHasValidCell = false;
         g_GridValidCellCount = 0;
-        update_grid = revalidate && g_iSpawnerMode>0;
+        update_grid = revalidate && g_iSpawnerMode>0 && GridLib_IsReady() && IsValidClientZM();
     }
     g_iLastZombieClass = zClass;
     if (update_grid) Grid_Update(); // this is expensive, could iterate over cells and check nav rules and context instead...
@@ -2194,13 +2206,14 @@ Action ZMControlSI(int client, int args)
                 float timestamp_cooldown = 0.0;
                 int ability = GetEntPropEnt(zm_client, Prop_Send, "m_customAbility");
                 if (ability > 0 && IsValidEdict(ability)) timestamp_cooldown = GetEntPropFloat(ability, Prop_Send, "m_timestamp");
+                float vomit_timestamp = GetEntPropFloat(zm_client, Prop_Send, "m_itTimer", 1);
+                bool stagger = L4D_IsPlayerStaggering(zm_client);
                 live_SI -= 1;
                 live_zombie_arr[zClass] -= 1;
                 int bot = ZM_Spawn_SI(zm_client,zClass,true,true,vOrigin);
                 if (IsValidEntity(bot))
                 {
-                    transfer_SI_properties(bot,sModelName,vOrigin,vAngles,vVelocity,health,maxhealth,fFlags,timestamp_cooldown,targetName);
-                    if (L4D_IsPlayerStaggering(zm_client)) L4D_StaggerPlayer(bot,bot,NULL_VECTOR);
+                    transfer_SI_properties(bot,sModelName,vOrigin,vAngles,vVelocity,health,maxhealth,fFlags,timestamp_cooldown,targetName,vomit_timestamp,stagger);
                 }
                 
             }
@@ -2278,9 +2291,9 @@ Action ZMControlSI(int client, int args)
          
          ChangeClientTeam(zm_client,TEAM_ZM);
          L4D_State_Transition(zm_client, STATE_OBSERVER_MODE);
-         
-         bool stagger = false;
-         if (L4D_IsPlayerStaggering(entity)) stagger = true;
+
+         float vomit_timestamp = GetEntPropFloat(entity, Prop_Send, "m_itTimer", 1);
+         bool stagger = L4D_IsPlayerStaggering(entity);
          
          if (zClass==ZOMBIECLASS_TANK)
          {
@@ -2290,8 +2303,7 @@ Action ZMControlSI(int client, int args)
          else L4D_TakeOverZombieBot(zm_client,entity);
          L4D_CleanupPlayerState(zm_client);
          
-         transfer_SI_properties(zm_client,sModelName,vOrigin,vAngles,vVelocity,health,maxhealth,fFlags,timestamp_cooldown,targetName);
-         if (stagger) L4D_StaggerPlayer(zm_client,zm_client,NULL_VECTOR);
+         transfer_SI_properties(zm_client,sModelName,vOrigin,vAngles,vVelocity,health,maxhealth,fFlags,timestamp_cooldown,targetName,vomit_timestamp,stagger);
          zm_use_notify = true;
          update_zm_flashlight();
   	 }
@@ -2991,4 +3003,14 @@ Action refresh_rush_client(Handle timer, DataPack pack)
         pack2.WriteCell(repeats);
     }
     return Plugin_Stop;
+}
+
+// Check if Survivor or Special Infected is vomited -- attracting commons, for survivors vomit overlay ON.
+stock bool is_player_vomited(int client)
+{
+    float t_end = GetEntPropFloat(client, Prop_Send, "m_itTimer", 1);
+    if (t_end<0.0) return false;
+    t_end -= 0.1; // smooth transition between custom glow and survivor glow
+    if (GetGameTime()>=t_end) return false;
+    return true;
 }

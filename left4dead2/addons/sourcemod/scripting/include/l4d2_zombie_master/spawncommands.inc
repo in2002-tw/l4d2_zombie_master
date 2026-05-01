@@ -446,13 +446,76 @@ void dissolve_forcekill(int entity)
     CreateTimer(2.0,kill_entity,EntIndexToEntRef(entity),TIMER_FLAG_NO_MAPCHANGE);
 }
 
+// Any pipe bombs on field?
 bool pipe_bomb_active()
 {
-    while (FindEntityByClassname(-1,"pipe_bomb_projectile")!=INVALID_ENT_REFERENCE)
+    while (FindEntityByClassname(INVALID_ENT_REFERENCE,"pipe_bomb_projectile")!=INVALID_ENT_REFERENCE)
     {
         return true;
     }
     return false;
+}
+
+// Any vomit jars on field?
+bool vomit_jar_active()
+{
+    while (FindEntityByClassname(INVALID_ENT_REFERENCE,"vomitjar_projectile")!=INVALID_ENT_REFERENCE)
+    {
+        return true;
+    }
+    return false;
+}
+
+// Check if entity is glowing due to vomit.
+bool entity_glowing_vomit(int entity)
+{
+	return GetEntProp(entity, Prop_Send, "m_iGlowType")>0;
+}
+
+// Check if any infected unit (common,special,witch) is vomited by a vomit jar from survivors.
+bool any_infected_vomited()
+{
+	int i = INVALID_ENT_REFERENCE;
+	while( (i = FindEntityByClassname(i,"player")) != INVALID_ENT_REFERENCE )
+	{
+		if (!IsValidClient(i) || !IsPlayerAlive(i) || GetClientTeam(i)!=TEAM_INFECTED) continue;
+		if (is_player_vomited(i)) return true;
+	}
+	//i = INVALID_ENT_REFERENCE;
+	//while( (i = FindEntityByClassname(i,"witch")) != INVALID_ENT_REFERENCE )
+	//{
+	//	if (entity_glowing_vomit(i)) return true;
+	//}
+	//i = INVALID_ENT_REFERENCE;
+	//while( (i = FindEntityByClassname(i,"infected")) != INVALID_ENT_REFERENCE )
+	//{
+	//	if (entity_glowing_vomit(i)) return true;
+	//}
+	return false;
+}
+
+// Check if deletion of common units is blocked due to pipe bombs or vomit jars.
+// Supply entity index to check if this common is vomited on
+// skip_global: optimization, skip global pipe bomb, vomit jar and vomited units checks
+bool delete_common_blocked()
+{
+	if (g_bVomitJar) return true;
+	if (pipe_bomb_active()) return true;
+	if (vomit_jar_active()) return true;
+	if (any_infected_vomited()) return true;
+	return false;
+}
+
+// Determine if Special Infected cannot be deleted
+bool delete_special_blocked(int client)
+{
+	return is_player_vomited(client);
+}
+
+// Determine if Witch cannot be deleted
+bool delete_witch_blocked(int witch)
+{
+	return entity_glowing_vomit(witch);
 }
 
 /**
@@ -466,55 +529,58 @@ bool pipe_bomb_active()
  */
 void delete_all_infected(bool common=true, bool witch=true, bool special=true)
 {
-   	bool anything_to_delete = false;
-   	
-   	if (common && live_zombie_arr[ZOMBIECLASS_COMMON]>0 && !pipe_bomb_active()) anything_to_delete = true;
-   	else common = false;
+   	if (DEBUG) LogMessage("[zm] delete_all_infected");
+	bool anything_to_delete = false;
+
+   	if (common && live_zombie_arr[ZOMBIECLASS_COMMON]>0 && !delete_common_blocked()) anything_to_delete = true;
+	else common = false;
    	
    	if (witch && live_zombie_arr[ZOMBIECLASS_WITCH]>0) anything_to_delete = true;
-   	else witch = false;
+	else witch = false;
    	
    	if (special && live_SI>0) anything_to_delete = true;
-   	else special = false;
+	else special = false;
    	
    	if (!anything_to_delete) return;
 
-   	reset_live_zombie_arr(common,witch,special);
+	int i = INVALID_ENT_REFERENCE;
 
-   	if (DEBUG) LogMessage("[zm] delete_all_infected");
+	if (special)
+	{
+		while( (i = FindEntityByClassname(i,"player")) != INVALID_ENT_REFERENCE )
+		{
+			if (!IsValidClient(i) || !IsFakeClient(i) || !IsPlayerAlive(i) || GetClientTeam(i)!=TEAM_INFECTED) continue;
+			if (delete_special_blocked(i)) continue;
+			if ( (ZM_finale_announced || L4D_IsSurvivalMode()) && GetEntProp(i, Prop_Send, "m_zombieClass")==ZOMBIECLASS_TANK )
+            {
+				char targetName[8];
+				GetEntPropString(i, Prop_Data, "m_iName", targetName, sizeof(targetName));
+				if (strcmp(targetName,"zm_unit")!=0) continue;
+            }
+			remove_ZM_glow(i);
+			AcceptEntityInput(i,"Kill");
+		}
+	}
 
-   	static char class[32];
-   	int entity;
-   	for(entity = 1; entity<=MAXENTITIES; entity++)
-   	{
-   		if(IsValidEntity(entity))
-   		{
-   		     if (IsValidClient(entity) && !IsFakeClient(entity)) continue;
-   		     if (GetEntProp(entity,Prop_Data,"m_iMaxHealth")<=0) continue;
-      	     GetEntityClassname(entity, class, sizeof(class));
-      	     if ( (ZM_finale_announced || L4D_IsSurvivalMode()) && strcmp(class,"player")==0 && GetEntProp(entity, Prop_Send, "m_zombieClass")==ZOMBIECLASS_TANK )
-             {
-                 static char targetName[20];
-                 GetEntPropString(entity, Prop_Data, "m_iName", targetName, sizeof(targetName));
-                 if (strcmp(targetName,"zm_unit")!=0)
-                 {
-                     live_zombie_arr[ZOMBIECLASS_TANK] += 1;
-                     continue;
-                 }
-             }
+	if (witch)
+	{
+		i = INVALID_ENT_REFERENCE;
+		while( (i = FindEntityByClassname(i,"witch")) != INVALID_ENT_REFERENCE )
+		{
+			if (delete_witch_blocked(i)) continue;
+			remove_ZM_glow(i);
+			dissolve_forcekill(i);
+		}
+	}
 
-      	     if ( (common && strcmp(class,"infected")==0) || (witch && strcmp(class,"witch")==0) || (special && strcmp(class,"player")==0 && GetClientTeam(entity)==TEAM_INFECTED) )
-      	     {
-          	     remove_ZM_glow(entity);
-          	     if (strcmp(class,"player")==0) AcceptEntityInput(entity,"Kill");
-                 else dissolve_forcekill(entity);
-      	     }
-   		}
-   	}
-
-   	if (special && clients_timer==INVALID_HANDLE)
-   	   clients_timer = CreateTimer(0.1,CountClients);
-   	if (common) live_zombie_arr[ZOMBIECLASS_COMMON] = 1; // Dissolve doesn't always work
+	if (common)
+	{
+		i = INVALID_ENT_REFERENCE;
+		while( (i = FindEntityByClassname(i,"infected")) != INVALID_ENT_REFERENCE )
+		{
+			dissolve_forcekill(i);
+		}
+	}
 }
 
 /**
@@ -598,9 +664,9 @@ void zm_del_pointing(int client)
    int group = -1; // Determine GROUP_COMMON or GROUP_WITCH or GROUP_SPECIAL
    if (IsValidClient(target))
    {
-       if (IsFakeClient(target) && GetClientTeam(target)==TEAM_INFECTED)
+       if (IsFakeClient(target) && GetClientTeam(target)==TEAM_INFECTED && !delete_special_blocked(target))
        {
-           if ( (ZM_finale_announced || L4D_IsSurvivalMode()) &&
+		   if ( (ZM_finale_announced || L4D_IsSurvivalMode()) &&
                GetEntProp(target, Prop_Send, "m_zombieClass")==ZOMBIECLASS_TANK )
            {
                char targetName[16];
@@ -618,11 +684,11 @@ void zm_del_pointing(int client)
        {
            case 'i':
            {
-               if (strncmp(class,"infected",8,false)==0 && !pipe_bomb_active()) group = GROUP_COMMON;
+               if (strncmp(class,"infected",8,false)==0 && !delete_common_blocked()) group = GROUP_COMMON;
            }
            case 'w':
            {
-               if (strncmp(class,"witch",5,false)==0) group = GROUP_WITCH;
+               if (strncmp(class,"witch",5,false)==0 && !delete_witch_blocked(entref_delete)) group = GROUP_WITCH;
            }
        }
    }

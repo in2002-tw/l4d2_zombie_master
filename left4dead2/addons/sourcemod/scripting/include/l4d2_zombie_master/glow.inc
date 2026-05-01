@@ -442,13 +442,3 @@ stock void GetSurvivorHealthColor(int hp,int color[3],bool rescue=false,bool cri
       color[1] = mins[1] + RoundFloat(frac*(maxs[1]-mins[1]));
       color[2] = mins[2] + RoundFloat(frac*(maxs[2]-mins[2]));
 }
-
-// Check if Survivor or Special Infected is vomited -- attracting commons, for survivors vomit overlay ON.
-stock bool is_player_vomited(int client)
-{
-    float t_end = GetEntPropFloat(client, Prop_Send, "m_itTimer", 1);
-    if (t_end<0.0) return false;
-    t_end -= 0.1; // smooth transition between custom glow and survivor glow
-    if (GetGameTime()>=t_end) return false;
-    return true;
-}

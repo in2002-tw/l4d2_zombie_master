@@ -15,6 +15,7 @@
 
 void update_hint_spawner(int spawner_state, int zClass = ZOMBIECLASS_COMMON)
 {
+    if (!IsValidClientZM()) return;
     switch (spawner_state)
     {
         case SPAWNER_DISTANCE:

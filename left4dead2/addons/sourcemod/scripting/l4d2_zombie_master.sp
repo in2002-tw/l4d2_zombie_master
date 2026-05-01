@@ -62,7 +62,7 @@ bool DEBUG = false;
 public Plugin myinfo =
 {
 	name = "[L4D2] Zombie Master",
-	author = "gvazdas,zyiks",
+	author = "gvazdas, zyiks",
 	description = "[coop,survival] AI Game Director is replaced by an infected player, the Zombie Master.",
 	version = PLUGIN_VERSION,
 	url = "https://forums.alliedmods.net/showthread.php?t=352060, https://github.com/gvazdas/l4d2_zombie_master"
@@ -112,7 +112,6 @@ public Plugin myinfo =
 // 41. Special context interact: delete, move, attack nearest
 // 42. Panic Trap
 // 47. Witches in survivor closets
-// 50. Random pz can spawn in saferoom :)
 // 51. Find out why commons get auto culled on finale start. Can avoid culling if they are attacking other infected...
 // 52. Smoker, Charger stupid behavior after ability fail.
 // 57. Frozen tanks should be in stasis to prevent music // EFL_DORMANT Entity_Flags
@@ -926,6 +925,8 @@ Action zm_new_round(Handle timer = null)
         return Plugin_Stop;
     }
     g_bRescueDoor = false;
+    g_bVomitJar = false;
+    g_hVomitJarTimer = null;
     g_iLastZombieClass = -1;
     
     if (g_bGrid && !GridLib_IsReady())
@@ -1365,6 +1366,14 @@ public void L4D2_OnChangeFinaleStage_Post(int finaleType, const char[] arg)
 void evtFinaleStart(Event event, const char[] name, bool dontBroadcast)
 {
     announce_finale();
+}
+
+// Prevent ZM from deleting Commons for a while after a vomit jar detonates.
+public void L4D2_VomitJar_Detonate_Post(int entity, int client)
+{
+    //if (!IsValidClient(client) || GetClientTeam(client)!=TEAM_SURVIVOR) return;
+    g_bVomitJar = true;
+    g_hVomitJarTimer = CreateTimer(VOMIT_JAR_DURATION,vomit_jar_reset,TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public void L4D2_OnRevived(int client)

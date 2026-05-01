@@ -167,7 +167,8 @@ void freeze_team(bool state = true, int team = TEAM_SURVIVOR)
     else if (team==TEAM_SURVIVOR && g_iLockedDoor==INVALID_ENT_REFERENCE) saferoom_locked=state;
 }
 
-stock void transfer_SI_properties(int entity_new, char[] modelname, float vOrigin[3], float vAngles[3], float vVelocity[3], int health, int maxhealth, int fFlags, float timestamp_cooldown, char targetname[64] = "")
+stock void transfer_SI_properties(int entity_new, char[] modelname, float vOrigin[3], float vAngles[3], float vVelocity[3],
+        int health, int maxhealth, int fFlags, float timestamp_cooldown, char targetname[64] = "", float vomit_timestamp = -1.0, bool stagger = false)
 {
    if (!IsValidClient(entity_new)) return;
    int zClass = GetEntProp(entity_new, Prop_Send, "m_zombieClass");
@@ -196,6 +197,13 @@ stock void transfer_SI_properties(int entity_new, char[] modelname, float vOrigi
        if (cooldown_remaining>default_cooldown) cooldown_remaining = default_cooldown;
        
    }
+
+   if (vomit_timestamp>0.0)
+   {
+        L4D2_CTerrorPlayer_OnHitByVomitJar(entity_new,entity_new);
+        SetEntPropFloat(entity_new, Prop_Send, "m_itTimer", vomit_timestamp, 1);
+   }
+   if (stagger) L4D_StaggerPlayer(entity_new,entity_new,NULL_VECTOR)
    
    L4D2_SetCustomAbilityCooldown(entity_new,cooldown_remaining);
    //SetEntProp(entity_new, Prop_Data, "m_fFlags", fFlags); // causes charger to be stuck forever
