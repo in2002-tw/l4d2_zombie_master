@@ -5,7 +5,7 @@
 #define _zm_panic_included
 ///////////////////////////////////////
 
-bool DEBUG_PANIC = false;
+bool DEBUG_PANIC = true;
 #define PANIC_SPACING_SEC 5.0 // minimum time in seconds between panic refills
 #define NATURAL_TIMEOUT 30.0 // how long to wait for natural mob reset after round start
 
@@ -187,16 +187,16 @@ bool panic_conditions(bool mob_just_spawned=false, bool ignore_spacing = false)
         if ( FloatAbs(new_timestamp-mob_timestamp)>=0.001 )
         {
             if (DEBUG_PANIC) LogMessage("[zm] MobSpawnTimer jumped %.2f, %.2f", mob_timer_left, mob_timer_elapsed);
-            if (mob_timer_left<=5.0 && mob_timer_left>=(-1.0) && mob_timer_elapsed<g_fPanicDuration)
+            if (mob_timer_left<10.0 && mob_timer_left>=(-1.0) && mob_timer_elapsed<g_fPanicDuration)
             {
                 if (ignore_spacing || (GetGameTime()-t_last_panic)>PANIC_SPACING_SEC) natural_mob=true;
             }
         }
         mob_timestamp = new_timestamp;
         
-        if (mob_timer_left>=5.0)
+        if (mob_timer_left>10.0)
         {
-            if (DEBUG_PANIC) LogMessage("panic_conditions: mob_timer_left >= 5.0");
+            if (DEBUG_PANIC) LogMessage("panic_conditions: mob_timer_left > 10.0");
             return false;
         }
         if (mob_timer_elapsed>=g_fPanicDuration)
