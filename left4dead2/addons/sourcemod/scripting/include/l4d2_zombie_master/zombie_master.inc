@@ -3018,6 +3018,6 @@ stock bool Valid_Ground(float pos[3], float dz = 25.0)
     static float pos2[3];
     pos2 = pos;
     pos2[2] -= dz;
-    TR_TraceHullFilter(pos,pos2,{-HULL_DX_STRICT,-HULL_DX_STRICT,0.0},{HULL_DX_STRICT,HULL_DX_STRICT,1.0},MASK_PLAYERSOLID,TraceFilter_Stuck_IgnoreZombies);
+    TR_TraceHullFilter(pos,pos2,{-HULL_DX_STRICT,-HULL_DX_STRICT,-1.0},{HULL_DX_STRICT,HULL_DX_STRICT,0.0},MASK_PLAYERSOLID,TraceFilter_Stuck_IgnoreZombies);
     return TR_DidHit(INVALID_HANDLE);
 }

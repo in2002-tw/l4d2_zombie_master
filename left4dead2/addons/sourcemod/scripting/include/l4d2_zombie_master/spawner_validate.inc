@@ -85,7 +85,7 @@ void Spawner_CacheSurvivorData()
 		}
 		g_iBatchSurvivorClients[g_iBatchSurvivorCount] = i;
 		g_CachedSurvNavArea[g_iBatchSurvivorCount] = L4D_GetNearestNavArea(
-			g_fBatchSurvivorPos[g_iBatchSurvivorCount], 300.0, true, false, true, TEAM_SURVIVOR);
+			g_fBatchSurvivorPos[g_iBatchSurvivorCount], 300.0, true, true, true, TEAM_SURVIVOR);
 		g_SurvNavAreaComputed[g_iBatchSurvivorCount] = true;
 
 		g_CachedSurvCell[g_iBatchSurvivorCount] = surv_pos_key(g_fBatchSurvivorEyePos[g_iBatchSurvivorCount]);
@@ -141,7 +141,7 @@ Address GetCachedSurvivorNavArea(int survIdx)
     if (!g_SurvNavAreaComputed[survIdx])
     {
         g_CachedSurvNavArea[survIdx] = L4D_GetNearestNavArea(
-            g_fBatchSurvivorPos[survIdx], 300.0, true, false, true, TEAM_SURVIVOR);
+            g_fBatchSurvivorPos[survIdx], 300.0, true, true, true, TEAM_SURVIVOR);
         g_SurvNavAreaComputed[survIdx] = true;
     }
     return g_CachedSurvNavArea[survIdx];
@@ -255,7 +255,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
     bool check_nav = hNavIsPotentiallyVisibleToTeam!=null || hNavIsPotentiallyVisible!=null || hNavIsCompletelyVisibleToTeam!=null;
     if (check_nav) // check visibility between two navmeshes
     {
-        if (cellNavArea == Address_Null) cellNavArea = L4D_GetNearestNavArea(vecPos, 300.0, true, false, true, TEAM_INFECTED);
+        if (cellNavArea == Address_Null) cellNavArea = L4D_GetNearestNavArea(vecPos, 300.0, true, true, true, TEAM_INFECTED);
         check_nav = cellNavArea != Address_Null; // check IsPotentiallyVisibleToTeam and IsPotentiallyVisible
     }
     
@@ -269,7 +269,7 @@ bool can_any_alive_survivor_see_cheap(float vecPos[3], int cellCluster = -1, Add
             float t_safe = GetEngineTime();
             if (check_nav) // reduce number of traces if both navs can't see each other
             {
-                Address navArea_saferoom = L4D_GetNearestNavArea(saferoom_pos, 300.0, true, false, true, TEAM_SURVIVOR);
+                Address navArea_saferoom = L4D_GetNearestNavArea(saferoom_pos, 300.0, true, true, true, TEAM_SURVIVOR);
                 if (navArea_saferoom != Address_Null && !NavArea_IsPotentiallyVisible(cellNavArea,navArea_saferoom,false))
                 {
                     //LogMessage("nav saferoom: not potentially visible, 3 trace rays");
@@ -482,7 +482,7 @@ bool Survivors_CanTravelTo_Pos(float pos[3],
                                Address navAreaSurv = Address_Null,
                                float max_distance = 5000.0)
 {
-    if (navArea == Address_Null) navArea = L4D_GetNearestNavArea(pos, 300.0, true, false, true, TEAM_SURVIVOR);
+    if (navArea == Address_Null) navArea = L4D_GetNearestNavArea(pos, 300.0, true, true, true, TEAM_SURVIVOR);
     if (navArea == Address_Null) return false;
     if (navAreaSurv == Address_Null)
     {
@@ -547,7 +547,7 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float saf
    
     Spawner_CacheSurvivorData();
     float flow_pos = L4D_GetFlowFromPoint(pos);
-    if (navArea == Address_Null) navArea = L4D_GetNearestNavArea(pos, 300.0, true, false, true, TEAM_INFECTED);
+    if (navArea == Address_Null) navArea = L4D_GetNearestNavArea(pos, 300.0, true, true, true, TEAM_INFECTED);
     
     float flowDiff, vecDist;
     Address survNav;
@@ -606,7 +606,7 @@ float min_distance_to_survivors(float pos[3], bool store_client=false, float saf
         {
             if (min_distance<0.0 || vector_distance_saferoom<min_distance)
             {
-                Address navArea_saferoom = L4D_GetNearestNavArea(pos_saferoom, 300.0, true, false, true, TEAM_INFECTED);
+                Address navArea_saferoom = L4D_GetNearestNavArea(pos_saferoom, 300.0, true, true, true, TEAM_INFECTED);
                 if (navArea_saferoom != Address_Null && L4D2_NavAreaBuildPath(navArea,navArea_saferoom,safe_distance,TEAM_INFECTED,false))
                     min_distance = vector_distance_saferoom;
             }

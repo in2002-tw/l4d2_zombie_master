@@ -816,7 +816,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
             //    if (min_distance_last>=0.0 && min_distance_last<DISTANCE_LAST_SAFEROOM)
             //        continue;
             //}
-            navArea = L4D_GetNearestNavArea(randomPos, 300.0, true, false, true, TEAM_INFECTED);
+            navArea = L4D_GetNearestNavArea(randomPos, 300.0, true, true, true, TEAM_INFECTED);
             if (navArea == Address_Null || !nav_can_spawn_zombies(ZOMBIECLASS_COMMON,navArea,_,_,_,_,!expected_angry))
             {
                 //LogMessage("%d Bad nav", i);
@@ -972,7 +972,7 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
             if (flow_pos<=0.0) continue; // witches get turned into commons with negative flow. lol
             if (check_flow && flow_pos <= flow_survivor) continue;
             if (IsObstructed(outPos,_,_,false)) continue; // use zyiks obstruction correction
-            navArea = L4D_GetNearestNavArea(outPos, 300.0, true, false, true, TEAM_INFECTED);
+            navArea = L4D_GetNearestNavArea(outPos, 300.0, true, true, true, TEAM_INFECTED);
             if (navArea == Address_Null || !nav_can_spawn_zombies(ZOMBIECLASS_WITCH,navArea,_,_,_,_,true)) continue;
             if (!Survivors_CanTravelTo_Pos(outPos,navArea)) continue; // witch must be a potential obstacle
             if (can_any_alive_survivor_see_cheap(outPos,_,navArea,_)) continue;
@@ -1017,7 +1017,7 @@ bool Analog_ResolveSpecialPosition(int zombieclass, bool flow, float outPos[3])
             i += 1;
             if (!L4D_GetRandomPZSpawnPosition(target_client, zombieclass, 1, outPos)) continue;
             if (IsObstructed(outPos,_,_,false)) continue; // use zyiks obstruction correction
-            navArea = L4D_GetNearestNavArea(outPos, 300.0, true, false, true, TEAM_INFECTED);
+            navArea = L4D_GetNearestNavArea(outPos, 300.0, true, true, true, TEAM_INFECTED);
             if (navArea == Address_Null || !nav_can_spawn_zombies(zombieclass,navArea)) continue;
             if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(outPos,_,navArea,_)) continue;
             g_bAnalogFlowUsed = true;
