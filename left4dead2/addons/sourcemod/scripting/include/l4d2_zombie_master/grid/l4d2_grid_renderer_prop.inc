@@ -498,6 +498,7 @@ static void GridRendererProp_UpdateEntity(int client, int idx,
 	else effects = effects | EF_NOSHADOW | EF_NOINTERP;
 	SetEntProp(ent, Prop_Send, "m_fEffects", effects);
 
+	if (!glow) glow = !can_ZM_see(position,1.0);
 	GridRendererProp_SetGlow(ent, glow, color);
 }
 
@@ -516,7 +517,13 @@ static void GridRendererProp_UpdateEntityColor(int client, int idx, const int co
     if (g_iSpawnerMode<2) effects = effects | EF_NOSHADOW;
     else effects = effects | EF_NOSHADOW | EF_NOINTERP;
 	SetEntProp(ent, Prop_Send, "m_fEffects", effects);
-
+	
+	if (!glow) // Deus Ex I never asked for this meme
+	{
+		static float position[3];
+		GetEntPropVector(ent,Prop_Send,"m_vecOrigin",position);
+		glow = !can_ZM_see(position,1.0);
+	}
 	GridRendererProp_SetGlow(ent, glow, color);
 }
 

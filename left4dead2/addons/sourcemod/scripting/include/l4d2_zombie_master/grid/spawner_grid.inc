@@ -199,6 +199,12 @@ static bool Grid_ValidateCell(int idx, float pos[3], Address navArea, bool obstr
         return false;
     }
     
+    if (!Valid_Ground(pos))
+    {
+        g_iGridValidateContext = SPAWNER_OTHER;
+        return false;
+    }
+
     if (cell_cooldown(g_GridCellIndices[idx]))
     {
        g_iGridValidateContext = SPAWNER_SIGHT;

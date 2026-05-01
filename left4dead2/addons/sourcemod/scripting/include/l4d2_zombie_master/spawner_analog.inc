@@ -273,6 +273,14 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
             fail = true;
         }
     }
+    if (!fail)
+    {
+        if (!Valid_Ground(vPos_spawner))
+        {
+            fail = true;
+            spawner_state = SPAWNER_OTHER;
+        }
+    }
     if (!fail || draw) // nav area travel distance is expensive, skip if not needed
     {
         //float t = GetEngineTime();

@@ -1502,7 +1502,7 @@ bool entity_solid(int entity)
 }
 
 // TraceFilter for predicting if an infected entity might be stuck: ignore infected, witches and special infected
-bool TraceFilter_Stuck_IgnoreZombies(int entity, int contentsMask, int ignore_entity)
+bool TraceFilter_Stuck_IgnoreZombies(int entity, int contentsMask, int ignore_entity = -1)
 {
 	if (entity==ignore_entity) return false;
 	if (entity==0) return true;
@@ -2910,18 +2910,15 @@ float distance_last_saferoom(float pos[3])
 }
 
 // Check if ZM can see position
-bool can_ZM_see(float vPos[3])
+bool can_ZM_see(const float vPos[3], float dz = 32.0)
 {
     if (!IsValidClientZM()) return false;
-    float vEye[3], vPos2[3];
+    static float vEye[3], vPos2[3];
     GetClientEyePosition(zm_client,vEye);
     if (GetVectorDistance(vPos,vEye)>=fog_distance) return false;
-    vPos2 = vPos; vPos2[2] += 32.0;
-    bool can_see = true;
-    Handle trace = TR_TraceRayFilterEx(vEye,vPos2,MASK_VISIBLE,RayType_EndPoint,FilterLOS,zm_client);
-    if(TR_DidHit(trace)) can_see = false;
-    delete trace;
-    return can_see;
+    vPos2 = vPos; vPos2[2] += dz;
+    TR_TraceRayFilter(vEye,vPos2,MASK_VISIBLE,RayType_EndPoint,FilterLOS,zm_client);
+    return !TR_DidHit(INVALID_HANDLE);
 }
 
 // Entity filter for LOS checks. Ignore players, infected, witches, and everything else that is see-through (transparent).
@@ -3013,4 +3010,14 @@ stock bool is_player_vomited(int client)
     t_end -= 0.1; // smooth transition between custom glow and survivor glow
     if (GetGameTime()>=t_end) return false;
     return true;
+}
+
+// Check if ground is solid at pos. dz is max allowed distance down
+stock bool Valid_Ground(float pos[3], float dz = 25.0)
+{
+    static float pos2[3];
+    pos2 = pos;
+    pos2[2] -= dz;
+    TR_TraceHullFilter(pos,pos2,{-HULL_DX_STRICT,-HULL_DX_STRICT,0.0},{HULL_DX_STRICT,HULL_DX_STRICT,1.0},MASK_PLAYERSOLID,TraceFilter_Stuck_IgnoreZombies);
+    return TR_DidHit(INVALID_HANDLE);
 }
