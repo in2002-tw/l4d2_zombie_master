@@ -379,11 +379,14 @@ stock bool GridRendererProp_PrecacheAssets()
 	PrecacheModel(GRIDRENDERERPROP_MODEL, true);
 
 	// Add model files to downloads table
-	AddFileToDownloadsTable("models/grid/grid_cell.mdl");
-	AddFileToDownloadsTable("models/grid/grid_cell.vvd");
-	AddFileToDownloadsTable("models/grid/grid_cell.dx90.vtx");
-	AddFileToDownloadsTable("materials/models/grid/grid_cell.vmt");
-	AddFileToDownloadsTable("materials/models/grid/grid_cell.vtf");
+	if (FindConVar("sv_allowdownload").BoolValue)
+	{
+		AddFileToDownloadsTable("models/grid/grid_cell.mdl");
+		AddFileToDownloadsTable("models/grid/grid_cell.vvd");
+		AddFileToDownloadsTable("models/grid/grid_cell.dx90.vtx");
+		AddFileToDownloadsTable("materials/models/grid/grid_cell.vmt");
+		AddFileToDownloadsTable("materials/models/grid/grid_cell.vtf");
+	}
 
 	return true;
 }

@@ -166,7 +166,6 @@ stock void GridRenderer_ResolveColor(bool isValid, bool isClosest, int color[4],
 	if (isClosest && g_iSpawnerMode==2)
 	{
 		if (isValid) color = GRIDRENDERER_COLOR_HIGHLIGHT;
-		
 		else
 		{
 			if (context>SPAWNER_NAV) color = GRIDRENDERER_COLOR_HIGHLIGHT_CONDITIONAL;
