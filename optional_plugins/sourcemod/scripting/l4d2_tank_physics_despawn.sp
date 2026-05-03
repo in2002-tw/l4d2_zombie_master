@@ -11,7 +11,7 @@
 
 ConVar g_hCvarDespawn;
 #define MAXENTITIES        2048
-bool marked[MAXENTITIES+1]; // entities marked for deletion
+bool marked[MAXENTITIES+1]; // mark entities that have been processed already
 
 public Plugin myinfo =
 {
@@ -50,7 +50,7 @@ public void OnEntityCreated(int entity, const char[] classname)
 
 void OnHitByTank(const char[] output, int activator, int caller, float delay)
 {
-    if (g_hCvarDespawn.FloatValue<0.1) return;
+    if (g_hCvarDespawn.FloatValue<=0.0) return;
     if (activator!=caller) return;
     #if DEBUG
         LogMessage("%s %d %d %f", output, activator, caller, delay);
@@ -61,7 +61,7 @@ void OnHitByTank(const char[] output, int activator, int caller, float delay)
 // When a tank rock touches an entity to bounce
 public void L4D_TankRock_BounceTouch_Post(int tank, int rock, int entity)
 {
-    if (g_hCvarDespawn.FloatValue<0.1) return;
+    if (g_hCvarDespawn.FloatValue<=0.0) return;
     #if DEBUG
         static char class[64];
         GetEntityClassname(entity, class, sizeof(class));
@@ -118,12 +118,12 @@ bool entity_ignore(int entity)
 // Mark entity for death
 void entity_mark(int entity)
 {
-    if (g_hCvarDespawn.FloatValue<0.1) return;
     #if DEBUG
         LogMessage("%d marked for deletion", entity);
     #endif
     //marked[entity] = true;
-    CreateTimer(g_hCvarDespawn.FloatValue,Timer_Delete_Entity,EntIndexToEntRef(entity),TIMER_FLAG_NO_MAPCHANGE);
+    if (g_hCvarDespawn.FloatValue<0.1) Timer_Delete_Entity(null,EntIndexToEntRef(entity));
+    else CreateTimer(g_hCvarDespawn.FloatValue,Timer_Delete_Entity,EntIndexToEntRef(entity),TIMER_FLAG_NO_MAPCHANGE);
 }
 
 // Kill entity
