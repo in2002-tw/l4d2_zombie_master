@@ -477,76 +477,76 @@
 
 	"Angry"
 	{
-		"zho"			"Angry"
+		"zho"			"憤怒模式"
 	}
 
         "Obstacle"
 	{
-		"zho"			"Obstacle"
+		"zho"			"障礙物"
 	}
 
         "Selected Special"
 	{
 		"#format"		"{1:s},{2:d},{3:d}"
-		"zho"			"{1} {2}/{3} HP"
+		"zho"			"{1} 生命值: {2}/{3}"
 	}
 
 	"Offered ZM Ticker"
 	{
 		"#format"		"{1:s},{2:d}"
-		"zho"			"ZM offered: {1} ({2})"
+		"zho"			"ZM 邀約候選人: {1} ({2})"
 	}
 	
 	"Offer ZM"
 	{
-		"zho"			"You are offered Zombie Master. Accept?"
+		"zho"			"邀請你擔任殭屍大師，是否接受？"
 	}
 
         "Flow hint"
 	{
-		"zho"			"Target a survivor for automatic spawns."
+		"zho"			"瞄準倖存者以自動生成殭屍。"
 	}
 
 	"Max tank discount"
 	{
-		"zho"			"Tank discount has been maximized!"
+		"zho"			"Tank 折扣已達上限！"
 	}
 
 	"AutoCommon"
 	{
-		"zho"			"AutoCommon"
+		"zho"			"自動生成小殭屍"
 	}
 	
 	"AutoCommon ALWAYS"
 	{
-		"zho"			"Mode: ALWAYS"
+		"zho"			"模式：總是開啟"
 	}
 	
 	"AutoCommon PANIC"
 	{
-		"zho"			"Mode: PANIC"
+		"zho"			"模式：僅限暴走"
 	}
 	
 	"AutoCommon OFF"
 	{
-		"zho"			"Mode: OFF"
+		"zho"			"模式：關閉"
 	}
 	
 	"AutoCommon Max"
 	{
 		"#format"		"{1:d}"
-		"zho"			"Max: {1}"
+		"zho"			"最大數量：{1}"
 	}
 	
 	
 	"Freeze Specials"
 	{
-		"zho"			"Freeze SI"
+		"zho"			"凍結特感"
 	}
 	
 	"Unfreeze Specials"
 	{
-		"zho"			"Unfreeze SI"
+		"zho"			"解除凍結特感"
 	}
 	
 
