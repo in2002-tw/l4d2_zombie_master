@@ -5,7 +5,7 @@
 #include <left4dhooks>
 
 #define PLUGIN_NAME			    "l4d2_tank_physics_despawn"
-#define PLUGIN_VERSION 			"1.00"
+#define PLUGIN_VERSION 			"1.01"
 #define CONFIG_FILENAME         PLUGIN_NAME
 #define DEBUG 0
 
@@ -81,18 +81,38 @@ void entity_hit_by_tank(int entity)
 // Check if entity should be ignored
 bool entity_ignore(int entity)
 {
-    if (entity<=MAXPLAYERS) return true;
     if (!IsValidEdict(entity)) return true;
-    if (marked[entity]) return true;
-    if (GetEntityMoveType(entity)!=MOVETYPE_VPHYSICS) return true;
-    if (GetEntProp(entity,Prop_Send,"m_isCarryable")>0) return true;
-    if (!entity_solid(entity)) return true;
+    if (marked[entity]) return true; // entity already checked
+    marked[entity] = true; // mark entity as checked now
+    if (entity<=MaxClients) return true;
+    MoveType movetype = GetEntityMoveType(entity);
+    if (movetype!=MOVETYPE_VPHYSICS)
+    {
+        #if DEBUG
+            LogMessage("entity_ignore %d: movetype %d", entity, movetype);
+        #endif
+        return true;
+    }
+    if (GetEntProp(entity,Prop_Send,"m_isCarryable")>0)
+    {
+        #if DEBUG
+            LogMessage("entity_ignore %d: carryable", entity);
+        #endif
+        return true;
+    }
+    if (!entity_solid(entity))
+    {
+        #if DEBUG
+            LogMessage("entity_ignore %d: not solid");
+        #endif
+        return true;
+    }
     int spawnflags = GetEntProp(entity,Prop_Send,"m_spawnflags");
-    if (spawnflags & 4) return true; // Debris
-    if (spawnflags & 2097152) return true; // No Collisions
     #if DEBUG
         LogMessage("%d spawnflags %d", entity, spawnflags);
     #endif
+    if (spawnflags & 4) return true; // Debris
+    if (spawnflags & 2097152) return true; // No Collisions
     return false;
 }
 
@@ -102,7 +122,7 @@ void entity_mark(int entity)
     #if DEBUG
         LogMessage("%d marked for deletion", entity);
     #endif
-    marked[entity] = true;
+    //marked[entity] = true;
     CreateTimer(g_hCvarDespawn.FloatValue,Timer_Delete_Entity,EntIndexToEntRef(entity),TIMER_FLAG_NO_MAPCHANGE);
 }
 
