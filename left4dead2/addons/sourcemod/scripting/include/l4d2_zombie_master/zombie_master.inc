@@ -3013,7 +3013,7 @@ stock bool is_player_vomited(int client)
 }
 
 // Check if ground is solid at pos. dz is max allowed distance down
-stock bool Valid_Ground(float pos[3], float dz = 25.0)
+stock bool Valid_Ground(float pos[3], float dz = 40.0)
 {
     static float pos2[3];
     pos2 = pos;
