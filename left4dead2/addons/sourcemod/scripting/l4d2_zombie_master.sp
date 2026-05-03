@@ -18,6 +18,9 @@
 // HUGE THANKS TO Reagy and IronBar for hosting the Knockout Left 4 Dead 2 Server
 // Sentence-mixed survivor voice lines: Skerion. Ellis voice line by zyiks
 
+// Changelog for 0.9.2
+// 1. Specials will refund correctly if their cooldown is less than 1.0s.
+
 #pragma semicolon 1
 #pragma newdecls required
 #pragma dynamic 131072
@@ -33,7 +36,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.1 2026-05-01"
+#define PLUGIN_VERSION 			"0.9.11 2026-05-02"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -68,53 +71,7 @@ public Plugin myinfo =
 	url = "https://forums.alliedmods.net/showthread.php?t=352060, https://github.com/gvazdas/l4d2_zombie_master"
 }
 
-// Changelog for 0.9.1
-// 1. Bug fixed where uncommons can sometimes instantly die on spawn.
-// 2. Rare bug hopefully fixed where commons try to attack empty space in Finales and Survival.
-// 4. Random SI model bug fixed for tanks.
-// 5. If you take over a tank that is climbing level geometry, you can get stuck. Fixed.
-// 6. Compatibility with jukebox by Silvers.
-// 7. Improved compatibility with plugins that modify survivor_set.
-// 8. Custom maps tested: Daybreak, I Hate Mountains 2, Urban Flight, Warcelona
-// 11. Compatibility with l4d2_shoot_alert_common. Plugin gets disabled during prep stage and re-activated on round start.
-// 13. New cvar: zm_say_horde which makes survivors team chatting spawn horde.
-// 15. zm_tankrun, zm_onlycommons, zm_jockeys
-// 16. zm_randomizer
-// 17. ZM menus updated to better represent game rules, like no specials, no witches, no commons, no uncommons, etc.
-// 18. New cvar: zm_panic_rate_multiplier
-// 19. New cvar: zm_ability_nocooldown
-// 20. zm_max_si behavior update: acceptable values -3, -2, -1, 0, etc.
-// 21. Many bug fixes.
-// 22. new cvar: zm_notanks
-// 23. L4D_NavArea_IsBlocked implemented.
-// 24. New admin menu.
-// 25. Activity detection for ZM offer now sees chat messages.
-// 26. More model variety for uncommon infected.
-// 27. Majority of code moved to /include
-// 28. Major spawner overhaul: GridLib implemented
-// 29. Some game logic related checks were referencing GetEngineTime and not GameTime.Whoops!
-// 30. Spawner memory: the last valid spawn location is kept in the spawner memory, and used where applicable.
-// 31. PVS (Potentially Visible Set) added to survivor visiblity checks for performance.
-// 32. Detection of free panic events triggered by the map were improved. Spontaneous panic should not happen anymore.
-// 33. Commons cannot be deleted when there is an active pipe bomb or vomit jar on the field.
-// 34. Witches and Specials cannot be deleted if they are afflicted by a vomit jar.
-// 35. Spawner will now properly visualize spawn rules for different zombie groups, i.e. commons, specials and witches. Witches can be placed almost anywhere!
-// 36. Angry (rushing) commons spawned by ZM targeting a survivor, will attempt to attack that specific survivor.
-// 37. Spawner will now remember the last valid spawn location.
-// 38. Flow spawn overhaul. Witches and non-angry commons will no longer spawn off the survivor path.
-// 39. Survivors rescued from a closet will trigger a zombie cooldown reset for zombie master.
-// 40. Obstruction rescue.
-// 41. Line-of-sight checks will now correctly pass through glass and windows.
-// 42. ZM look target is now more robust by doing trace hull instead of trace ray.
-// 43. Major performance improvements. Common zombie spawns have a dedicated 30 ms CPU budget to reduce server stutter.
-// 44. New spawner modes: Default, Default+Grid, Grid.
-// 45. For the custom gamemode zm_clowns, my plugin clown_world will activate if you have it installed, randomizing color of all entities on the map.
-// 46. New custom voicelines by Skerion: Coach, Nick, Zoey, Francis
-// 47. New cvar: zm_cursed, which makes spawned zombies have random proportions.
-// 48. Angry zombies, when given a survivor to chase, will attempt to chase that survivor.
-// 49. Better navmesh validation. Rescue closet navmeshes without rescue doors allow zombies to spawn. Navmeshes asking zombies not to be spawned will check for trigger_hurt nearby.
-// 50. Distance to last saferoom is checked to avoid exploits.
-// 51. Improved visibility to first saferoom checks.
+// Changelog for 0.9.2
 
 // TO DO LIST:
 // 5. Gas station tornado (done by zyiks, not implemented)
@@ -2394,7 +2351,7 @@ public void OnEntityDestroyed(int entity)
                  int ability = GetEntPropEnt(entity, Prop_Send, "m_customAbility");
                  if (ability > 0 && IsValidEdict(ability))
                  {
-                     if ((GetEntPropFloat(ability, Prop_Send, "m_timestamp")-GetGameTime())>0.0) 
+                     if ((GetEntPropFloat(ability, Prop_Send, "m_timestamp")-GetGameTime())>1.0) 
                          refund = false;
                  }
              }
