@@ -654,7 +654,7 @@ Action zm_update(Handle timer = null)
            	{
            		if (!IsValidClient(i) || !IsPlayerAlive(i) || !IsFakeClient(i) || GetClientTeam(i)!=TEAM_INFECTED) continue;
                 if (ignore_threats[i]) continue;
-           		if (GetEntProp(i, Prop_Send, "m_hasVisibleThreats")>0)
+           		if (GetEntProp(i, Prop_Send, "m_hasVisibleThreats")>0 || L4D2_GetSurvivorVictim(i)>0)
            		{
                		set_specials_frozen(false);
                		if (IsValidClientZM()) EmitSoundToClient(zm_client,SOUND_START,_,_,_,_,_,GetRandomInt(95,105));
@@ -2004,7 +2004,7 @@ void EvtPlayerRescued(Event event, const char[] name, bool dontBroadcast)
 void EvtRescueDoorOpen(Event event, const char[] name, bool dontBroadcast)
 {
     g_bRescueDoor = true;
-    CreateTimer(g_fUpdateRate,Timer_reset_rescue_door,TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(2.0*g_fUpdateRate,Timer_reset_rescue_door,TIMER_FLAG_NO_MAPCHANGE);
 }
 
 Action Timer_reset_rescue_door(Handle timer)
