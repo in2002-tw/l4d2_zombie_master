@@ -915,6 +915,7 @@ int ZM_Spawn_SI(int client, int ZOMBIECLASS, bool free = false, bool setpos=fals
             }
 
             Spawner_NotifySpawned(bot);
+			ignore_threats[bot] = false;
             if (!playcount_increased && zm_stage>=ZM_STARTED) increase_playcount(zm_client);
         }
         else update_EMS_HUD();

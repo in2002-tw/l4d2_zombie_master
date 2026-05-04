@@ -18,9 +18,6 @@
 // HUGE THANKS TO Reagy and IronBar for hosting the Knockout Left 4 Dead 2 Server
 // Sentence-mixed survivor voice lines: Skerion. Ellis voice line by zyiks
 
-// Changelog for 0.9.2
-// 1. Specials will refund correctly if their cooldown is less than 1.0s.
-
 #pragma semicolon 1
 #pragma newdecls required
 #pragma dynamic 131072
@@ -36,7 +33,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.11 2026-05-02"
+#define PLUGIN_VERSION 			"0.9.11a 2026-05-03"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -72,6 +69,8 @@ public Plugin myinfo =
 }
 
 // Changelog for 0.9.2
+// 1. Fixed Specials not refunding if deleted immediately on spawn due to ability cooldown checks
+// 2. Ambush system: Specials that are vomited on, fighting Survivors, or burning, are not included in Freeze/Unfreeze commands.
 
 // TO DO LIST:
 // 5. Gas station tornado (done by zyiks, not implemented)
@@ -653,9 +652,8 @@ Action zm_update(Handle timer = null)
         {
            	for( int i = 1; i <= MaxClients; i++ )
            	{
-           		if (!IsClientInGame(i)) continue;
-           		if (!IsPlayerAlive(i)) continue;
-           	    if (GetClientTeam(i)!=TEAM_INFECTED || !IsFakeClient(i)) continue;
+           		if (!IsValidClient(i) || !IsPlayerAlive(i) || !IsFakeClient(i) || GetClientTeam(i)!=TEAM_INFECTED) continue;
+                if (ignore_threats[i]) continue;
            		if (GetEntProp(i, Prop_Send, "m_hasVisibleThreats")>0)
            		{
                		set_specials_frozen(false);
@@ -1044,6 +1042,7 @@ Action zm_new_round(Handle timer = null)
 	targetName_pending = "";
 	model_pending = "";
 	pending_tank = false;
+    ignore_threat_pending = false;
 	
 	if (fq_timer==INVALID_HANDLE) fq_timer = CreateTimer(1.0,fair_queue_update);
 	
@@ -1135,6 +1134,7 @@ Action CountClients(Handle timer = null)
     	targetName_pending = "";
     	pending_tank = false;
     	model_pending = "";
+        ignore_threat_pending = false;
     	if (first_tank_stage==FIRST_TANK_SPAWNED) first_tank_stage = FIRST_TANK_DEAD;
 	}
 	
@@ -2113,6 +2113,7 @@ void evtPlayerSpawned(Event event, const char[] name, bool dontBroadcast)
                	if (health>1) SetEntProp(client,Prop_Data,"m_iHealth",health-1); // prevent possible same-frame refund exploit
                	DispatchKeyValue(client, "targetname", targetName_pending);
                	SetEntProp(client,Prop_Data,"m_iMaxHealth", maxhp_pending);
+                ignore_threats[client] = ignore_threat_pending;
                	if (model_pending[0]!=0)
                	{
                    	SetEntityModel(client, model_pending);
@@ -2120,18 +2121,17 @@ void evtPlayerSpawned(Event event, const char[] name, bool dontBroadcast)
                	}
            	}
        	}
-       	if (specials_frozen && IsFakeClient(client)) freeze_player(client,true,TEAM_INFECTED);
+       	if (specials_frozen && IsFakeClient(client) && !ignore_threats[client]) freeze_player(client,true,TEAM_INFECTED);
       }
 }
 
 void Event_PlayerShoved(Event event, const char[] name, bool dontBroadcast)
 {
-    if (!g_bCvarAllow) return;
-    if (!specials_frozen || zm_stage!=ZM_STARTED) return;
+    if (!g_bCvarAllow || !specials_frozen || zm_stage!=ZM_STARTED) return; 
     int victim = GetClientOfUserId(event.GetInt("userid"));
-    if (IsValidClient(victim) && IsFakeClient(victim) && GetClientTeam(victim)==TEAM_INFECTED)
+    if (IsValidClient(victim) && !ignore_threats[victim] && IsFakeClient(victim) && GetClientTeam(victim)==TEAM_INFECTED)
     {
-        int client = event.GetInt("attacker");
+        int client = GetClientOfUserId(event.GetInt("attacker"));
        	if (IsValidClient(client) && GetClientTeam(client)!=TEAM_INFECTED)
        	{
            set_specials_frozen(false);
@@ -2148,7 +2148,7 @@ void EvtPlayerHurt(Event event, const char[] name, bool dontBroadcast)
 	if (DEBUG) LogMessage("[zm] EvtPlayerHurt %d", client);
 	request_update_glow(client);
 	
-	if (specials_frozen && zm_stage==ZM_STARTED && IsFakeClient(client) && GetClientTeam(client)==TEAM_INFECTED)
+	if (specials_frozen && zm_stage==ZM_STARTED && !ignore_threats[client] && IsFakeClient(client) && GetClientTeam(client)==TEAM_INFECTED)
     {
        	int attacker = event.GetInt("attackerentid");
        	if (IsValidClient(attacker) && GetClientTeam(attacker)!=TEAM_INFECTED)

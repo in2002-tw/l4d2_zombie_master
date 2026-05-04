@@ -100,6 +100,22 @@ stock int get_occupied_units(int max, int available, int live)
     return occupied;
 }
 
+// Check if Special Infected should be ignored in the Ambush system.
+// When Freeze command is about to fire, here we check if client is fighting Survivors.
+bool should_ignore_freeze(int client)
+{
+    if (GetEntProp(client, Prop_Send, "m_hasVisibleThreats")>0) return true;
+    if (is_player_vomited(client)) return true;
+    if (GetEntityFlags(client) & FL_ONFIRE) return true;
+    if (L4D_IsPlayerIncapacitated(client)) return true;
+    if (L4D2_GetSurvivorVictim(client)>0) return true;
+    // Check if received damage from Survivors the last 5.0 seconds
+    static float pos[3];
+    GetClientAbsOrigin(client,pos);
+    if (can_any_alive_survivor_see_cheap(pos)) return true;
+    return false;
+}
+
 void freeze_player(int client, bool state = true, int team = TEAM_SURVIVOR)
 {
     if(IsValidClient(client) && client!=zm_client && GetClientTeam(client)==team && IsPlayerAlive(client))
@@ -113,13 +129,19 @@ void freeze_player(int client, bool state = true, int team = TEAM_SURVIVOR)
             if (team == TEAM_SURVIVOR) SetEntProp(client, Prop_Data, "m_takedamage", 0);
             else if (IsFakeClient(client))
             {
-                SetEntPropEnt(client, Prop_Send, "m_lookatPlayer",-1);
-                SetEntProp(client, Prop_Send, "m_hasVisibleThreats",0);
-                if (zClass==ZOMBIECLASS_TANK)
+                if (should_ignore_freeze(client))
                 {
-                    //if (hTankEnterStasis) SDKCall(hTankEnterStasis,client);
-                    SetEntProp(client, Prop_Send, "m_zombieState",0);
+                    ignore_threats[client] = true;
+                    return;
                 }
+                ignore_threats[client] = false;
+                //SetEntPropEnt(client, Prop_Send, "m_lookatPlayer",-1);
+                //SetEntProp(client, Prop_Send, "m_hasVisibleThreats",0);
+                //if (zClass==ZOMBIECLASS_TANK)
+                //{
+                //    //if (hTankEnterStasis) SDKCall(hTankEnterStasis,client);
+                //    SetEntProp(client, Prop_Send, "m_zombieState",0);
+                //}
             }
     		//SetEntityMoveType(client, MOVETYPE_NONE);
     		SetEntProp(client, Prop_Send, "m_fFlags", GetEntProp(client, Prop_Send, "m_fFlags")|FL_FROZEN);

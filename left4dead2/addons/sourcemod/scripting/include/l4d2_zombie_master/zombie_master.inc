@@ -342,8 +342,8 @@ bool panic = false;
 float t_last_panic = 0.0;
 int g_iEntities; // track number of edicts and entities
 bool zm_allow_spawns = true; // in survival, prevent spawns until survivors have started timer
-Handle zm_timer = INVALID_HANDLE; // zm_update timer, repeats periodically
-Handle clients_timer = INVALID_HANDLE; // CountClients() timer which does not run twice if there's already a timer set to run it
+Handle zm_timer; // zm_update timer, repeats periodically
+Handle clients_timer; // CountClients() timer which does not run twice if there's already a timer set to run it
 char ZM_hint[128];
 bool EMS_hud_ready = false; // track whether HUD was initialized
 int roundcount = 0;
@@ -362,21 +362,23 @@ bool pending_tank = false;
 char targetName_pending[64]; // pending targetname for takeover tank
 char model_pending[64]; // pending model for takeover tank
 int maxhp_pending = 0; // pending max hp for takeover tank
+bool ignore_threat_pending; // pending threat state for takeover tank
 bool active_looktarget = false; // live update HP for special infected ZM is looking at
-Handle hp_timers[MAXENTITIES+1] = {INVALID_HANDLE, ...}; // prevent extremely frequent glow updates
+Handle hp_timers[MAXENTITIES+1]; // reduce glow update spam
 bool l4d2_specials = true;
 bool force_started = false;
 bool g_bMapStarted = false;
 bool clients_in_server = false; // track whether HUD needs to be updated
 float t_round_start = 0.0;
 bool natural_first_wait = false; // wait for first natural mob timer reset, when survivors leave saferoom usually.
-bool clients_active[MAXPLAYERS+1] = {false,...};
+bool clients_active[MAXPLAYERS+1];
+bool ignore_threats[MAXPLAYERS+1]; // set which Specials to ignore for Ambush system
 bool first_active = false; // track whether ANY player has shown signs of life before starting to offer ZM
-bool dominated[MAXPLAYERS+1] = {false,...};
-bool zm_win_announced = false;
+bool dominated[MAXPLAYERS+1];
+bool zm_win_announced;
 float clients_t_join[MAXPLAYERS+1] = {0.0,...};
-Handle fq_timer = INVALID_HANDLE;
-Handle ems_hud_timer = INVALID_HANDLE;
+Handle fq_timer;
+Handle ems_hud_timer;
 bool recordpos = true; // for tank stutter fix
 
 // Spawner_CacheSurvivorData: PVS (Potentially Visible Set) engine calls + survivor position an
@@ -2189,6 +2191,8 @@ Action ZMControlSI(int client, int args)
             if (strcmp(targetName,"zm_control")==0) targetName = "";
             else if (strcmp(targetName,"zm_unit_control")==0) targetName = "zm_unit";
             DispatchKeyValue(zm_client, "targetname", "zm_client");
+
+            bool ignore_threat = specials_frozen && should_ignore_freeze(zm_client);
             
             if (zClass == ZOMBIECLASS_TANK)
             {
@@ -2196,6 +2200,7 @@ Action ZMControlSI(int client, int args)
                 targetName_pending = targetName;
                 maxhp_pending = maxhealth;
                 model_pending = sModelName;
+                ignore_threat_pending = ignore_threat;
                 if (DEBUG) LogMessage("[zm] targetName_pending %s", targetName_pending);
                 CreateTimer(0.1,Timer_Clear_targetname_pending,TIMER_FLAG_NO_MAPCHANGE);
                 L4D_ReplaceWithBot(zm_client);
@@ -2214,6 +2219,7 @@ Action ZMControlSI(int client, int args)
                 if (IsValidEntity(bot))
                 {
                     transfer_SI_properties(bot,sModelName,vOrigin,vAngles,vVelocity,health,maxhealth,fFlags,timestamp_cooldown,targetName,vomit_timestamp,stagger);
+                    if (ignore_threat) ignore_threats[bot] = true;
                 }
                 
             }
