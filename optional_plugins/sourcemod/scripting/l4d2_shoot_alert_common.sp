@@ -7,7 +7,7 @@
 #include <left4dhooks>
 #include <l4d2_shoot_alert_common>
 
-#define PLUGIN_VERSION 		"2.15 2026-05-07"
+#define PLUGIN_VERSION 		"2.17 2026-05-08"
 public Plugin myinfo =
 {
 	name = "[L4D2] Weapon Fire Alert Common",
@@ -16,18 +16,6 @@ public Plugin myinfo =
 	version = PLUGIN_VERSION,
 	url = "https://forums.alliedmods.net/showthread.php?t=352360, https://github.com/gvazdas/l4d2_zombie_master"
 }
-
-// Changelog v2.15:
-// 1. CEDA multiplier
-// 2. Rewrite with CreateDataTimer
-// 3. Infected head attachment used for LOS checks
-// 4. Added Car alarm detection to turn off hooks
-// 5. Separated finale and survival
-// 6. Added map_transition
-// 7. Native L4D2_Infected_Alert_Constructor now available to external plugins.
-// 8. Vomit jar detonation resets all alerts.
-// 9. Moved to include.
-// 10. Made infected hit by vomit jars ignore alerts.
 
 public void OnPluginStart()
 {   
@@ -247,6 +235,7 @@ public void OnClientPutInServer(int client)
 {
     if (!weapon_fire_hooked || client<=0 || client>MaxClients) return;
     timers[client] = null;
+    spoken[client] = false;
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)

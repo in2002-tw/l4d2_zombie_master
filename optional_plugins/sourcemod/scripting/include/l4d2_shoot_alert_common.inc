@@ -135,10 +135,7 @@ void IsAllowed()
 void MapStarted()
 {
     map_started = true;
-    if (!enabled) return;
-    late_enable();
-    if (weapon_fire_hooked || timer_hook!=null) return;
-    timer_hook = CreateTimer(0.1,timer_check_hooks,_,TIMER_FLAG_NO_MAPCHANGE);
+    if (enabled) late_enable();
 }
 
 void check_hooks(int state = HOOKS_AUTO) // Dynamically hook/unhook weapon_fire and NormalSoundHook for performance.
