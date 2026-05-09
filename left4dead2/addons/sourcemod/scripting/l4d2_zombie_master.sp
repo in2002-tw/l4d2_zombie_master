@@ -274,6 +274,9 @@ public void OnPluginStart()
 	g_hTankCooldown = CreateConVar("zm_tank_cooldown", "60.0", "Tank cooldown, in seconds.",FCVAR_PROTECTED, true, 0.0, true, 100000.0);
 	g_hTankCooldown.AddChangeHook(ConVarChanged_Cvars);
 	
+    g_hSpitterCooldown = CreateConVar("zm_spitter_cooldown", "40.0", "Spitter cooldown, in seconds.",FCVAR_PROTECTED, true, 0.0, true, 100000.0);
+	g_hSpitterCooldown.AddChangeHook(ConVarChanged_Cvars);
+
 	g_hSpecialCooldown = CreateConVar("zm_special_cooldown", "20.0", "Cooldown for special infected spawns, in seconds.",FCVAR_PROTECTED, true, 0.0, true, 100000.0);
 	g_hSpecialCooldown.AddChangeHook(ConVarChanged_Cvars);
 	

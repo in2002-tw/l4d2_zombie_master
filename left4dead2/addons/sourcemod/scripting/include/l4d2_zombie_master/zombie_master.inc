@@ -515,13 +515,13 @@ ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer,
        g_hUpdateRate, g_hMaxCommons, g_hSpawnMinDistance, g_hBonusCarAlarm, g_hBonusFinaleStage, g_hPanicCost, g_hBonusSurvival, g_hAbilityCooldown,
        g_hCostBoomer, g_hCostSpitter, g_hCostHunter, g_hCostSmoker, g_hCostJockey, g_hMaxWitches, g_hMaxSI, g_hSpecialCooldown, g_hNoZMWarn,
        g_hCostCharger, g_hCostTank, g_hCostWitchStatic, g_hCostWitchMoving, g_hCostCommon, g_hCostUncommon, g_hLockSaferoom,
-       g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait, g_hPanicRateMultiplier,
+       g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hSpitterCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait, g_hPanicRateMultiplier,
        g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons, g_hAllowFreeze,
        //g_hGridSearchRadius,
        g_hGrid, g_hSpawnerMode, g_hPanicRefill, g_hCursed, g_hGridCooldown;
 
 float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fStopInactivity,g_fSpecialCooldown, g_fPanicRateMultiplier,
-g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout,
+g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fSpitterCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout,
 //g_fGridSearchRadius,
 g_fAbilityCooldown, g_fGridCooldown;
 
@@ -740,6 +740,7 @@ void GetCvars()
     
     g_fSpecialCooldown = g_hSpecialCooldown.FloatValue;
     g_fTankCooldown = g_hTankCooldown.FloatValue;
+    g_fSpitterCooldown = g_hSpitterCooldown.FloatValue;
     g_fWitchCooldown = g_hWitchCooldown.FloatValue;
     g_fCommonRate = g_hCommonRate.FloatValue;
     

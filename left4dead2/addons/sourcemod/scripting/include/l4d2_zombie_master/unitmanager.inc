@@ -273,6 +273,7 @@ float get_class_cooldown(int ZOMBIECLASS)
     {
         case ZOMBIECLASS_WITCH: return g_fWitchCooldown;
         case ZOMBIECLASS_TANK: return g_fTankCooldown;
+        case ZOMBIECLASS_SPITTER: return g_fSpitterCooldown;
         default: return g_fSpecialCooldown;
     }
 }
