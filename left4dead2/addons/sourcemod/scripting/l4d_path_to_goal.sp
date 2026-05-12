@@ -95,6 +95,7 @@ Action CmdRecalculate(int client, int args)
 public void OnMapStart()
 {
 	g_iLaser = PrecacheModel(VMT_LASERBEAM, true);
+    map_started = true;
 }
 
 public void OnMapEnd()
@@ -128,9 +129,9 @@ void Native_RequestGuide(Handle plugin, int numParams)
     float duration = (numParams>1) ? view_as<float>(GetNativeCell(2)) : -1.0;
     bool backward = (numParams>2) ? view_as<bool>(GetNativeCell(3)) : false;
     bool join_client = (numParams>3) ? view_as<bool>(GetNativeCell(4)) : false;
-    #if DEBUG
-        LogMessage("Native_RequestGuide %d %f %d %d", client, duration, backward, join_client);
-    #endif
+    //#if DEBUG
+    //    LogMessage("Native_RequestGuide %d %f %d %d", client, duration, backward, join_client);
+    //#endif
     RequestGuide(client,duration,backward,join_client);
 }
 
@@ -234,6 +235,6 @@ void RequestGuide(int client, float duration = 10.0, bool backward = false, bool
     }
     if (i_draw>0) beams_cooldown_update(client,duration);
     #if DEBUG
-        LogMessage("RequestGuide: client %d flow %f cells %d ms %f", client, flow, i_draw, (GetEngineTime()-t)*1000.0);
+        LogMessage("RequestGuide: client %d flow %f cells %d i_start %d (%f ms)", client, flow, i_draw, i_start, (GetEngineTime()-t)*1000.0);
     #endif
 }

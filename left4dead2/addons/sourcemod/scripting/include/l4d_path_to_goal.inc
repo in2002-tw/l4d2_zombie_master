@@ -59,8 +59,8 @@ bool beams_cooldown(int client)
     static PlayerTime playertime;
     playertime = g_PlayerTime[client];
     if (playertime.t_engine<0.0 && playertime.t_game<0.0) return false;
-    if ( (playertime.t_engine+playertime.t_cooldown)<GetEngineTime() ) return true;
-    if ( (playertime.t_game+playertime.t_cooldown)<GetGameTime() ) return true;
+    if ( (playertime.t_engine+playertime.t_cooldown/2.0)>=GetEngineTime() ) return true;
+    if ( (playertime.t_game+playertime.t_cooldown/2.0)>=GetGameTime() ) return true;
     return false;
 }
 

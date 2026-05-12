@@ -866,7 +866,7 @@ Action zm_update(Handle timer = null)
       // Draw path to goal
       if (zm_draw_path && zm_menu_state>ZM_MENU_CLOSED && GetFeatureStatus(FeatureType_Native,"L4D_Path_To_Goal")==FeatureStatus_Available)
       {
-            L4D_Path_To_Goal(zm_client,g_fUpdateRate*2.0,true,false);
+            L4D_Path_To_Goal(zm_client,g_fUpdateRate*1.5,true,false);
       }
       
    }
