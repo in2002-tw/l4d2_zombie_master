@@ -74,6 +74,9 @@ public Plugin myinfo =
 // Changelog for 0.9.2
 // 1. Fixed Specials not refunding if deleted immediately on spawn due to ability cooldown checks
 // 2. Ambush system: Specials that are vomited on, fighting Survivors, or burning, are not included in Freeze/Unfreeze commands.
+// 3. Other -> Give Up now asks for confirmation to avoid accidents.
+// 4. Player data: remember grid mode, autocommon settings, PTG
+// 5. Traditional Chinese localization updated (thanks in2002)
 
 // TO DO LIST:
 // 5. Gas station tornado (done by zyiks, not implemented)
@@ -861,9 +864,9 @@ Action zm_update(Handle timer = null)
       else if (g_iSpawnerMode>0 && g_bGridReady && g_GridCellCount>0) GridRenderer_HideAll(zm_client); // grid needs to be hidden manually
 
       // Draw path to goal
-      if (zm_draw_path && GetFeatureStatus(FeatureType_Native,"L4D_Path_To_Goal")==FeatureStatus_Available)
+      if (zm_draw_path && zm_menu_state>ZM_MENU_CLOSED && GetFeatureStatus(FeatureType_Native,"L4D_Path_To_Goal")==FeatureStatus_Available)
       {
-            L4D_Path_To_Goal(zm_client,g_fUpdateRate*2.0,false,false);
+            L4D_Path_To_Goal(zm_client,g_fUpdateRate*2.0,true,false);
       }
       
    }

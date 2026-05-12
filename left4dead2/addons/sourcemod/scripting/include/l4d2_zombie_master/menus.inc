@@ -70,7 +70,7 @@ void open_menu(int client, int MENU=ZM_MENU_MAIN, int time=MENU_TIME_FOREVER)
     
     if (menu_main==null) update_menus();
     
-    if (MENU<ZM_MENU_CLOSED || MENU>=ZM_MENU_MAX) MENU = ZM_MENU_MAIN;
+    if (MENU<ZM_MENU_QUIT || MENU>=ZM_MENU_MAX) MENU = ZM_MENU_MAIN;
     if (MENU==ZM_MENU_CLOSED) time = 1;
     
     switch(MENU)

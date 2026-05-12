@@ -19,6 +19,7 @@
 #define FIRST_TANK_SPAWNED 1
 #define FIRST_TANK_DEAD 2
 
+#define ZM_MENU_QUIT -1
 #define ZM_MENU_CLOSED 0
 #define ZM_MENU_MAIN 1
 #define ZM_MENU_COMMON 2
@@ -29,8 +30,7 @@
 #define ZM_MENU_OTHER 7
 #define ZM_MENU_AUTOCOMMON 8
 #define ZM_MENU_CONTEXT 9
-#define ZM_MENU_QUIT 10
-#define ZM_MENU_MAX 11
+#define ZM_MENU_MAX 10
 
 // enum for spawner context state. to determine spawner RGB state:
 // 0 -> GREEN
@@ -686,6 +686,10 @@ enum struct zm_data
 	int rounds;          // number of rounds played as ZM
 	int last_roundcount; // last internal roundcount value where they played as ZM
 	bool offered;        // track if offered at round start
+    bool PTG; // path to goal indicator
+    int autocommon_max; // autocommon max
+    int autocommon_mode; // autocommon mode: off panic always
+    bool autocommon_common; // commons or autocommons
 }
 
 // Navmesh struct
