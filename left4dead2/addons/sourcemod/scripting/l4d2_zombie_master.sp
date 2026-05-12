@@ -11,10 +11,10 @@
 
 // Made for the Knockout.chat community
 // Plugin authors: gvazdas, zyiks
-// HUGE THANKS TO TESTERS: Hatsune Miku Fan, Skerion, Raykeno, IronBar, ngh, Lil Ole Fella, ShaunOfTheLive, zyiks
+// HUGE THANKS TO TESTERS: Hatsune Miku Fan (God's Strongest Playtester), Skerion, Raykeno, IronBar, ngh, Lil Ole Fella, ShaunOfTheLive, zyiks
 // Chance, Lett1, AGGA Lambo, Robotnik, AriesToffle, Shadowcat, Wicket, GARFIELD'S SKELETON, Perchance, 
-// Snake22, Mark9013100, Sarahtonin, Rex Bosworth
-// HUGE THANKS for scripting help: HarryPotter, xerox8521, Forgetest, little_froy, Lux, Marttt, Bacardi, Silvers
+// Snake22, Mark9013100, Sarahtonin, Rex Bosworth, g3intel, SomeENG, nativehenu
+// HUGE THANKS for scripting help: HarryPotter, xerox8521, Forgetest, little_froy, Lux, Marttt, Bacardi, Silvers, zyiks
 // HUGE THANKS TO Reagy and IronBar for hosting the Knockout Left 4 Dead 2 Server
 // Sentence-mixed survivor voice lines: Skerion. Ellis voice line by zyiks
 
@@ -33,7 +33,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.11a 2026-05-03"
+#define PLUGIN_VERSION 			"0.9.12 2026-05-11"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -58,6 +58,9 @@ bool DEBUG = false;
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 #include <l4d2_zombie_master/menus>
+
+#define _NATIVE_ONLY
+#include "l4d_path_to_goal"
 
 public Plugin myinfo =
 {
@@ -128,6 +131,7 @@ public void OnPluginStart()
     RegConsoleCmd("zm_delete_specials", ZM_Delete_Specials, "Delete all special infected.");
     RegConsoleCmd("zm_delete_witches", ZM_Delete_Witches, "Delete all witches.");
 	RegConsoleCmd("zm_quit", QuitZM_Command, "Give up Zombie Master and join Survivors.");
+    RegConsoleCmd("zm_giveup", QuitZM_Command, "Give up Zombie Master and join Survivors.");
 	RegConsoleCmd("zm_panic", ZMPanic, "All Common and Uncommon Infected rush the survivors. Bank rate is reduced.");
 	RegConsoleCmd("zm_start", zm_start,"Allow survivors to leave safezone; if already so, force saferoom open and start round. Can be used by ZM and admins.");
 	RegConsoleCmd("zm_followme", ZM_Chase_ZM, "Panic horde will chase Zombie Master.");
@@ -480,7 +484,7 @@ void IsAllowed()
 		
 		for( int i = 1; i <= MaxClients; i++ )
     	{
-    		if(IsClientInGame(i) && !IsFakeClient(i))
+    		if(IsValidClient(i) && !IsFakeClient(i))
     		{
         		create_client_data(i);
         		clients_active[i] = true;
@@ -855,6 +859,12 @@ Action zm_update(Handle timer = null)
       // Draw spawner visuals for ZM. Grid visualizer runs on its own timer
       if (zm_menu_state>ZM_MENU_CLOSED) Spawner_Update();
       else if (g_iSpawnerMode>0 && g_bGridReady && g_GridCellCount>0) GridRenderer_HideAll(zm_client); // grid needs to be hidden manually
+
+      // Draw path to goal
+      if (zm_draw_path && GetFeatureStatus(FeatureType_Native,"L4D_Path_To_Goal")==FeatureStatus_Available)
+      {
+            L4D_Path_To_Goal(zm_client,g_fUpdateRate*2.0,false,false);
+      }
       
    }
    else

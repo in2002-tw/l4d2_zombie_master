@@ -29,6 +29,8 @@
 #define ZM_MENU_OTHER 7
 #define ZM_MENU_AUTOCOMMON 8
 #define ZM_MENU_CONTEXT 9
+#define ZM_MENU_QUIT 10
+#define ZM_MENU_MAX 11
 
 // enum for spawner context state. to determine spawner RGB state:
 // 0 -> GREEN
@@ -381,6 +383,8 @@ Handle fq_timer;
 Handle ems_hud_timer;
 bool recordpos = true; // for tank stutter fix
 
+bool zm_draw_path;
+
 // Spawner_CacheSurvivorData: PVS (Potentially Visible Set) engine calls + survivor position an
 Handle hGetClusterForOrigin = null;
 Handle hGetPVSForCluster = null;
@@ -628,7 +632,7 @@ TopMenu hAdminMenu = null;
 TopMenuObject obj_zmcommands, zm_enable, zm_gamemode_menu, zm_kick_topmenu, zm_randomizer, zm_sayhorde, zm_help, zm_random;
 
 int zm_menu_state = ZM_MENU_CLOSED;
-Menu menu_main,menu_common,menu_uncommon,menu_special,menu_boss,menu_cleanup,menu_other,menu_autocommon = null;
+Menu menu_main,menu_common,menu_uncommon,menu_special,menu_boss,menu_cleanup,menu_other,menu_autocommon,menu_quit = null;
 
 // Define groups with different spawn rules.
 // Commons cannot spawn in areas marked by IsBlocked
@@ -2708,7 +2712,7 @@ Action JoinZM(int client, int args)
     zm_client = client;
     zm_client_userid = GetClientUserId(zm_client);
     Spawner_OnEnabled(client);
-
+    zm_draw_path = false;
     update_menus();
     
     // Prevent InputKill - thanks Shadowsyn

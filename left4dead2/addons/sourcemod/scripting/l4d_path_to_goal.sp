@@ -6,6 +6,9 @@
 #include <dhooks>
 #include <sdkhooks>
 #include <left4dhooks>
+#include <l4d_path_to_goal>
+
+
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
 #define PLUGIN_VERSION 			"1.00 2026-05-11"
@@ -20,6 +23,21 @@ public Plugin myinfo =
 	description = "Fully automatic navmesh-based path to goal indicator.",
 	version = PLUGIN_VERSION,
 	url = "https://github.com/gvazdas/l4d2_zombie_master"
+}
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	CreateNative("L4D_Path_To_Goal", Native_RequestGuide);
+	return APLRes_Success;
+}
+
+void Native_RequestGuide(Handle plugin, int numParams)
+{
+    int client = (numParams>0) ? GetNativeCell(1) : 0;
+    float duration = (numParams>1) ? view_as<float>(GetNativeCell(2)) : -1.0;
+    bool backward = (numParams>2) ? view_as<bool>(GetNativeCell(3)) : false;
+    bool join_client = (numParams>3) ? view_as<bool>(GetNativeCell(4)) : false;
+    RequestGuide(client,duration,backward,join_client);
 }
 
 #define TEAM_SPECTATOR		1
@@ -55,6 +73,20 @@ public void OnPluginStart()
   	g_hCvarMPGameMode.AddChangeHook(ConVarGameMode);
 
     Check_Guidable();
+
+    HookEvent("round_start_post_nav", evtNav, EventHookMode_PostNoCopy);
+    //  nav_blocked
+    //  nav_generate
+
+}
+
+void evtNav(Event event, const char[] name, bool dontBroadcast)
+{
+    #if DEBUG
+        LogMessage("round_start_post_nav");
+    #endif
+    Guide_Cleanup();
+    RequestFrame(Check_Guidable);
 }
 
 void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -64,14 +96,24 @@ void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
 
 Action CmdRequestGuide(int client, int args)
 {
+    float duration = 5.0;
     bool backward = GetClientTeam(client)!=TEAM_SURVIVOR;
-    if (!backward && args>0)
+    if (args>0)
     {
+        float duration_new = GetCmdArgFloat(1);
+        if (duration_new>0.0) duration = duration_new;
         char arg[16];
         GetCmdArg(1,arg,sizeof(arg));
-        backward = strcmp(arg,"backward")==0;
+        if (strcmp(arg,"backward")==0) backward = true;
+        if (args>1)
+        {
+            duration_new = GetCmdArgFloat(2);
+            if (duration_new>0.0) duration = duration_new;
+            GetCmdArg(2,arg,sizeof(arg));
+            if (strcmp(arg,"backward")==0) backward = true;
+        }
     }
-    RequestGuide(client,_,backward);
+    RequestGuide(client,duration,backward);
     return Plugin_Continue;
 }
 
@@ -107,13 +149,21 @@ public void OnMapEnd()
     Guide_Cleanup();
 }
 
-// Check round_nav event to recalculate guide
+public void OnClientPutInServer(int client)
+{
+    if (!IsValidClient(client) || IsFakeClient(client)) return;
+    reset_PlayerTime(client);
+}
 
 void Guide_Prep()
 {
     if (!map_started) return;
     #if DEBUG
         float t = GetEngineTime();
+    #endif
+
+    #if DEBUG
+        LogMessage("Guide_Prep");
     #endif
 
     float max_flow = L4D2Direct_GetMapMaxFlowDistance();
@@ -184,8 +234,8 @@ void Guide_Prep()
             continue;
         }
         TR_TraceRayFilter(last_pos,cell.center,MASK_SOLID,RayType_EndPoint,TraceFilterWorld);
-        if (TR_DidHit(INVALID_HANDLE))
-        {
+        if (TR_DidHit(INVALID_HANDLE) && !cell_rescue(all_cells,g_GuideCells,i))
+        {    
             if (last_valid) g_GuideCells.PushArray(cell_last);
             g_GuideCells.PushArray(cell);
             last_pos = cell.center;
@@ -208,6 +258,7 @@ void Guide_Prep()
         LogMessage("Final cell num %d", g_GuideCells.Length);
     #endif
 
+    reset_PlayerTime();
     guide_ready = true;
 
     #if DEBUG
@@ -226,10 +277,31 @@ int SortFlow(int index1, int index2, Handle array, Handle hndl)
     return 0;
 }
 
-// L4D_GetFlowFromPoint(float point[3]) 
+#define RESCUE_FAIL 0
+#define RESCUE_INSERT 1
+#define RESCUE_MOVE 2
+
+// Two cells cannot see each other. Attempt to fix this.
+int cell_rescue(ArrayList cells, int i1, int i2)
+{
+    return RESCUE_FAIL;
+    static Cell cell1,cell2;
+    cells.GetArray(i1,cell1,sizeof(Cell));
+    cells.GetArray(i2,cell2,sizeof(Cell));
+
+    // // Place new cell inbetween
+
+    // or // Adjust prior cell to recover LOS
+
+    // L4D_GetFlowFromPoint(float point[3])
+    // Make sure INSERT has flow inbetween the two original cells.
+}
 
 void Guide_Cleanup()
 {
+    #if DEBUG
+        LogMessage("Guide_Cleanup");
+    #endif
     delete g_GuideCells;
     guide_ready = false;
 }
@@ -242,14 +314,23 @@ void RequestGuide(int client, float duration = 10.0, bool backward = false, bool
     #if DEBUG
     float t = GetEngineTime();
     #endif
-    if (!gamemode_guidable || !IsValidClient(client) || IsFakeClient(client)) return;
+    if (!gamemode_guidable || duration<=0.0 || !IsValidClient(client) || IsFakeClient(client)) return;
     if (!guide_ready) Guide_Prep();
     if (!guide_ready || g_GuideCells==null) return;
+    //if (playertime_cooldown(g_PlayerTime[client])) return;
     float flow = L4D2Direct_GetFlowDistance(client);
     int i_start = 0;
     static float last_pos[3];
-    GetClientAbsOrigin(client,last_pos);
-    if (IsPlayerAlive(client)) last_pos[2] += 16.0;
+    if (IsPlayerAlive(client))
+    {
+        GetClientAbsOrigin(client,last_pos);
+        last_pos[2] += 16.0;
+    }
+    else
+    {
+        GetClientEyePosition(client,last_pos);
+        last_pos[2] -= 16.0;
+    }
     static Cell cell;
     bool use_flow = flow>0.0 && IsPlayerAlive(client);
     float min_dist = -1.0;
@@ -274,15 +355,14 @@ void RequestGuide(int client, float duration = 10.0, bool backward = false, bool
     }
     if (!use_flow && min_dist<0.0) return;
 
-    // Move start backwards by 1 cell if there's no LOS
-    if (i_start>0)
+    static float eye_pos[3]; // Move start if there's no LOS
+    GetClientEyePosition(client,eye_pos);
+    if (!cell_visible(i_start,eye_pos))
     {
-        static float eye_pos[3];
-        GetClientEyePosition(client,eye_pos);
-        TR_TraceRayFilter(eye_pos,cell.center,MASK_SOLID,RayType_EndPoint,TraceFilterWorld);
-        if (TR_DidHit(INVALID_HANDLE)) i_start -= 1;
+        if ((i_start+1)<g_GuideCells.Length && cell_visible(i_start+1,eye_pos)) i_start += 1; // Move forward
+        else if (i_start>0 && cell_visible(i_start-1,eye_pos)) i_start -=1; // Move backward
     }
-
+    
     int i_draw = 0;
 
     if (join_client)
@@ -324,6 +404,7 @@ void RequestGuide(int client, float duration = 10.0, bool backward = false, bool
         }
         if (i_draw>=MAX_DRAW) break;
     }
+    if (i_draw>0) playertime_update(client,duration);
     #if DEBUG
         LogMessage("RequestGuide: client %d flow %f, %f ms", client, flow, (GetEngineTime()-t)*1000.0);
     #endif
@@ -331,9 +412,22 @@ void RequestGuide(int client, float duration = 10.0, bool backward = false, bool
 
 void DrawBeam(int client, float pos_start[3], float pos_end[3], float duration = 10.0, int color[4] = {100,100,100,255})
 {
-    float width = 1.0;
-    TE_SetupBeamPoints(pos_start,pos_end,g_iLaser,0,0,0,duration,width,width,1,0.0,color,0);
+    float start_width = 1.0;
+    float end_width = 1.0;
+    int fade_length = 1;
+    float amp = 0.0;
+    TE_SetupBeamPoints(pos_start,pos_end,g_iLaser,0,0,0,duration,start_width,end_width,fade_length,amp,color,0);
     TE_SendToClient(client); // no LOS
+}
+
+// Test if cell is visible from given position
+bool cell_visible(int i, float pos[3])
+{
+    static Cell cell;
+    g_GuideCells.GetArray(i,cell,sizeof(Cell));
+    TR_TraceRay(pos,cell.center,MASK_SOLID,RayType_EndPoint);
+    if (!TR_DidHit(INVALID_HANDLE)) return true;
+    return false;
 }
 
 bool TraceFilterWorld(int entity, int contentsMask)

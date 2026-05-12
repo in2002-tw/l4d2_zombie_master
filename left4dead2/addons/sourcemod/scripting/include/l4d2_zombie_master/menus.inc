@@ -70,7 +70,7 @@ void open_menu(int client, int MENU=ZM_MENU_MAIN, int time=MENU_TIME_FOREVER)
     
     if (menu_main==null) update_menus();
     
-    if (MENU<ZM_MENU_CLOSED || MENU>ZM_MENU_CONTEXT) MENU = ZM_MENU_MAIN;
+    if (MENU<ZM_MENU_CLOSED || MENU>=ZM_MENU_MAX) MENU = ZM_MENU_MAIN;
     if (MENU==ZM_MENU_CLOSED) time = 1;
     
     switch(MENU)
@@ -98,6 +98,11 @@ void open_menu(int client, int MENU=ZM_MENU_MAIN, int time=MENU_TIME_FOREVER)
         {
             update_spawner_zombieclass(ZOMBIECLASS_COMMON);
             menu_autocommon.Display(zm_client,time);
+        }
+        case ZM_MENU_QUIT:
+        {
+            if (zm_menu_state!=ZM_MENU_QUIT) create_quit_menu();
+            menu_quit.Display(zm_client,time);
         }
         case ZM_MENU_CLOSED: close_menus(zm_client);
         default: menu_main.Display(zm_client,time);
@@ -661,7 +666,13 @@ void create_other_menu()
     Format(buffer, sizeof(buffer), "%T", "Teleport", zm_language);
     AddMenuItem(menu_other, "2", buffer);
 
-    AddMenuItem(menu_other, "3", "-");
+    if (GetFeatureStatus(FeatureType_Native,"L4D_Path_To_Goal")==FeatureStatus_Available)
+    {
+        if (zm_draw_path) Format(buffer, sizeof(buffer), "PTG ON");
+        else Format(buffer, sizeof(buffer), "PTG OFF");
+    }
+    else Format(buffer, sizeof(buffer), "-");
+    AddMenuItem(menu_other, "3", buffer);
 
     Format(buffer, sizeof(buffer), "%T", "Give Up", zm_language);
     AddMenuItem(menu_other, "4", buffer);
@@ -709,11 +720,17 @@ int other_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
             	    Spawner_OnDisabled(zm_client);
             	    g_iSpawnerMode = newMode;
             	    Spawner_OnEnabled(zm_client);
-            	    create_other_menu();
+            	    create_other_menu(); 
             	}
             	case 2: ZMTeleport(zm_client,0);
-            	case 4: {QuitZM(zm_client); return 0;}
-            	case 6: zm_menu_state=ZM_MENU_MAIN;
+                case 3:
+                {
+                    zm_draw_path = !zm_draw_path;
+                    if (GetFeatureStatus(FeatureType_Native,"L4D_Path_To_Goal")==FeatureStatus_Available)
+                        create_other_menu();
+                }
+                case 4: {open_menu(zm_client, ZM_MENU_QUIT); return 0;}
+                case 6: zm_menu_state=ZM_MENU_MAIN;
         	}
         	RequestFrame(reopen_zm_menu,true);     	
         }
@@ -728,6 +745,65 @@ int other_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
     }
 	return 0;
 }
+
+// QUIT MENU
+void create_quit_menu()
+{		
+	if (DEBUG) LogMessage("[zm] create_quit_menu");
+    if (!IsValidClientZM()) return;
+	if (menu_quit!=INVALID_HANDLE) CloseHandle(menu_quit);
+	menu_quit = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),quit_menu_Handler);
+
+    char buffer[64]; 
+    Format(buffer, sizeof(buffer), "%t ?", "Give Up", zm_client);
+	menu_quit.SetTitle(buffer);
+
+    Format(buffer,sizeof(buffer),"%T", "Yes", zm_client);
+    AddMenuItem(menu_quit, "0", buffer);
+
+    Format(buffer,sizeof(buffer),"%T", "No", zm_client);
+    AddMenuItem(menu_quit, "1", buffer);
+    
+    AddMenuItem(menu_quit, "2", "-");
+    AddMenuItem(menu_quit, "3", "-");
+    AddMenuItem(menu_quit, "4", "-");
+    AddMenuItem(menu_quit, "5", "-");
+    AddMenuItem(menu_quit, "6", "<-- (R)");
+
+    menu_quit.ExitButton = false;
+	SetMenuOptionFlags(menu_quit,MENUFLAG_NO_SOUND);
+}
+int quit_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
+{
+    switch(action) 
+    {
+        case MenuAction_Select:
+        {
+        	if (param1!=zm_client || zm_stage>=ZM_END) return 0;
+        	switch(param2)
+        	{
+            	case 0: {QuitZM(zm_client); return 0;}
+                case 4: {QuitZM(zm_client); return 0;}
+            	default: zm_menu_state=ZM_MENU_MAIN;
+        	}
+        	RequestFrame(reopen_zm_menu,true);
+        }
+        case MenuAction_Cancel:
+        {
+           if (param1==zm_client)
+           {
+               if (param2==MenuCancel_Exit)
+               {
+                    zm_menu_state=ZM_MENU_MAIN;
+                    RequestFrame(reopen_zm_menu,true);
+               }
+               else RequestFrame(reopen_zm_menu,false);
+           }
+        }
+    }
+	return 0;
+}
+
 
 // AUTOCOMMON MENU
 void create_autocommon_menu()
@@ -757,7 +833,6 @@ void create_autocommon_menu()
     if (autocommon_uncommons) Format(buffer, sizeof(buffer), "%T", "Uncommon", zm_language);
     else Format(buffer, sizeof(buffer), "%T", "Common", zm_language);
     AddMenuItem(menu_autocommon, "2", buffer);
-    
     AddMenuItem(menu_autocommon, "3", "-");
     AddMenuItem(menu_autocommon, "4", "-");
     AddMenuItem(menu_autocommon, "5", "-");
@@ -838,9 +913,9 @@ void DoVoteMenu()
     Menu menu = new Menu(Handle_VoteMenu);
     if (g_bCvarAllow) menu.SetTitle("Zombie Master -> OFF?");
     else menu.SetTitle("Zombie Master -> ON?");
-    menu.AddItem("yes", "Yes");
-    menu.AddItem("no", "No");
     menu.ExitButton = false;
+    AddMenuItem(menu, "yes", "Yes");
+    AddMenuItem(menu, "no", "No");
     menu.DisplayVoteToAll(20);
 }
  
