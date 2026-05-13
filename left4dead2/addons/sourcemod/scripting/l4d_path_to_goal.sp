@@ -126,9 +126,9 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 void Native_RequestGuide(Handle plugin, int numParams)
 {
     int client = (numParams>0) ? GetNativeCell(1) : -1;
-    float duration = (numParams>1) ? view_as<float>(GetNativeCell(2)) : -1.0;
+    float duration = (numParams>1) ? view_as<float>(GetNativeCell(2)) : 5.0;
     bool backward = (numParams>2) ? view_as<bool>(GetNativeCell(3)) : false;
-    bool join_client = (numParams>3) ? view_as<bool>(GetNativeCell(4)) : false;
+    bool join_client = (numParams>3) ? view_as<bool>(GetNativeCell(4)) : true;
     //#if DEBUG
     //    LogMessage("Native_RequestGuide %d %f %d %d", client, duration, backward, join_client);
     //#endif
@@ -138,7 +138,7 @@ void Native_RequestGuide(Handle plugin, int numParams)
 // Draw survivor path for client, for duration in seconds
 // backward: include backwards-going path.
 // join_client: draw connection between client's origin and nearest point in survivor path.
-void RequestGuide(int client, float duration = 10.0, bool backward = false, bool join_client = true)
+void RequestGuide(int client, float duration = 5.0, bool backward = false, bool join_client = true)
 {
     #if DEBUG
     float t = GetEngineTime();
@@ -153,14 +153,21 @@ void RequestGuide(int client, float duration = 10.0, bool backward = false, bool
     GetClientEyePosition(client,eye_pos);
     if (IsPlayerAlive(client))
     {
+        flow = L4D2Direct_GetFlowDistance(client);
         GetClientAbsOrigin(client,last_pos);
         last_pos[2] += 16.0;
-        flow = L4D2Direct_GetFlowDistance(client);
+        switch (GetEntProp(client, Prop_Send, "m_nWaterLevel"))
+        {
+            case 1: last_pos[2] += 16.0;
+        
+            case 2: last_pos[2] += 32.0;
+        }
     }
     else
     {
         last_pos = eye_pos;
-        last_pos[2] -= 16.0;
+        last_pos[2] -= 48.0;
+        if (pos_underwater(last_pos)) last_pos[2] += 32.0;
     }
     static Cell cell;
     bool use_flow = flow>0.0;
@@ -186,10 +193,11 @@ void RequestGuide(int client, float duration = 10.0, bool backward = false, bool
     }
     if (!use_flow && min_dist<0.0) return;
 
-    if (!cell_visible(i_start,eye_pos))
+    // Move to a more reasonable position
+    if ( (i_start+1)<g_GuideCells.Length && cell_visible(i_start+1,eye_pos)) i_start += 1;
+    else if (!cell_visible(i_start,eye_pos))
     {
-        if ((i_start+1)<g_GuideCells.Length && cell_visible(i_start+1,eye_pos)) i_start += 1; // Move forward
-        else if (i_start>0 && cell_visible(i_start-1,eye_pos)) i_start -=1; // Move backward
+        if (i_start>0 && cell_visible(i_start-1,eye_pos)) i_start -=1; // Move backward
     }
     
     int i_draw = 0;
@@ -214,7 +222,7 @@ void RequestGuide(int client, float duration = 10.0, bool backward = false, bool
         {
             i_forward += 1;
             g_GuideCells.GetArray(i_forward,cell,sizeof(Cell));
-            DrawBeam(client,pos_forward,cell.center,duration,{100,200,100,100});
+            DrawBeam(client,pos_forward,cell.center,duration);
             pos_forward = cell.center;
             end = false;
             i_draw += 1;

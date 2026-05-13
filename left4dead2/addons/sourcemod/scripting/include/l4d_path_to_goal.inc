@@ -6,7 +6,7 @@
 /**
  * Draw survivor escape path in L4D1 or L4D2.
  *
- * @param client       Client entity index for which to draw beams. Must be a real client in the server.
+ * @param client       Client entity index for which to draw beams. Must be a real in game client.
  * @param duration     Beam lifetime.
  * @param backward     Draw backwards-going path.
  * @param join_client  Visually connect client origin to nearest point in survivor path.
@@ -140,6 +140,15 @@ void Guide_Prep()
         if (flow<0.0 || flow>max_flow) continue;
         L4D_GetNavAreaCenter(navArea,pos);
         pos[2] += 16.0;
+        if (pos_underwater(pos))
+        {
+            pos[2] += 16.0;
+            if (pos_underwater(pos))
+            {
+                pos[2] += 16.0;
+                if (pos_underwater(pos)) continue;
+            }
+        }
         cell.navArea = navArea;
         cell.center = pos;
         cell.flow = flow;
@@ -183,7 +192,7 @@ void Guide_Prep()
         }
         TR_TraceRayFilter(last_pos,cell.center,MASK_SOLID,RayType_EndPoint,TraceFilterWorld);
         bool hit = TR_DidHit(INVALID_HANDLE);
-        if (hit && !cell_rescue(all_cells,g_GuideCells,i))
+        if ( hit && ( !last_valid || !cell_rescue(g_GuideCells,cell_last,cell) ) )
         {    
             if (last_valid) g_GuideCells.PushArray(cell_last);
             g_GuideCells.PushArray(cell);
@@ -191,7 +200,11 @@ void Guide_Prep()
             last_valid = false;
             continue;
         }
-        if (hit) g_GuideCells.GetArray(g_GuideCells.Length-1,cell_last,sizeof(Cell)); // last cell may have been updated by rescue
+        if (hit)
+        {
+            g_GuideCells.GetArray(g_GuideCells.Length-1,cell_last,sizeof(Cell)); // last cell may have been updated by rescue
+            last_pos = cell_last.center;
+        }
         else cell_last = cell;
         last_valid = true;
     }
@@ -203,6 +216,8 @@ void Guide_Prep()
         delete g_GuideCells;
         return;
     }
+
+    // Comb through again and merge visible cells
 
     #if DEBUG
         LogMessage("Final cell num %d", g_GuideCells.Length);
@@ -225,24 +240,87 @@ int SortFlow(int index1, int index2, Handle array, Handle hndl)
     return 0;
 }
 
-#define RESCUE_FAIL 0
-#define RESCUE_INSERT 1
-#define RESCUE_MOVE 2
-
 // Two cells cannot see each other. Attempt to fix this.
-int cell_rescue(ArrayList cells, int i1, int i2)
+bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
 {
-    return RESCUE_FAIL;
-    static Cell cell1,cell2;
-    cells.GetArray(i1,cell1,sizeof(Cell));
-    cells.GetArray(i2,cell2,sizeof(Cell));
+    return false;
+    static Cell cell;
+    ArrayList pos_candidates = new ArrayList(3);
 
-    // // Place new cell inbetween
+    static float diff[3], diff_candidate[3], diff_template[3], pos_candidate[3], pos_template[3];
+    SubtractVectors(cell_new.center,cell_old.center,diff);
+    diff_candidate = diff;
 
-    // or // Adjust prior cell to recover LOS
+    bool flat = FloatAbs(diff[2])<=1.0; // flat -> nothing to do in z direction
+    int i_turns_flat = 1;
+    if (!flat) i_turns_flat += 1; // two turns if not flat
+    int i_turns_mid = 2;
 
-    // L4D_GetFlowFromPoint(float point[3])
-    // Make sure INSERT has flow inbetween the two original cells.
+    for (int i_turn_flat = 0; i_turn_flat < i_turns_flat; i_turn_flat++)
+    {
+        diff_template = diff;
+        if (i_turn_flat==1) diff_template[2] = 0.0;
+        for (int i_turn_mid = 0; i_turn_mid < i_turns_mid; i_turn_mid++) 
+        {
+            if (i_turn_mid==1)
+            {
+                // Move to midpoint. Do some wiggling
+                diff_candidate = diff; ScaleVector(diff_candidate,0.5);
+                AddVectors(cell_old.center,diff_candidate,pos_template);
+            }
+            else pos_template = cell_old.center;
+
+            diff_candidate = diff_template; diff_candidate[0] = 0.0; // dy
+            AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
+            diff_candidate[1] *= 0.5; // dy/2
+            AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
+            
+            diff_candidate = diff_template; diff_candidate[1] = 0.0; // dx
+            AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
+            diff_candidate[0] *= 0.5; // dx/2
+            AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
+            
+            diff_candidate = diff_template; ScaleVector(diff_candidate,0.5); // half
+            AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
+            diff_candidate = diff_template; ScaleVector(diff_candidate,0.25); // quarter
+            AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
+
+            if (!flat && i_turn_flat==0) // z is not flat
+            {
+                diff_candidate = diff_template; diff_template[0] = 0.0; diff_template[1] = 0.0; // dz
+                AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
+                diff_candidate[2] *= 0.5; // dz/2
+                AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
+            }
+
+        }
+    }
+
+    for (int i = 0; i < pos_candidates.Length; i++) 
+    {
+        pos_candidates.GetArray(i,pos_candidate,sizeof(pos_candidate));
+        bool visible_end = twopos_visible(cell_new.center,pos_candidate);
+        bool visible_start = twopos_visible(cell_old.center,pos_candidate);
+
+        if (visible_start && visible_end) // Middle cell is mutually visible -> change old cell to middle cell, add only middle cell to array.
+        {
+            cell.flow = (cell_old.flow + cell_new.flow)/2.0;
+            cell.navArea = cell_old.navArea;
+            cell.center = pos_candidate;
+            cells.PushArray(cell);
+            delete pos_candidates; return true;
+        }
+        else if (visible_end) // Middle cell is only visible to end point -> add old cell and middle cell.
+        {
+            cells.PushArray(cell_old);
+            cell.flow = (cell_old.flow + cell_new.flow)/2.0;
+            cell.navArea = cell_old.navArea;
+            cell.center = pos_candidate;
+            cells.PushArray(cell);
+            delete pos_candidates; return true;
+        }
+    }
+    delete pos_candidates; return false;
 }
 
 void Guide_Cleanup()
@@ -255,7 +333,7 @@ void Guide_Cleanup()
 }
 
 
-void DrawBeam(int client, float pos_start[3], float pos_end[3], float duration = 10.0, int color[4] = {100,100,100,255})
+void DrawBeam(int client, float pos_start[3], float pos_end[3], float duration = 10.0, int color[4] = {100,200,100,100})
 {
     float start_width = 1.0;
     float end_width = 1.0;
@@ -266,11 +344,18 @@ void DrawBeam(int client, float pos_start[3], float pos_end[3], float duration =
 }
 
 // Test if cell is visible from given position
-bool cell_visible(int i, float pos[3])
+bool cell_visible(int i, float pos[3], bool world_only = true)
 {
     static Cell cell;
     g_GuideCells.GetArray(i,cell,sizeof(Cell));
-    TR_TraceRayFilter(pos,cell.center,MASK_SOLID,RayType_EndPoint,TraceFilterNoClients);
+    return twopos_visible(pos,cell.center,world_only);
+}
+
+// Test if two vector positions are visible to one another. world_only to hit only entity 0.
+bool twopos_visible(float pos1[3], float pos2[3], bool world_only = true)
+{
+    if (world_only) TR_TraceRayFilter(pos1,pos2,MASK_SOLID,RayType_EndPoint,TraceFilterWorld);
+    else TR_TraceRayFilter(pos1,pos2,MASK_SOLID,RayType_EndPoint,TraceFilterNoClients);
     if (!TR_DidHit(INVALID_HANDLE)) return true;
     return false;
 }
@@ -284,6 +369,16 @@ bool TraceFilterNoClients(int entity, int contentsMask)
 {
     if (IsValidClient(entity)) return false;
     return true;
+}
+
+stock bool pos_underwater(const float pos[3])
+{
+	static float top[3], bottom[3];
+    bottom = pos;
+    top = pos; top[2] += 64.0;
+	TR_TraceRay(top,bottom,MASK_WATER,RayType_EndPoint);
+	if (TR_DidHit(INVALID_HANDLE)) return true;
+    return false;
 }
 
 stock bool IsValidClient(int client, bool replaycheck = true)
