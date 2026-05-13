@@ -129,9 +129,6 @@ void Native_RequestGuide(Handle plugin, int numParams)
     float duration = (numParams>1) ? view_as<float>(GetNativeCell(2)) : 5.0;
     bool backward = (numParams>2) ? view_as<bool>(GetNativeCell(3)) : false;
     bool join_client = (numParams>3) ? view_as<bool>(GetNativeCell(4)) : true;
-    //#if DEBUG
-    //    LogMessage("Native_RequestGuide %d %f %d %d", client, duration, backward, join_client);
-    //#endif
     RequestGuide(client,duration,backward,join_client);
 }
 
@@ -148,7 +145,7 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     if (!guide_ready || g_GuideCells==null) return;
     if (beams_cooldown(client)) return;
     float flow = 0.0;
-    int i_start = 0;
+    int i_start = g_GuideCells.Length - 1;
     static float last_pos[3], eye_pos[3];
     GetClientEyePosition(client,eye_pos);
     if (IsPlayerAlive(client))
@@ -159,7 +156,6 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
         switch (GetEntProp(client, Prop_Send, "m_nWaterLevel"))
         {
             case 1: last_pos[2] += 16.0;
-        
             case 2: last_pos[2] += 32.0;
         }
     }
@@ -176,7 +172,7 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     for (int i = 0; i < g_GuideCells.Length; i++)
     {
         g_GuideCells.GetArray(i,cell,sizeof(Cell));
-        if (use_flow && cell.flow >= flow)
+        if ( use_flow && ( cell.flow > flow ) )
         {
             i_start = i;
             break;
@@ -192,19 +188,16 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
         }
     }
     if (!use_flow && min_dist<0.0) return;
-
-    // Move to a more reasonable position
-    if ( (i_start+1)<g_GuideCells.Length && cell_visible(i_start+1,eye_pos)) i_start += 1;
-    else if (!cell_visible(i_start,eye_pos))
-    {
-        if (i_start>0 && cell_visible(i_start-1,eye_pos)) i_start -=1; // Move backward
-    }
+    
+    // Try starting at a more reasonable position with LOS
+    if ( join_client && (i_start+1)<g_GuideCells.Length && cell_visible(i_start+1,last_pos)) i_start += 1; // Move forward
+    else if (i_start>0 && !cell_visible(i_start,last_pos) && cell_visible(i_start-1,last_pos)) i_start -=1; // Move backward
     
     int i_draw = 0;
+    g_GuideCells.GetArray(i_start,cell,sizeof(Cell));
 
-    if (join_client)
+    if (join_client) // Connect client to starting cell
     {
-        g_GuideCells.GetArray(i_start,cell,sizeof(Cell));
         DrawBeam(client,last_pos,cell.center,duration);
         i_draw += 1;
     }
@@ -226,20 +219,23 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
             pos_forward = cell.center;
             end = false;
             i_draw += 1;
+            //#if DEBUG>1
+            //    LogMessage("%d %.1f %.1f %.1f -> %.1f %.1f %.1f", i_forward,
+            //    pos_forward[0], pos_forward[1], pos_forward[2],
+            //    cell.center[0], cell.center[1], cell.center[2]);
+            //#endif
+            if (i_draw>=MAX_DRAW) break;
         }
         if (backward && i_backward>0)
         {
             i_backward -= 1;
             g_GuideCells.GetArray(i_backward,cell,sizeof(Cell));
-            #if DEBUG>1
-                LogMessage("%d, %.1f %.1f %.1f", i_backward, cell.center[0], cell.center[1], cell.center[2]);
-            #endif
             DrawBeam(client,pos_backward,cell.center,duration,{200,100,100,100});
             pos_backward = cell.center;
             end = false;
             i_draw += 1;
+            if (i_draw>=MAX_DRAW) break;
         }
-        if (i_draw>=MAX_DRAW) break;
     }
     if (i_draw>0) beams_cooldown_update(client,duration);
     #if DEBUG

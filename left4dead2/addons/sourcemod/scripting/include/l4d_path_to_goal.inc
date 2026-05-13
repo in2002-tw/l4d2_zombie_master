@@ -36,7 +36,8 @@ enum struct Cell
 {
 	float flow;
     Address navArea;
-	float center[3];
+	float center[3]; // cell position slightly above ground
+    bool fixed; // flag cell as unmovable
 }
 
 ArrayList g_GuideCells;
@@ -58,9 +59,10 @@ bool beams_cooldown(int client)
 {
     static PlayerTime playertime;
     playertime = g_PlayerTime[client];
-    if (playertime.t_engine<0.0 && playertime.t_game<0.0) return false;
-    if ( (playertime.t_engine+playertime.t_cooldown/2.0)>=GetEngineTime() ) return true;
-    if ( (playertime.t_game+playertime.t_cooldown/2.0)>=GetGameTime() ) return true;
+    //if (playertime.t_engine<0.0 && playertime.t_game<0.0) return false;
+    if (playertime.t_game<0.0) return false;
+    //if ( (playertime.t_engine+playertime.t_cooldown/2.0)>=GetEngineTime() ) return true;
+    if ( (playertime.t_game+playertime.t_cooldown)>GetGameTime() ) return true;
     return false;
 }
 
@@ -74,7 +76,8 @@ void beams_cooldown_update(int client, float duration = -1.0)
         duration = playertime.t_cooldown;
         if (duration < 0.0) return;
     }
-    playertime.t_engine = GetEngineTime();
+    else duration /= 2.0;
+    //playertime.t_engine = GetEngineTime();
     playertime.t_game = GetGameTime();
     playertime.t_cooldown = duration;
     g_PlayerTime[client] = playertime;
@@ -130,6 +133,7 @@ void Guide_Prep()
     Cell cell;
 
     ArrayList all_cells = new ArrayList(sizeof(Cell)); // Collect nav areas in survivor path
+
 	for (int i = 0; i < allAreas.Length; i++)
 	{
 		Address navArea = allAreas.Get(i);
@@ -137,7 +141,8 @@ void Guide_Prep()
         if (!(L4D_GetNavArea_SpawnAttributes(navArea) & NAV_SPAWN_ESCAPE_ROUTE)) continue;
         if (L4D_NavArea_IsBlocked(navArea,TEAM_SURVIVOR,true) || L4D_NavArea_IsBlocked(navArea,TEAM_SURVIVOR,false)) continue;
         flow = L4D2Direct_GetTerrorNavAreaFlow(navArea);
-        if (flow<0.0 || flow>max_flow) continue;
+        if (flow<=0.0 || flow>max_flow) continue;
+        if (all_cells.FindValue(flow,0)>=0) continue; // if identical flow exists, ignore this cell
         L4D_GetNavAreaCenter(navArea,pos);
         pos[2] += 16.0;
         if (pos_underwater(pos))
@@ -172,12 +177,30 @@ void Guide_Prep()
     
     all_cells.SortCustom(SortFlow);
 
+    // Check info survivor rescue, add that as first cell.
+
+    // Set first cell as fixed
+    all_cells.GetArray(0,cell,sizeof(Cell));
+    cell.fixed = true;
+    all_cells.SetArray(0,cell,sizeof(Cell));
+
+    // Set last cell as fixed
+    all_cells.GetArray(all_cells.Length-1,cell,sizeof(Cell));
+    cell.fixed = true;
+    all_cells.SetArray(all_cells.Length-1,cell,sizeof(Cell));
+
     delete g_GuideCells;
     g_GuideCells = new ArrayList(sizeof(Cell));
 
     float last_pos[3];
     Cell cell_last;
     bool last_valid = false;
+
+    // There are multiple types of cells:
+    // Cell that is already in guide list - may or may not be fixed
+    // New candidate cell - guaranteed to be not in guide list
+    // If we want to move cell that is already in guide list, we need to check LOS to cell BEFORE that one too.
+
     for (int i = 0; i < all_cells.Length; i++) // Merge points that are visible to one another
     {
         all_cells.GetArray(i,cell,sizeof(Cell));
@@ -189,9 +212,8 @@ void Guide_Prep()
             g_GuideCells.PushArray(cell);
             last_pos = cell.center;
             continue;
-        }
-        TR_TraceRayFilter(last_pos,cell.center,MASK_SOLID,RayType_EndPoint,TraceFilterWorld);
-        bool hit = TR_DidHit(INVALID_HANDLE);
+        } 
+        bool hit = !twopos_visible(last_pos,cell.center);
         if ( hit && ( !last_valid || !cell_rescue(g_GuideCells,cell_last,cell) ) )
         {    
             if (last_valid) g_GuideCells.PushArray(cell_last);

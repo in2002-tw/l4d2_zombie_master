@@ -2716,7 +2716,7 @@ Action JoinZM(int client, int args)
     zm_client = client;
     zm_client_userid = GetClientUserId(zm_client);
     Spawner_OnEnabled(client);
-    zm_draw_path = false;
+    zm_draw_path = true;
     update_menus();
     
     // Prevent InputKill - thanks Shadowsyn

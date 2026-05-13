@@ -582,6 +582,12 @@ void IsAllowed()
 	}
 }
 
+// Draw Path To Goal for Zombie Master
+void zm_ptg()
+{
+    L4D_Path_To_Goal(zm_client,g_fUpdateRate*1.9,true,false);
+}
+
 Action zm_update(Handle timer = null)
 {
    
@@ -866,7 +872,7 @@ Action zm_update(Handle timer = null)
       // Draw path to goal
       if (zm_draw_path && zm_menu_state>ZM_MENU_CLOSED && GetFeatureStatus(FeatureType_Native,"L4D_Path_To_Goal")==FeatureStatus_Available)
       {
-            L4D_Path_To_Goal(zm_client,g_fUpdateRate*1.5,true,false);
+            RequestFrame(zm_ptg);
       }
       
    }
