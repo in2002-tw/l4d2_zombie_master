@@ -9,7 +9,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.00 2026-05-12"
+#define PLUGIN_VERSION 			"1.00 2026-05-13"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -17,7 +17,7 @@ public Plugin myinfo =
 {
 	name = "[L4D1/L4D2] Path To Goal",
 	author = "gvazdas",
-	description = "Fully automatic navmesh-based path to goal indicator.",
+	description = "Navmesh-based automatic path to goal indicator.",
 	version = PLUGIN_VERSION,
 	url = "https://github.com/gvazdas/l4d2_zombie_master"
 }
@@ -37,7 +37,7 @@ public void OnPluginStart()
   	g_hCvarMPGameMode = FindConVar("mp_gamemode");
   	g_hCvarMPGameMode.AddChangeHook(ConVarGameMode);
     Check_Guidable();
-
+    nav_started = true;
     HookEvent("round_start_post_nav", evtPostNav, EventHookMode_PostNoCopy);
     // nav_blocked nav_generate
 }
@@ -47,13 +47,8 @@ void evtPostNav(Event event, const char[] name, bool dontBroadcast)
     #if DEBUG
         LogMessage("round_start_post_nav");
     #endif
-    RequestFrame(PostNav);
-}
-
-void PostNav()
-{
-    map_started = true;
-    RequestFrame(Guide_Prep);
+    nav_started = true;
+    Guide_Prep();
 }
 
 void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -95,12 +90,19 @@ Action CmdRecalculate(int client, int args)
 public void OnMapStart()
 {
 	g_iLaser = PrecacheModel(VMT_LASERBEAM, true);
+    RequestFrame(MapStarted);
+}
+
+void MapStarted()
+{
     map_started = true;
+    if (nav_started && !guide_ready) Guide_Prep();
 }
 
 public void OnMapEnd()
 {
     map_started = false;
+    nav_started = false;
     Guide_Cleanup();
 }
 

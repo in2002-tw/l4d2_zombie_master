@@ -41,7 +41,7 @@ enum struct Cell
 
 ArrayList g_GuideCells;
 ConVar g_hCvarMPGameMode;
-bool gamemode_guidable, guide_ready, map_started;
+bool gamemode_guidable, guide_ready, map_started, nav_started;
 int g_iLaser;
 
 // Data structure for guide points
@@ -105,13 +105,14 @@ void Check_Guidable()
 {
     gamemode_guidable = !L4D_IsSurvivalMode();
     if (gamemode_guidable && GetEngineVersion()==Engine_Left4Dead2) gamemode_guidable = !L4D2_IsScavengeMode();
-    if (!guide_ready && gamemode_guidable) RequestFrame(Guide_Prep);
+    if (!map_started || !nav_started) return;
+    if (!guide_ready && gamemode_guidable) Guide_Prep();
     else if (guide_ready && !gamemode_guidable) Guide_Cleanup();
 }
 
 void Guide_Prep()
 {
-    if (!map_started || !gamemode_guidable) return;
+    if (!gamemode_guidable || !map_started || !nav_started) return;
     //#if DEBUG
         float t = GetEngineTime();
     //#endif
@@ -164,9 +165,9 @@ void Guide_Prep()
     
     delete allAreas;
 
-    //#if DEBUG
+    #if DEBUG
         LogMessage("Initial cell num %d", all_cells.Length);
-    //#endif
+    #endif
 
     if (all_cells.Length <= 1)
     {
@@ -228,7 +229,9 @@ void Guide_Prep()
     if (g_GuideCells.Length>2) // Erase inbetween cells with mutual LOS
     {
         int i = 1;
-        int erased = 0;
+        #if DEBUG
+            int erased = 0;
+        #endif
         Cell cell_before,cell_after;
         while (i<(g_GuideCells.Length-1))
         {
@@ -238,24 +241,22 @@ void Guide_Prep()
             if (twopos_visible(cell_before.center,cell.center) && twopos_visible(cell_before.center,cell_after.center) && twopos_visible(cell.center,cell_after.center))
             {
                 g_GuideCells.Erase(i);
-                erased += 1;
+                #if DEBUG
+                    erased += 1;
+                #endif
                 continue;
             }
             i += 1;
         }
-        if (erased>0) LogMessage("Erased %d cells because of author skill issue.", erased);
+        #if DEBUG
+            if (erased>0) LogMessage("Erased %d cells because of author skill issue.", erased);
+        #endif
     }
-
-    //#if DEBUG
-        LogMessage("Final cell num %d", g_GuideCells.Length);
-    //#endif
 
     beams_cooldown_reset();
     guide_ready = true;
 
-    //#if DEBUG
-        LogMessage("Guide_Prep: %f ms", (GetEngineTime()-t)*1000.0);
-    //#endif
+    LogMessage("Final cell num %d (%f ms)", g_GuideCells.Length, (GetEngineTime()-t)*1000.0);
 }
 
 int SortFlow(int index1, int index2, Handle array, Handle hndl)
