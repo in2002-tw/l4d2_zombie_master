@@ -37,7 +37,6 @@ enum struct Cell
 	float flow;
     Address navArea;
 	float center[3]; // cell position slightly above ground
-    bool fixed; // flag cell as unmovable
 }
 
 ArrayList g_GuideCells;
@@ -177,18 +176,6 @@ void Guide_Prep()
     
     all_cells.SortCustom(SortFlow);
 
-    // Check info survivor rescue, add that as first cell.
-
-    // Set first cell as fixed
-    all_cells.GetArray(0,cell,sizeof(Cell));
-    cell.fixed = true;
-    all_cells.SetArray(0,cell,sizeof(Cell));
-
-    // Set last cell as fixed
-    all_cells.GetArray(all_cells.Length-1,cell,sizeof(Cell));
-    cell.fixed = true;
-    all_cells.SetArray(all_cells.Length-1,cell,sizeof(Cell));
-
     delete g_GuideCells;
     g_GuideCells = new ArrayList(sizeof(Cell));
 
@@ -216,11 +203,9 @@ void Guide_Prep()
         bool hit = !twopos_visible(last_pos,cell.center);
         if (hit)
         {    
-            // Try moving last_pos. If prior cell has LOS, new cell has LOS, no need to push arrays.
             if (last_valid)
             {
                 g_GuideCells.PushArray(cell_last);
-                // Try adding new cell inbetween
                 if (!twopos_visible(cell_last.center,cell.center)) cell_rescue(g_GuideCells,cell_last,cell);
             }
             g_GuideCells.PushArray(cell);
@@ -240,7 +225,26 @@ void Guide_Prep()
         return;
     }
 
-    // Comb through again and merge visible cells
+    if (g_GuideCells.Length>2) // Erase inbetween cells with mutual LOS
+    {
+        int i = 1;
+        int erased = 0;
+        Cell cell_before,cell_after;
+        while (i<(g_GuideCells.Length-1))
+        {
+            g_GuideCells.GetArray(i-1,cell_before,sizeof(Cell));
+            g_GuideCells.GetArray(i,cell,sizeof(Cell));
+            g_GuideCells.GetArray(i+1,cell_after,sizeof(Cell));
+            if (twopos_visible(cell_before.center,cell.center) && twopos_visible(cell_before.center,cell_after.center) && twopos_visible(cell.center,cell_after.center))
+            {
+                g_GuideCells.Erase(i);
+                erased += 1;
+                continue;
+            }
+            i += 1;
+        }
+        if (erased>0) LogMessage("Erased %d cells because of author skill issue.", erased);
+    }
 
     //#if DEBUG
         LogMessage("Final cell num %d", g_GuideCells.Length);
@@ -324,7 +328,7 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
         bool visible_end = twopos_visible(cell_new.center,pos_candidate);
         if (!visible_end) continue;
         bool visible_start = twopos_visible(cell_old.center,pos_candidate);
-        if (visible_start && visible_end) // Middle cell is mutually visible -> change old cell to middle cell, add only middle cell to array.
+        if (visible_start && visible_end)
         {
             cell.flow = (cell_old.flow + cell_new.flow)/2.0;
             cell.navArea = cell_old.navArea;
@@ -332,7 +336,7 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
             cells.PushArray(cell);
             delete pos_candidates; return true;
         }
-        //else if (visible_end) // Middle cell is only visible to end point -> add old cell and middle cell.
+        //else if (visible_end)
         //{
         //    cells.PushArray(cell_old);
         //    cell.flow = (cell_old.flow + cell_new.flow)/2.0;
