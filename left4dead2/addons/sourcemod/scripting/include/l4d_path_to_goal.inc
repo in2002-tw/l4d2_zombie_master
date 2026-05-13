@@ -23,7 +23,7 @@ native void L4D_Path_To_Goal(int client = -1, float duration = 5.0, bool backwar
 #include <files>
 #include <left4dhooks>
 
-#define DEBUG 1 // 1 for basic debug, 2 for details, 3 for EXTREME amount of detail
+#define DEBUG 0 // 1 for basic debug, 2 for details, 3 for EXTREME amount of detail
 
 #define TEAM_SPECTATOR		1
 #define TEAM_SURVIVOR		2
@@ -113,9 +113,9 @@ void Check_Guidable()
 void Guide_Prep()
 {
     if (!map_started || !gamemode_guidable) return;
-    #if DEBUG
+    //#if DEBUG
         float t = GetEngineTime();
-    #endif
+    //#endif
 
     float max_flow = L4D2Direct_GetMapMaxFlowDistance();
     if (max_flow<=0.0) return;
@@ -141,7 +141,7 @@ void Guide_Prep()
         if (!(L4D_GetNavArea_SpawnAttributes(navArea) & NAV_SPAWN_ESCAPE_ROUTE)) continue;
         if (L4D_NavArea_IsBlocked(navArea,TEAM_SURVIVOR,true) || L4D_NavArea_IsBlocked(navArea,TEAM_SURVIVOR,false)) continue;
         flow = L4D2Direct_GetTerrorNavAreaFlow(navArea);
-        if (flow<=0.0 || flow>max_flow) continue;
+        if (flow<0.0 || flow>max_flow) continue;
         if (all_cells.FindValue(flow,0)>=0) continue; // if identical flow exists, ignore this cell
         L4D_GetNavAreaCenter(navArea,pos);
         pos[2] += 16.0;
@@ -165,9 +165,9 @@ void Guide_Prep()
     
     delete allAreas;
 
-    #if DEBUG
+    //#if DEBUG
         LogMessage("Initial cell num %d", all_cells.Length);
-    #endif
+    //#endif
 
     if (all_cells.Length <= 1)
     {
@@ -214,20 +214,21 @@ void Guide_Prep()
             continue;
         } 
         bool hit = !twopos_visible(last_pos,cell.center);
-        if ( hit && ( !last_valid || !cell_rescue(g_GuideCells,cell_last,cell) ) )
+        if (hit)
         {    
-            if (last_valid) g_GuideCells.PushArray(cell_last);
+            // Try moving last_pos. If prior cell has LOS, new cell has LOS, no need to push arrays.
+            if (last_valid)
+            {
+                g_GuideCells.PushArray(cell_last);
+                // Try adding new cell inbetween
+                if (!twopos_visible(cell_last.center,cell.center)) cell_rescue(g_GuideCells,cell_last,cell);
+            }
             g_GuideCells.PushArray(cell);
             last_pos = cell.center;
             last_valid = false;
             continue;
         }
-        if (hit)
-        {
-            g_GuideCells.GetArray(g_GuideCells.Length-1,cell_last,sizeof(Cell)); // last cell may have been updated by rescue
-            last_pos = cell_last.center;
-        }
-        else cell_last = cell;
+        cell_last = cell;
         last_valid = true;
     }
 
@@ -241,16 +242,16 @@ void Guide_Prep()
 
     // Comb through again and merge visible cells
 
-    #if DEBUG
+    //#if DEBUG
         LogMessage("Final cell num %d", g_GuideCells.Length);
-    #endif
+    //#endif
 
     beams_cooldown_reset();
     guide_ready = true;
 
-    #if DEBUG
+    //#if DEBUG
         LogMessage("Guide_Prep: %f ms", (GetEngineTime()-t)*1000.0);
-    #endif
+    //#endif
 }
 
 int SortFlow(int index1, int index2, Handle array, Handle hndl)
@@ -265,7 +266,6 @@ int SortFlow(int index1, int index2, Handle array, Handle hndl)
 // Two cells cannot see each other. Attempt to fix this.
 bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
 {
-    return false;
     static Cell cell;
     ArrayList pos_candidates = new ArrayList(3);
 
@@ -322,8 +322,8 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
     {
         pos_candidates.GetArray(i,pos_candidate,sizeof(pos_candidate));
         bool visible_end = twopos_visible(cell_new.center,pos_candidate);
+        if (!visible_end) continue;
         bool visible_start = twopos_visible(cell_old.center,pos_candidate);
-
         if (visible_start && visible_end) // Middle cell is mutually visible -> change old cell to middle cell, add only middle cell to array.
         {
             cell.flow = (cell_old.flow + cell_new.flow)/2.0;
@@ -332,15 +332,15 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
             cells.PushArray(cell);
             delete pos_candidates; return true;
         }
-        else if (visible_end) // Middle cell is only visible to end point -> add old cell and middle cell.
-        {
-            cells.PushArray(cell_old);
-            cell.flow = (cell_old.flow + cell_new.flow)/2.0;
-            cell.navArea = cell_old.navArea;
-            cell.center = pos_candidate;
-            cells.PushArray(cell);
-            delete pos_candidates; return true;
-        }
+        //else if (visible_end) // Middle cell is only visible to end point -> add old cell and middle cell.
+        //{
+        //    cells.PushArray(cell_old);
+        //    cell.flow = (cell_old.flow + cell_new.flow)/2.0;
+        //    cell.navArea = cell_old.navArea;
+        //    cell.center = pos_candidate;
+        //    cells.PushArray(cell);
+        //    delete pos_candidates; return true;
+        //}
     }
     delete pos_candidates; return false;
 }
