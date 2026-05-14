@@ -6,7 +6,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.00 2026-05-13"
+#define PLUGIN_VERSION 			"1.01 2026-05-14"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -16,7 +16,7 @@ public Plugin myinfo =
 	author = "gvazdas",
 	description = "Navmesh-based automatic path to goal indicator.",
 	version = PLUGIN_VERSION,
-	url = "https://github.com/gvazdas/l4d2_zombie_master"
+	url = "https://forums.alliedmods.net/showthread.php?t=352685, https://github.com/gvazdas/l4d2_zombie_master"
 }
 
 public void OnPluginStart()
@@ -38,7 +38,18 @@ public void OnPluginStart()
   	
     g_hCvarMax = CreateConVar("l4d_path_to_goal_max", "32",
     "Max number of beams per request.",FCVAR_NOTIFY, true, 1.0, true, 1000.0);
-    g_hCvarMax.AddChangeHook(ConVarChanged_Cvars);
+
+    g_hCvarSurvivors = CreateConVar("l4d_path_to_goal_survivor", "1",
+    "Allow survivors to see path to goal.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+
+    g_hCvarInfected = CreateConVar("l4d_path_to_goal_infected", "1",
+    "Allow infected to see path to goal.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+
+    g_hCvarSpec = CreateConVar("l4d_path_to_goal_spec", "1",
+    "Allow observers/spectators to see path to goal.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+
+    g_hCvarAlive = CreateConVar("l4d_path_to_goal_alive", "0",
+    "Allow players to see path to goal based on alive state: 0=all,1=alive only,2=dead only.",FCVAR_NOTIFY, true, 0.0, true, 2.0);
 
   	g_hCvarMPGameMode = FindConVar("mp_gamemode");
   	g_hCvarMPGameMode.AddChangeHook(ConVarGameMode);
@@ -72,7 +83,7 @@ void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
 
 Action CmdRequestGuide(int client, int args)
 {
-    if (!enable || !map_started || !gamemode_guidable) return Plugin_Continue;
+    if (!enable || !map_started || !nav_started || !gamemode_guidable) return Plugin_Continue;
     float duration = 5.0;
     bool backward = GetClientTeam(client)!=TEAM_SURVIVOR;
     if (args>0)
@@ -110,7 +121,7 @@ public void OnMapStart()
 void MapStarted()
 {
     map_started = true;
-    if (nav_started && !guide_ready) Guide_Prep();
+    if (nav_started && gamemode_guidable && !guide_ready) Guide_Prep();
 }
 
 public void OnMapEnd()
@@ -141,7 +152,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 void Native_RequestGuide(Handle plugin, int numParams)
 {
-    if (!enable) return;
+    if (!enable || !gamemode_guidable) return;
     int client = (numParams>0) ? GetNativeCell(1) : -1;
     float duration = (numParams>1) ? view_as<float>(GetNativeCell(2)) : 5.0;
     bool backward = (numParams>2) ? view_as<bool>(GetNativeCell(3)) : false;
@@ -158,6 +169,23 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     float t = GetEngineTime();
     #endif
     if (!enable || !gamemode_guidable || duration<=0.0 || g_iLaser==0 || !IsValidClient(client) || IsFakeClient(client)) return;
+
+    switch (GetClientTeam(client)) // Check if team is blocked
+    {
+        case TEAM_SPECTATOR:
+        {
+            if (!g_hCvarSpec.BoolValue) return;
+        }
+        case TEAM_SURVIVOR:
+        {
+            if (!g_hCvarSurvivors.BoolValue) return;
+        }
+        case TEAM_INFECTED:
+        {
+            if (!g_hCvarInfected.BoolValue) return;
+        }
+    }
+
     if (!guide_ready) Guide_Prep();
     if (!guide_ready || g_GuideCells==null) return;
     if (beams_cooldown(client)) return;
@@ -167,6 +195,7 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     GetClientEyePosition(client,eye_pos);
     if (IsPlayerAlive(client))
     {
+        if (g_hCvarAlive.IntValue == ACCEPT_DEAD) return; // alive state blocked by cvar
         flow = L4D2Direct_GetFlowDistance(client);
         GetClientAbsOrigin(client,last_pos);
         last_pos[2] += 16.0;
@@ -178,6 +207,7 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     }
     else
     {
+        if (g_hCvarAlive.IntValue == ACCEPT_ALIVE) return; // alive state blocked by cvar
         last_pos = eye_pos;
         last_pos[2] -= 48.0;
         if (pos_underwater(last_pos)) last_pos[2] += 32.0;
@@ -236,12 +266,7 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
             pos_forward = cell.center;
             end = false;
             i_draw += 1;
-            //#if DEBUG>1
-            //    LogMessage("%d %.1f %.1f %.1f -> %.1f %.1f %.1f", i_forward,
-            //    pos_forward[0], pos_forward[1], pos_forward[2],
-            //    cell.center[0], cell.center[1], cell.center[2]);
-            //#endif
-            if (i_draw>=max_draw) break;
+            if (i_draw>=g_hCvarMax.IntValue) break;
         }
         if (backward && i_backward>0)
         {
@@ -251,7 +276,7 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
             pos_backward = cell.center;
             end = false;
             i_draw += 1;
-            if (i_draw>=max_draw) break;
+            if (i_draw>=g_hCvarMax.IntValue) break;
         }
     }
     if (i_draw>0) beams_cooldown_update(client,duration);

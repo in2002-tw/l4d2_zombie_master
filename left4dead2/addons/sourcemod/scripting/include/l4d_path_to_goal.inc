@@ -29,6 +29,10 @@ native void L4D_Path_To_Goal(int client = -1, float duration = 5.0, bool backwar
 #define TEAM_INFECTED		3
 #define VMT_LASERBEAM       "sprites/laserbeam.vmt"
 
+#define ACCEPT_ALL   0 // accept all players
+#define ACCEPT_ALIVE 1 // accept only alive players
+#define ACCEPT_DEAD  2 // accept only non-alive players
+
 // Data structure for guide points
 enum struct Cell
 {
@@ -38,16 +42,15 @@ enum struct Cell
 }
 
 ArrayList g_GuideCells;
-ConVar g_hCvarMPGameMode, g_hCvarEnable, g_hCvarMax;
+ConVar g_hCvarMPGameMode, g_hCvarEnable, g_hCvarMax, g_hCvarSurvivors, g_hCvarInfected, g_hCvarSpec, g_hCvarAlive;
 bool gamemode_guidable, guide_ready, map_started, nav_started, enable;
-int g_iLaser, max_draw;
+int g_iLaser;
 
 void GetCvars()
 {
-    max_draw = GetConVarInt(g_hCvarMax);
-    if (enable != GetConVarBool(g_hCvarEnable))
+    if (enable != g_hCvarEnable.BoolValue)
     {
-        enable = GetConVarBool(g_hCvarEnable);
+        enable = g_hCvarEnable.BoolValue;
         if (enable && !guide_ready) Guide_Prep();
         else if (!enable && guide_ready) Guide_Cleanup();
     }
@@ -74,7 +77,7 @@ bool beams_cooldown(int client)
     return false;
 }
 
-// Client just rendered beams for given duration.
+// Client just rendered beams for given duration. Set cooldown to half the duration.
 void beams_cooldown_update(int client, float duration = -1.0)
 {
     static PlayerTime playertime;
@@ -94,6 +97,7 @@ void beams_cooldown_update(int client, float duration = -1.0)
 // Reset all beam cooldowns. If client is specified, reset only for that client
 void beams_cooldown_reset(int client = -1)
 {
+    if (!enable || !guide_ready) return;
     static PlayerTime playertime;
     if (client>0)
     {
@@ -137,9 +141,9 @@ void Guide_Prep()
         return;
     }
 
-    float pos[3];
+    static float pos[3];
     float flow;
-    Cell cell;
+    static Cell cell;
 
     ArrayList all_cells = new ArrayList(sizeof(Cell)); // Collect nav areas in survivor path
 
@@ -211,7 +215,7 @@ void Guide_Prep()
         #if DEBUG
             int erased = 0;
         #endif
-        Cell cell_before,cell_after;
+        static Cell cell_before,cell_after;
         while (i<(g_GuideCells.Length-1))
         {
             g_GuideCells.GetArray(i-1,cell_before,sizeof(Cell));
@@ -249,7 +253,7 @@ void guide_add_cell(Cell cell)
         if (prev2_exists && twopos_visible(cell.center,cell_prev2.center)) g_GuideCells.SetArray(g_GuideCells.Length-1,cell,sizeof(Cell));
         else g_GuideCells.PushArray(cell);
     }
-    else cell_rescue(g_GuideCells,cell_prev,cell); // Try adding cell inbetween to recover LOS.
+    else cell_rescue(g_GuideCells,cell_prev,cell,prev2_exists,cell_prev2); // Try adding cell inbetween to recover LOS.
 }
 
 int SortFlow(int index1, int index2, Handle array, Handle hndl)
@@ -262,7 +266,7 @@ int SortFlow(int index1, int index2, Handle array, Handle hndl)
 }
 
 // Two cells cannot see each other. Attempt to remedy this
-void cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
+void cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, bool prev2_exists, Cell cell_prev2)
 {
     static Cell cell;
     ArrayList pos_candidates = new ArrayList(3);
@@ -274,7 +278,7 @@ void cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
     bool flat = FloatAbs(diff[2])<=1.0; // flat -> nothing to do in z direction
     int i_turns_flat = 1;
     if (!flat) i_turns_flat += 1; // two turns if not flat
-    int i_turns_mid = 2;
+    int i_turns_mid = 2; // one cycle at old cell, then one cycle at midpoint
 
     for (int i_turn_flat = 0; i_turn_flat < i_turns_flat; i_turn_flat++)
     {
@@ -282,13 +286,18 @@ void cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
         if (i_turn_flat==1) diff_template[2] = 0.0;
         for (int i_turn_mid = 0; i_turn_mid < i_turns_mid; i_turn_mid++) 
         {
-            if (i_turn_mid==1)
+            if (i_turn_mid==1) // Try wiggling at midpoint
             {
-                // Move to midpoint. Do some wiggling
                 diff_candidate = diff; ScaleVector(diff_candidate,0.5);
                 AddVectors(cell_old.center,diff_candidate,pos_template);
             }
             else pos_template = cell_old.center;
+
+            if (i_turn_mid==0)
+            {
+                diff_candidate = diff_template; ScaleVector(diff_candidate,0.5); // half
+                AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
+            }
 
             diff_candidate = diff_template; diff_candidate[0] = 0.0; // dy
             AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
@@ -300,8 +309,6 @@ void cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
             diff_candidate[0] *= 0.5; // dx/2
             AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
             
-            diff_candidate = diff_template; ScaleVector(diff_candidate,0.5); // half
-            AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
             diff_candidate = diff_template; ScaleVector(diff_candidate,0.25); // quarter
             AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
 
@@ -313,6 +320,14 @@ void cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
                 AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
             }
 
+            // Try small static wiggles
+            AddVectors(pos_template,{16.0,0.0,0.0},pos_candidate); pos_candidates.PushArray(pos_candidate);
+            AddVectors(pos_template,{-16.0,0.0,0.0},pos_candidate); pos_candidates.PushArray(pos_candidate);
+            AddVectors(pos_template,{0.0,16.0,0.0},pos_candidate); pos_candidates.PushArray(pos_candidate);
+            AddVectors(pos_template,{0.0,-16.0,0.0},pos_candidate); pos_candidates.PushArray(pos_candidate);
+            AddVectors(pos_template,{0.0,0.0,16.0},pos_candidate); pos_candidates.PushArray(pos_candidate);
+            AddVectors(pos_template,{0.0,-0.0,-16.0},pos_candidate); pos_candidates.PushArray(pos_candidate);
+
         }
     }
 
@@ -321,9 +336,12 @@ void cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
         pos_candidates.GetArray(i,pos_candidate,sizeof(pos_candidate));
         if (!twopos_visible(cell_new.center,pos_candidate)) continue;
         if (!twopos_visible(cell_old.center,pos_candidate)) continue;
-        cell.flow = (cell_old.flow + cell_new.flow)/2.0;
+        float d_flow = GetVectorDistance(cell_old.center,pos_candidate);
+        cell.flow = cell_old.flow + d_flow;
+        if (cell.flow>=cell_new.flow) cell.flow = (cell_old.flow + cell_new.flow)/2.0;
         cell.navArea = cell_old.navArea;
         cell.center = pos_candidate;
+        //if (prev2_exists && twopos_visible(cell.center,cell_prev2.center)) cells.SetArray(cells.Length-1,cell,sizeof(Cell));
         cells.PushArray(cell);
         break;
     }
