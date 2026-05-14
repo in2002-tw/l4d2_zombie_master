@@ -77,6 +77,7 @@ public Plugin myinfo =
 // 3. Other -> Give Up now asks for confirmation to avoid accidents.
 // 4. Player data: remember grid mode, autocommon settings, PTG
 // 5. Traditional Chinese localization updated (thanks in2002)
+// 6. Start area fixes for better compatibility with custom maps.
 
 // TO DO LIST:
 // 5. Gas station tornado (done by zyiks, not implemented)
@@ -1495,7 +1496,9 @@ public Action evtPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     
     if (clients_timer==INVALID_HANDLE) clients_timer = CreateTimer(0.1,CountClients);
     
-    L4D2_RemoveEntityGlow(victim);
+    //L4D2_RemoveEntityGlow(victim);
+    request_update_glow(victim,true,0.0); // Force update glow to reduce glow glitches.
+    request_update_glow(victim,true); 
     
     if(GetClientTeam(victim)!=TEAM_INFECTED)
     {
@@ -1991,8 +1994,10 @@ Action EvtBotReplacePlayer(Event event, const char[] name, bool dontBroadcast)
     int bot = GetClientOfUserId(event.GetInt("bot"));
     int client = GetClientOfUserId(event.GetInt("player"));
     if (DEBUG) LogMessage("[zm] EvtBotReplacePlayer %d replaced %d", bot, client);
-    request_update_glow(bot);
-    request_update_glow(client);
+    request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
+    request_update_glow(client,true); 
+    request_update_glow(bot,true,0.0); // Force update glow to reduce glow glitches.
+    request_update_glow(bot,true); 
     if (GetEntityFlags(client) & FL_DUCKING)
     {
         request_crouch(EntIndexToEntRef(bot));
@@ -2007,8 +2012,10 @@ Action EvtPlayerReplaceBot(Event event, const char[] name, bool dontBroadcast)
     int bot = GetClientOfUserId(event.GetInt("bot"));
     int client = GetClientOfUserId(event.GetInt("player"));
     if (DEBUG) LogMessage("[zm] EvtPlayerReplaceBot %d replaced %d", client, bot);
-    request_update_glow(bot);
-    request_update_glow(client);
+    request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
+    request_update_glow(client,true); 
+    request_update_glow(bot,true,0.0); // Force update glow to reduce glow glitches.
+    request_update_glow(bot,true); 
     if (GetEntityFlags(bot) & FL_DUCKING)
     {
         request_crouch(EntIndexToEntRef(client));
@@ -2194,7 +2201,8 @@ void evtPlayerTeam(Event event, const char[] name, bool dontBroadcast)
     int client = GetClientOfUserId(event.GetInt("userid"));
     if (!IsValidClient(client)) return;
     if (DEBUG) LogMessage("[zm] evtPlayerTeam %d", client);
-    request_update_glow(client);
+    request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
+    request_update_glow(client,true); 
     if (zm_timer==INVALID_HANDLE) zm_update();
     if (zm_client==client) RequestFrame(check_zm_team);
     if (clients_timer==INVALID_HANDLE) clients_timer = CreateTimer(0.1,CountClients);
@@ -2237,7 +2245,8 @@ public void OnClientPutInServer(int client)
 	if (!IsValidClient(client)) return;
 	if (DEBUG) LogMessage("[zm] OnClientPutInServer %d", client);
 	hp_timers[client] = null;
-	request_update_glow(client);
+    request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
+    request_update_glow(client,true); 
 	clients_active[client] = false;
 	clients_offered[client] = false;
 	dominated[client] = false;

@@ -717,12 +717,16 @@ stock bool navArea_validStart(Address navArea)
     float pos[3];
     L4D_FindRandomSpot(navArea,pos);
     if (L4D_IsPositionInFirstCheckpoint(pos)) return true;
+    L4D_GetNavAreaCenter(navArea,pos);
+    if (L4D_IsPositionInFirstCheckpoint(pos)) return true;
     
     int navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
     if ( (navSpawnAttrs & NAV_SPAWN_OBSCURED) || (navSpawnAttrs & NAV_SPAWN_FINALE) ) return false;
     if (!((navSpawnAttrs & NAV_SPAWN_PLAYER_START) || (navSpawnAttrs & NAV_SPAWN_CHECKPOINT))) return false;
     float flow = L4D_GetFlowFromPoint(pos);
-    if (flow>0.0 || flow<(-9000.0)) return false;
+    if (flow<=(-9000.0)) return false;
+    float max_flow = L4D2Direct_GetMapMaxFlowDistance();
+    if (flow>=(max_flow*0.1)) return false;
     return true;
 }
 

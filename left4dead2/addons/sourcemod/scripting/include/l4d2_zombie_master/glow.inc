@@ -235,7 +235,7 @@ void CreateZMGlow(int target, bool red = false, bool flow = false)
 
 void request_update_glow(int i, bool force = false, float delay=0.1)
 {
-    if (!IsValidEntity(i)) return;
+    if (!IsValidEntity(i) || !IsValidEdict(i)) return;
     if (!force && hp_timers[i]!=null) return;
     if (DEBUG) LogMessage("request_update_glow %d force %d delay %f", i, force, delay)
     if (delay<0.1) update_glow(i);
