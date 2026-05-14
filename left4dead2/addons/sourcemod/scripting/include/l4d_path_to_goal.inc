@@ -20,7 +20,6 @@ native void L4D_Path_To_Goal(int client = -1, float duration = 5.0, bool backwar
 #pragma semicolon 1
 #pragma newdecls required
 #include <sourcemod>
-#include <files>
 #include <left4dhooks>
 
 #define DEBUG 0 // 1 for basic debug, 2 for details, 3 for EXTREME amount of detail
@@ -29,7 +28,6 @@ native void L4D_Path_To_Goal(int client = -1, float duration = 5.0, bool backwar
 #define TEAM_SURVIVOR		2
 #define TEAM_INFECTED		3
 #define VMT_LASERBEAM       "sprites/laserbeam.vmt"
-#define MAX_DRAW            32
 
 // Data structure for guide points
 enum struct Cell
@@ -40,11 +38,22 @@ enum struct Cell
 }
 
 ArrayList g_GuideCells;
-ConVar g_hCvarMPGameMode;
-bool gamemode_guidable, guide_ready, map_started, nav_started;
-int g_iLaser;
+ConVar g_hCvarMPGameMode, g_hCvarEnable, g_hCvarMax;
+bool gamemode_guidable, guide_ready, map_started, nav_started, enable;
+int g_iLaser, max_draw;
 
-// Data structure for guide points
+void GetCvars()
+{
+    max_draw = GetConVarInt(g_hCvarMax);
+    if (enable != GetConVarBool(g_hCvarEnable))
+    {
+        enable = GetConVarBool(g_hCvarEnable);
+        if (enable && !guide_ready) Guide_Prep();
+        else if (!enable && guide_ready) Guide_Cleanup();
+    }
+}
+
+// Player cooldown
 enum struct PlayerTime
 {
 	float t_engine;
@@ -112,7 +121,7 @@ void Check_Guidable()
 
 void Guide_Prep()
 {
-    if (!gamemode_guidable || !map_started || !nav_started) return;
+    if (!enable || !gamemode_guidable || !map_started || !nav_started) return;
     //#if DEBUG
         float t = GetEngineTime();
     //#endif
@@ -179,43 +188,13 @@ void Guide_Prep()
 
     delete g_GuideCells;
     g_GuideCells = new ArrayList(sizeof(Cell));
+    all_cells.GetArray(0,cell,sizeof(Cell));
+    g_GuideCells.PushArray(cell);
 
-    float last_pos[3];
-    Cell cell_last;
-    bool last_valid = false;
-
-    // There are multiple types of cells:
-    // Cell that is already in guide list - may or may not be fixed
-    // New candidate cell - guaranteed to be not in guide list
-    // If we want to move cell that is already in guide list, we need to check LOS to cell BEFORE that one too.
-
-    for (int i = 0; i < all_cells.Length; i++) // Merge points that are visible to one another
+    for (int i = 1; i < all_cells.Length; i++) // Merge points that are visible to one another
     {
         all_cells.GetArray(i,cell,sizeof(Cell));
-        #if DEBUG>1
-            LogMessage("%d %f (%.1f %.1f %.1f)", i, cell.flow, cell.center[0], cell.center[1], cell.center[2]);
-        #endif
-        if (i==0)
-        {
-            g_GuideCells.PushArray(cell);
-            last_pos = cell.center;
-            continue;
-        } 
-        bool hit = !twopos_visible(last_pos,cell.center);
-        if (hit)
-        {    
-            if (last_valid)
-            {
-                g_GuideCells.PushArray(cell_last);
-                if (!twopos_visible(cell_last.center,cell.center)) cell_rescue(g_GuideCells,cell_last,cell);
-            }
-            g_GuideCells.PushArray(cell);
-            last_pos = cell.center;
-            last_valid = false;
-            continue;
-        }
-        cell_last = cell;
-        last_valid = true;
+        guide_add_cell(cell);
     }
 
     delete all_cells;
@@ -249,7 +228,7 @@ void Guide_Prep()
             i += 1;
         }
         #if DEBUG
-            if (erased>0) LogMessage("Erased %d cells because of author skill issue.", erased);
+            if (erased>0) LogMessage("Erased %d cells. Author skill issue.", erased);
         #endif
     }
 
@@ -257,6 +236,20 @@ void Guide_Prep()
     guide_ready = true;
 
     LogMessage("Final cell num %d (%f ms)", g_GuideCells.Length, (GetEngineTime()-t)*1000.0);
+}
+
+void guide_add_cell(Cell cell)
+{
+    static Cell cell_prev, cell_prev2;
+    g_GuideCells.GetArray(g_GuideCells.Length-1,cell_prev,sizeof(Cell)); // last cell
+    bool prev2_exists = (g_GuideCells.Length-2)>=0;
+    if (prev2_exists) g_GuideCells.GetArray(g_GuideCells.Length-2,cell_prev2,sizeof(Cell)); // cell before last one
+    if (twopos_visible(cell.center,cell_prev.center))
+    {
+        if (prev2_exists && twopos_visible(cell.center,cell_prev2.center)) g_GuideCells.SetArray(g_GuideCells.Length-1,cell,sizeof(Cell));
+        else g_GuideCells.PushArray(cell);
+    }
+    else cell_rescue(g_GuideCells,cell_prev,cell); // Try adding cell inbetween to recover LOS.
 }
 
 int SortFlow(int index1, int index2, Handle array, Handle hndl)
@@ -268,8 +261,8 @@ int SortFlow(int index1, int index2, Handle array, Handle hndl)
     return 0;
 }
 
-// Two cells cannot see each other. Attempt to fix this.
-bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
+// Two cells cannot see each other. Attempt to remedy this
+void cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
 {
     static Cell cell;
     ArrayList pos_candidates = new ArrayList(3);
@@ -326,28 +319,16 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new)
     for (int i = 0; i < pos_candidates.Length; i++) 
     {
         pos_candidates.GetArray(i,pos_candidate,sizeof(pos_candidate));
-        bool visible_end = twopos_visible(cell_new.center,pos_candidate);
-        if (!visible_end) continue;
-        bool visible_start = twopos_visible(cell_old.center,pos_candidate);
-        if (visible_start && visible_end)
-        {
-            cell.flow = (cell_old.flow + cell_new.flow)/2.0;
-            cell.navArea = cell_old.navArea;
-            cell.center = pos_candidate;
-            cells.PushArray(cell);
-            delete pos_candidates; return true;
-        }
-        //else if (visible_end)
-        //{
-        //    cells.PushArray(cell_old);
-        //    cell.flow = (cell_old.flow + cell_new.flow)/2.0;
-        //    cell.navArea = cell_old.navArea;
-        //    cell.center = pos_candidate;
-        //    cells.PushArray(cell);
-        //    delete pos_candidates; return true;
-        //}
+        if (!twopos_visible(cell_new.center,pos_candidate)) continue;
+        if (!twopos_visible(cell_old.center,pos_candidate)) continue;
+        cell.flow = (cell_old.flow + cell_new.flow)/2.0;
+        cell.navArea = cell_old.navArea;
+        cell.center = pos_candidate;
+        cells.PushArray(cell);
+        break;
     }
-    delete pos_candidates; return false;
+    cells.PushArray(cell_new);
+    delete pos_candidates;
 }
 
 void Guide_Cleanup()
@@ -362,6 +343,7 @@ void Guide_Cleanup()
 
 void DrawBeam(int client, float pos_start[3], float pos_end[3], float duration = 10.0, int color[4] = {100,200,100,100})
 {
+    if (g_iLaser==0) return;
     float start_width = 1.0;
     float end_width = 1.0;
     int fade_length = 1;

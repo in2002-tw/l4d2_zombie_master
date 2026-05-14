@@ -2,9 +2,6 @@
 #pragma newdecls required
 
 #include <sourcemod>
-#include <sdktools>
-#include <dhooks>
-#include <sdkhooks>
 #include <left4dhooks>
 #include <l4d_path_to_goal>
 
@@ -24,22 +21,39 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-    RegConsoleCmd("l4d_path_to_goal",   CmdRequestGuide, "Point where to go to progress in the map.");
+    AutoExecConfig(true, CONFIG_FILENAME);
+
     RegConsoleCmd("path_to_goal",       CmdRequestGuide, "Point where to go to progress in the map.");
     RegConsoleCmd("pathtogoal",         CmdRequestGuide, "Point where to go to progress in the map.");
     RegConsoleCmd("wheretogo",          CmdRequestGuide, "Point where to go to progress in the map.");
-    RegConsoleCmd("guideme",            CmdRequestGuide, "Point where to go to progress in the map.");
     RegConsoleCmd("imlost",             CmdRequestGuide, "Point where to go to progress in the map.");
+    RegConsoleCmd("guide",              CmdRequestGuide, "Point where to go to progress in the map.");
     RegConsoleCmd("ptg",                CmdRequestGuide, "Point where to go to progress in the map.");
     
     RegAdminCmd("l4d_path_to_goal_recalculate", CmdRecalculate, ADMFLAG_ROOT,"Recalculate guide points.");
+
+    g_hCvarEnable = CreateConVar("l4d_path_to_goal_enable", "1",
+    "0=OFF, 1=ON.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hCvarEnable.AddChangeHook(ConVarChanged_Cvars);
   	
+    g_hCvarMax = CreateConVar("l4d_path_to_goal_max", "32",
+    "Max number of beams per request.",FCVAR_NOTIFY, true, 1.0, true, 1000.0);
+    g_hCvarMax.AddChangeHook(ConVarChanged_Cvars);
+
   	g_hCvarMPGameMode = FindConVar("mp_gamemode");
   	g_hCvarMPGameMode.AddChangeHook(ConVarGameMode);
+    
     Check_Guidable();
+    GetCvars();
+    
     nav_started = true;
     HookEvent("round_start_post_nav", evtPostNav, EventHookMode_PostNoCopy);
     // nav_blocked nav_generate
+}
+
+void ConVarChanged_Cvars(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+    GetCvars();
 }
 
 void evtPostNav(Event event, const char[] name, bool dontBroadcast)
@@ -58,7 +72,7 @@ void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
 
 Action CmdRequestGuide(int client, int args)
 {
-    if (!map_started || !gamemode_guidable) return Plugin_Continue;
+    if (!enable || !map_started || !gamemode_guidable) return Plugin_Continue;
     float duration = 5.0;
     bool backward = GetClientTeam(client)!=TEAM_SURVIVOR;
     if (args>0)
@@ -82,7 +96,7 @@ Action CmdRequestGuide(int client, int args)
 
 Action CmdRecalculate(int client, int args)
 {
-    if (!map_started || !gamemode_guidable) return Plugin_Continue;
+    if (!enable || !map_started || !nav_started || !gamemode_guidable) return Plugin_Continue;
     Guide_Prep();
     return Plugin_Continue;
 }
@@ -127,6 +141,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 void Native_RequestGuide(Handle plugin, int numParams)
 {
+    if (!enable) return;
     int client = (numParams>0) ? GetNativeCell(1) : -1;
     float duration = (numParams>1) ? view_as<float>(GetNativeCell(2)) : 5.0;
     bool backward = (numParams>2) ? view_as<bool>(GetNativeCell(3)) : false;
@@ -142,7 +157,7 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     #if DEBUG
     float t = GetEngineTime();
     #endif
-    if (!gamemode_guidable || duration<=0.0 || !IsValidClient(client) || IsFakeClient(client)) return;
+    if (!enable || !gamemode_guidable || duration<=0.0 || g_iLaser==0 || !IsValidClient(client) || IsFakeClient(client)) return;
     if (!guide_ready) Guide_Prep();
     if (!guide_ready || g_GuideCells==null) return;
     if (beams_cooldown(client)) return;
@@ -226,7 +241,7 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
             //    pos_forward[0], pos_forward[1], pos_forward[2],
             //    cell.center[0], cell.center[1], cell.center[2]);
             //#endif
-            if (i_draw>=MAX_DRAW) break;
+            if (i_draw>=max_draw) break;
         }
         if (backward && i_backward>0)
         {
@@ -236,7 +251,7 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
             pos_backward = cell.center;
             end = false;
             i_draw += 1;
-            if (i_draw>=MAX_DRAW) break;
+            if (i_draw>=max_draw) break;
         }
     }
     if (i_draw>0) beams_cooldown_update(client,duration);
