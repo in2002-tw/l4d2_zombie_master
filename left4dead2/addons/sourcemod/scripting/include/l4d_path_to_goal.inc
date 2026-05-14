@@ -51,8 +51,8 @@ void GetCvars()
     if (enable != g_hCvarEnable.BoolValue)
     {
         enable = g_hCvarEnable.BoolValue;
-        if (enable && !guide_ready) Guide_Prep();
-        else if (!enable && guide_ready) Guide_Cleanup();
+        //if (enable && !guide_ready) Guide_Prep();
+        if (!enable && guide_ready) Guide_Cleanup();
     }
 }
 
@@ -119,8 +119,8 @@ void Check_Guidable()
     gamemode_guidable = !L4D_IsSurvivalMode();
     if (gamemode_guidable && GetEngineVersion()==Engine_Left4Dead2) gamemode_guidable = !L4D2_IsScavengeMode();
     if (!map_started || !nav_started) return;
-    if (!guide_ready && gamemode_guidable) Guide_Prep();
-    else if (guide_ready && !gamemode_guidable) Guide_Cleanup();
+    //if (!guide_ready && gamemode_guidable) Guide_Prep();
+    if (guide_ready && !gamemode_guidable) Guide_Cleanup();
 }
 
 void Guide_Prep()
@@ -147,35 +147,90 @@ void Guide_Prep()
 
     ArrayList all_cells = new ArrayList(sizeof(Cell)); // Collect nav areas in survivor path
 
+    bool missing_start = true;
+    bool missing_checkpoint = true;
+
+    bool found_start, found_checkpoint;
+    Address navArea_start, navArea_checkpoint;
+    float flow_start = max_flow;
+    float flow_checkpoint = 0.0;
+
 	for (int i = 0; i < allAreas.Length; i++)
 	{
 		Address navArea = allAreas.Get(i);
 		if (!navArea) continue;
-        if (!(L4D_GetNavArea_SpawnAttributes(navArea) & NAV_SPAWN_ESCAPE_ROUTE)) continue;
         if (L4D_NavArea_IsBlocked(navArea,TEAM_SURVIVOR,true) || L4D_NavArea_IsBlocked(navArea,TEAM_SURVIVOR,false)) continue;
         flow = L4D2Direct_GetTerrorNavAreaFlow(navArea);
-        if (flow<0.0 || flow>max_flow) continue;
-        if (all_cells.FindValue(flow,0)>=0) continue; // if identical flow exists, ignore this cell
-        L4D_GetNavAreaCenter(navArea,pos);
-        pos[2] += 16.0;
-        if (pos_underwater(pos))
+        if (flow>max_flow) continue;
+        int navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
+        if (navSpawnAttrs & NAV_SPAWN_ESCAPE_ROUTE)
         {
+            if (flow<=0.0) continue;
+            if (all_cells.FindValue(flow,0)>=0) continue; // if identical flow exists, ignore this cell
+            L4D_GetNavAreaCenter(navArea,pos);
             pos[2] += 16.0;
             if (pos_underwater(pos))
             {
                 pos[2] += 16.0;
-                if (pos_underwater(pos)) continue;
+                if (pos_underwater(pos))
+                {
+                    pos[2] += 16.0;
+                    if (pos_underwater(pos)) continue;
+                }
+            }
+            cell.navArea = navArea;
+            cell.center = pos;
+            cell.flow = flow;
+            all_cells.PushArray(cell);
+            if (navSpawnAttrs & NAV_SPAWN_PLAYER_START) missing_start = false;
+            if (navSpawnAttrs & NAV_SPAWN_CHECKPOINT) missing_checkpoint = false;
+            #if DEBUG>2
+                LogMessage("%d %f %f", i, flow, cell.flow);
+            #endif
+        }
+        
+        if (navSpawnAttrs & NAV_SPAWN_PLAYER_START) // Find smallest flow starting position
+        {
+            if (flow<flow_start)
+            {
+                found_start = true;
+                navArea_start = navArea;
+                flow_start = flow;
             }
         }
-        cell.navArea = navArea;
-        cell.center = pos;
-        cell.flow = flow;
-        all_cells.PushArray(cell);
-        #if DEBUG>2
-            LogMessage("%d %f %f", i, flow, cell.flow);
-        #endif
+        else if (navSpawnAttrs & NAV_SPAWN_CHECKPOINT) // Find biggest flow ending position
+        {
+            if (flow>flow_checkpoint)
+            {
+                found_checkpoint = true;
+                navArea_checkpoint = navArea;
+                flow_checkpoint = flow;
+            }
+        }
+
     }
     
+    if (missing_start && found_start && all_cells.FindValue(flow_start,0)<0)
+    {
+        cell.navArea = navArea_start;
+        L4D_GetNavAreaCenter(navArea_start,pos);
+        pos[2] += 16.0; 
+        if (pos_underwater(pos)) pos[2] += 16.0;
+        cell.center = pos;
+        cell.flow = flow_start;
+        all_cells.PushArray(cell);
+    }
+    if (missing_checkpoint && found_checkpoint && all_cells.FindValue(flow_checkpoint,0)<0)
+    {
+        cell.navArea = navArea_checkpoint;
+        L4D_GetNavAreaCenter(navArea_checkpoint,pos);
+        pos[2] += 16.0;
+        if (pos_underwater(pos)) pos[2] += 16.0;
+        cell.center = pos;
+        cell.flow = flow_checkpoint;
+        all_cells.PushArray(cell);
+    }
+
     delete allAreas;
 
     #if DEBUG
@@ -236,9 +291,8 @@ void Guide_Prep()
         #endif
     }
 
-    beams_cooldown_reset();
     guide_ready = true;
-
+    beams_cooldown_reset();
     LogMessage("Final cell num %d (%f ms)", g_GuideCells.Length, (GetEngineTime()-t)*1000.0);
 }
 
@@ -341,8 +395,8 @@ void cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, bool prev2_exist
         if (cell.flow>=cell_new.flow) cell.flow = (cell_old.flow + cell_new.flow)/2.0;
         cell.navArea = cell_old.navArea;
         cell.center = pos_candidate;
-        //if (prev2_exists && twopos_visible(cell.center,cell_prev2.center)) cells.SetArray(cells.Length-1,cell,sizeof(Cell));
-        cells.PushArray(cell);
+        if (prev2_exists && twopos_visible(cell.center,cell_prev2.center)) cells.SetArray(cells.Length-1,cell,sizeof(Cell));
+        else cells.PushArray(cell);
         break;
     }
     cells.PushArray(cell_new);

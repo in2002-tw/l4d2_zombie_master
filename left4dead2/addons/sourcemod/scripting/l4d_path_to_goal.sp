@@ -6,7 +6,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.01 2026-05-14"
+#define PLUGIN_VERSION 			"1.02 2026-05-14"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -36,20 +36,20 @@ public void OnPluginStart()
     "0=OFF, 1=ON.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_hCvarEnable.AddChangeHook(ConVarChanged_Cvars);
   	
-    g_hCvarMax = CreateConVar("l4d_path_to_goal_max", "32",
-    "Max number of beams per request.",FCVAR_NOTIFY, true, 1.0, true, 1000.0);
+    g_hCvarMax = CreateConVar("l4d_path_to_goal_max", "16",
+    "Max beams per request. Increasing this can potentially cause crashes.",FCVAR_NOTIFY, true, 1.0, true, 1000.0);
 
     g_hCvarSurvivors = CreateConVar("l4d_path_to_goal_survivor", "1",
-    "Allow survivors to see path to goal.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    "Allow survivors to request.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
     g_hCvarInfected = CreateConVar("l4d_path_to_goal_infected", "1",
-    "Allow infected to see path to goal.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    "Allow infected to request.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
     g_hCvarSpec = CreateConVar("l4d_path_to_goal_spec", "1",
-    "Allow observers/spectators to see path to goal.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    "Allow observers/spectators to request.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
     g_hCvarAlive = CreateConVar("l4d_path_to_goal_alive", "0",
-    "Allow players to see path to goal based on alive state: 0=all,1=alive only,2=dead only.",FCVAR_NOTIFY, true, 0.0, true, 2.0);
+    "Allow request based on alive state: 0=all,1=alive only,2=dead only.",FCVAR_NOTIFY, true, 0.0, true, 2.0);
 
   	g_hCvarMPGameMode = FindConVar("mp_gamemode");
   	g_hCvarMPGameMode.AddChangeHook(ConVarGameMode);
@@ -58,8 +58,9 @@ public void OnPluginStart()
     GetCvars();
     
     nav_started = true;
-    HookEvent("round_start_post_nav", evtPostNav, EventHookMode_PostNoCopy);
-    // nav_blocked nav_generate
+    HookEvent("round_start_post_nav", evtPostNav,    EventHookMode_PostNoCopy);
+    HookEvent("nav_blocked",          evtNavChange,  EventHookMode_PostNoCopy);
+    HookEvent("nav_generate",         evtNavChange,  EventHookMode_PostNoCopy);
 }
 
 void ConVarChanged_Cvars(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -73,7 +74,27 @@ void evtPostNav(Event event, const char[] name, bool dontBroadcast)
         LogMessage("round_start_post_nav");
     #endif
     nav_started = true;
-    Guide_Prep();
+    NavChanged();
+}
+
+void evtNavChange(Event event, const char[] name, bool dontBroadcast)
+{
+    NavChanged();
+}
+
+void NavChanged()
+{
+    if (guide_ready) Guide_Cleanup();
+}
+
+public void OnEntityCreated(int entity, const char[] classname)
+{
+    if (!nav_started || !map_started) return;
+    if (strcmp(classname,"func_nav_blocker",false)==0 || strcmp(classname,"script_nav_blocker",false)==0)
+    {
+        // Hook AcceptInput
+        NavChanged();
+    }
 }
 
 void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -121,7 +142,7 @@ public void OnMapStart()
 void MapStarted()
 {
     map_started = true;
-    if (nav_started && gamemode_guidable && !guide_ready) Guide_Prep();
+    //if (nav_started && gamemode_guidable && !guide_ready) Guide_Prep();
 }
 
 public void OnMapEnd()
@@ -219,7 +240,7 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     for (int i = 0; i < g_GuideCells.Length; i++)
     {
         g_GuideCells.GetArray(i,cell,sizeof(Cell));
-        if ( use_flow && ( cell.flow > flow ) )
+        if ( use_flow && ( cell.flow >= flow ) )
         {
             i_start = i;
             break;
