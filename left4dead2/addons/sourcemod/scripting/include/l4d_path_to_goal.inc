@@ -62,7 +62,6 @@ void GetCvars()
     {
         t_nav = -1.0;
         enable = g_hCvarEnable.BoolValue;
-        //if (enable && !guide_ready) Guide_Prep();
         if (!enable && guide_ready) Guide_Cleanup();
     }
 }
@@ -85,54 +84,149 @@ enum struct CellRequest
 }
 CellRequest g_CellRequests[MAXPLAYERS+1];
 
-// Check if client is on cooldown for drawing beams
-bool beams_cooldown(int client)
+// Draw survivor path for client, for duration in seconds
+// backward: include backwards-going path.
+// join_client: draw connection between client's origin and nearest point in survivor path.
+void RequestGuide(int client, float duration = 5.0, bool backward = false, bool join_client = true)
 {
-    //if (playertime.t_engine<0.0 && playertime.t_game<0.0) return false;
-    if (g_PlayerTime[client].t_game<0.0) return false;
-    //if ( (playertime.t_engine+playertime.t_cooldown/2.0)>=GetEngineTime() ) return true;
-    if ( (g_PlayerTime[client].t_game+g_PlayerTime[client].t_cooldown)>GetGameTime() ) return true;
-    return false;
-}
+    #if DEBUG
+    float t = GetEngineTime();
+    #endif
+    if (!enable || !gamemode_guidable || duration<=0.0 || g_iLaser==0 || !IsValidClient(client) || IsFakeClient(client)) return;
 
-// Client just rendered beams for given duration. Set cooldown to half the duration.
-void beams_cooldown_update(int client, float duration = -1.0)
-{
-    static PlayerTime playertime;
-    playertime = g_PlayerTime[client];
-    if (duration < 0.0)
+    switch (GetClientTeam(client)) // Check if team is blocked
     {
-        duration = playertime.t_cooldown;
-        if (duration < 0.0) return;
+        case TEAM_SPECTATOR:
+        {
+            if (!g_hCvarSpec.BoolValue) return;
+        }
+        case TEAM_SURVIVOR:
+        {
+            if (!g_hCvarSurvivors.BoolValue) return;
+        }
+        case TEAM_INFECTED:
+        {
+            if (!g_hCvarInfected.BoolValue) return;
+        }
     }
-    else duration /= 2.0;
-    //playertime.t_engine = GetEngineTime();
-    playertime.t_game = GetGameTime();
-    playertime.t_cooldown = duration;
-    g_PlayerTime[client] = playertime;
-    g_CellRequests[client].duration = -1.0;
-}
 
-// Reset all beam cooldowns. If client is specified, reset only for that client
-void beams_cooldown_reset(int client = -1)
-{
-    if (!enable || !guide_ready) return;
-    static PlayerTime playertime;
-    if (client>0)
+    if (!guide_ready) Guide_Prep();
+    if (!guide_ready || g_GuideCells==null)
     {
-        playertime = g_PlayerTime[client];
-        playertime.t_game = -1.0; playertime.t_engine = -1.0; playertime.t_cooldown = -1.0;
-        g_PlayerTime[client] = playertime;
-        //g_CellRequests[client].duration = -1.0;
+        static CellRequest request;
+        request.duration = duration;
+        request.backward = backward;
+        request.join_client = join_client;
+        g_CellRequests[client] = request;
         return;
     }
-    for (int i = 1; i <= MaxClients; i++)
+    if (beams_cooldown(client)) return;
+    float flow = 0.0;
+    int i_start = g_GuideCells.Length - 1;
+    static float last_pos[3], eye_pos[3];
+    GetClientEyePosition(client,eye_pos);
+    if (IsPlayerAlive(client))
     {
-        playertime = g_PlayerTime[i];
-        playertime.t_game = -1.0; playertime.t_engine = -1.0; playertime.t_cooldown = -1.0;
-        g_PlayerTime[i] = playertime;
-        //g_CellRequests[i].duration = -1.0;
+        if (g_hCvarAlive.IntValue == ACCEPT_DEAD) return; // alive state blocked by cvar
+        flow = L4D2Direct_GetFlowDistance(client);
+        GetClientAbsOrigin(client,last_pos);
+        last_pos[2] += 16.0;
+        switch (GetEntProp(client, Prop_Send, "m_nWaterLevel"))
+        {
+            case 1: last_pos[2] += 16.0;
+            case 2: last_pos[2] += 32.0;
+        }
     }
+    else
+    {
+        if (g_hCvarAlive.IntValue == ACCEPT_ALIVE) return; // alive state blocked by cvar
+        last_pos = eye_pos;
+        last_pos[2] -= 48.0;
+        if (pos_underwater(last_pos)) last_pos[2] += 32.0;
+    }
+    static Cell cell;
+    bool use_flow = flow>0.0;
+    float min_dist = -1.0;
+    float dist;
+    for (int i = 0; i < g_GuideCells.Length; i++)
+    {
+        g_GuideCells.GetArray(i,cell,sizeof(Cell));
+        if ( use_flow && ( cell.flow >= flow ) )
+        {
+            i_start = i;
+            break;
+        }
+        else
+        {
+            dist = GetVectorDistance(last_pos,cell.center,true);
+            if (min_dist<0.0 || dist<min_dist)
+            {
+                min_dist = dist;
+                i_start = i;
+            }
+        }
+    }
+    if (!use_flow && min_dist<0.0) return;
+    
+    // Try starting at a more reasonable position with LOS
+    if ( join_client && (i_start+1)<g_GuideCells.Length && cell_visible(i_start+1,last_pos)) i_start += 1; // Move forward
+    else if (i_start>0 && !cell_visible(i_start,last_pos) && cell_visible(i_start-1,last_pos)) i_start -=1; // Move backward
+    
+    int i_draw = 0;
+    g_GuideCells.GetArray(i_start,cell,sizeof(Cell));
+
+    if (join_client) // Connect client to starting cell
+    {
+        DrawBeam(client,last_pos,cell.center,duration);
+        i_draw += 1;
+    }
+
+    int i_forward = i_start;
+    int i_backward = i_start;
+    static float pos_forward[3], pos_backward[3];
+    pos_forward = cell.center;
+    pos_backward = cell.center;
+    bool end = false;
+    while (!end)
+    {
+        end = true;
+        if ((i_forward+1)<g_GuideCells.Length)
+        {
+            i_forward += 1;
+            g_GuideCells.GetArray(i_forward,cell,sizeof(Cell));
+            DrawBeam(client,pos_forward,cell.center,duration);
+            pos_forward = cell.center;
+            end = false;
+            i_draw += 1;
+            if (i_draw>=g_hCvarMax.IntValue) break;
+        }
+        if (backward && i_backward>0)
+        {
+            i_backward -= 1;
+            g_GuideCells.GetArray(i_backward,cell,sizeof(Cell));
+            DrawBeam(client,pos_backward,cell.center,duration,{200,100,100,100});
+            pos_backward = cell.center;
+            end = false;
+            i_draw += 1;
+            if (i_draw>=g_hCvarMax.IntValue) break;
+        }
+    }
+    if (i_draw>0) beams_cooldown_update(client,duration);
+    #if DEBUG
+        LogMessage("RequestGuide: client %d flow %f cells %d i_start %d (%f ms)", client, flow, i_draw, i_start, (GetEngineTime()-t)*1000.0);
+    #endif
+}
+
+
+void DrawBeam(int client, float pos_start[3], float pos_end[3], float duration = 10.0, int color[4] = {100,200,100,100})
+{
+    if (g_iLaser==0) return;
+    float start_width = 1.0;
+    float end_width = 1.0;
+    int fade_length = 1;
+    float amp = 0.0;
+    TE_SetupBeamPoints(pos_start,pos_end,g_iLaser,0,0,0,duration,start_width,end_width,fade_length,amp,color,0);
+    TE_SendToClient(client); // no LOS
 }
 
 void Check_Guidable()
@@ -140,7 +234,6 @@ void Check_Guidable()
     gamemode_guidable = !L4D_IsSurvivalMode();
     if (gamemode_guidable && GetEngineVersion()==Engine_Left4Dead2) gamemode_guidable = !L4D2_IsScavengeMode();
     if (!map_started || !nav_started) return;
-    //if (!guide_ready && gamemode_guidable) Guide_Prep();
     if (guide_ready && !gamemode_guidable) Guide_Cleanup();
 }
 
@@ -158,6 +251,26 @@ ArrayList allAreas, all_cells;
 bool g_bMissingStart, g_bMissingCheckpoint, g_bFoundStart, g_bFoundCheckpoint;
 Address g_aNavStart, g_aNavCheckpoint;
 
+void Guide_Prep()
+{
+    if (!enable || !gamemode_guidable || !map_started || !nav_started || guide_prep) return;
+    if (is_prep_cooldown()) return;
+    guide_prep = true;
+    g_iPrepStage = STAGE_PREP;
+    g_iPrepFrames = 0;
+    OnFramePrep(true);
+}
+
+void Guide_Cleanup()
+{
+    #if DEBUG
+        LogMessage("Guide_Cleanup");
+    #endif
+    delete g_GuideCells;
+    guide_ready = false;
+    g_iPrepStage = STAGE_NONE;
+}
+
 bool frame_budget_exceeded()
 {
     if (g_hCvarBudget.FloatValue <= 0.0) return false;
@@ -168,7 +281,7 @@ bool frame_budget_exceeded()
 
 void OnFramePrep(bool new_frame = true)
 {
-    if (!enable || guide_ready || !gamemode_guidable || !map_started || !nav_started || !guide_prep || g_iPrepStage<=STAGE_NONE || g_iPrepStage>=STAGE_END)
+    if (!enable || guide_ready || !gamemode_guidable || !map_started || !nav_started || g_iPrepStage<=STAGE_NONE || g_iPrepStage>=STAGE_END)
     {
         guide_prep = false;
         g_iPrepStage = STAGE_NONE;
@@ -182,7 +295,6 @@ void OnFramePrep(bool new_frame = true)
         g_iPrepFrames += 1;
         g_tFrameStart = GetEngineTime();
     }
-    //LogMessage("OnFramePrep %d %d i=%d", g_iPrepStage, g_iPrepFrames, g_iLoop);
     switch (g_iPrepStage)
     {
         case STAGE_PREP:
@@ -424,20 +536,6 @@ void OnFramePrep(bool new_frame = true)
 
 }
 
-void Guide_Prep()
-{
-    if (!enable || !gamemode_guidable || !map_started || !nav_started || guide_prep) return;
-    if (is_prep_cooldown())
-    {
-        LogMessage("Guide_Prep denied: is_prep_cooldown");
-        return;
-    }
-    guide_prep = true;
-    g_iPrepStage = STAGE_PREP;
-    g_iPrepFrames = 0;
-    OnFramePrep(true);
-}
-
 void guide_add_cell(Cell cell)
 {
     static Cell cell_prev, cell_prev2;
@@ -545,160 +643,52 @@ void cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, bool prev2_exist
     delete pos_candidates;
 }
 
-void Guide_Cleanup()
+// Check if client is on cooldown for drawing beams
+bool beams_cooldown(int client)
 {
-    #if DEBUG
-        LogMessage("Guide_Cleanup");
-    #endif
-    delete g_GuideCells;
-    guide_ready = false;
-    guide_prep = false;
-    g_iPrepStage = STAGE_NONE;
+    //if (playertime.t_engine<0.0 && playertime.t_game<0.0) return false;
+    if (g_PlayerTime[client].t_game<0.0) return false;
+    //if ( (playertime.t_engine+playertime.t_cooldown/2.0)>=GetEngineTime() ) return true;
+    if ( (g_PlayerTime[client].t_game+g_PlayerTime[client].t_cooldown)>GetGameTime() ) return true;
+    return false;
 }
 
-// Draw survivor path for client, for duration in seconds
-// backward: include backwards-going path.
-// join_client: draw connection between client's origin and nearest point in survivor path.
-void RequestGuide(int client, float duration = 5.0, bool backward = false, bool join_client = true)
+// Client just rendered beams for given duration. Set cooldown to half the duration.
+void beams_cooldown_update(int client, float duration = -1.0)
 {
-    #if DEBUG
-    float t = GetEngineTime();
-    #endif
-    if (!enable || !gamemode_guidable || duration<=0.0 || g_iLaser==0 || !IsValidClient(client) || IsFakeClient(client)) return;
-
-    switch (GetClientTeam(client)) // Check if team is blocked
+    static PlayerTime playertime;
+    playertime = g_PlayerTime[client];
+    if (duration < 0.0)
     {
-        case TEAM_SPECTATOR:
-        {
-            if (!g_hCvarSpec.BoolValue) return;
-        }
-        case TEAM_SURVIVOR:
-        {
-            if (!g_hCvarSurvivors.BoolValue) return;
-        }
-        case TEAM_INFECTED:
-        {
-            if (!g_hCvarInfected.BoolValue) return;
-        }
+        duration = playertime.t_cooldown;
+        if (duration < 0.0) return;
     }
+    else duration /= 2.0;
+    //playertime.t_engine = GetEngineTime();
+    playertime.t_game = GetGameTime();
+    playertime.t_cooldown = duration;
+    g_PlayerTime[client] = playertime;
+    g_CellRequests[client].duration = -1.0;
+}
 
-    if (!guide_ready) Guide_Prep();
-    if (!guide_ready || g_GuideCells==null)
+// Reset all beam cooldowns. If client is specified, reset only for that client
+void beams_cooldown_reset(int client = -1)
+{
+    if (!enable || !guide_ready) return;
+    static PlayerTime playertime;
+    if (client>0)
     {
-        static CellRequest request;
-        request.duration = duration;
-        request.backward = backward;
-        request.join_client = join_client;
-        g_CellRequests[client] = request;
+        playertime = g_PlayerTime[client];
+        playertime.t_game = -1.0; playertime.t_engine = -1.0; playertime.t_cooldown = -1.0;
+        g_PlayerTime[client] = playertime;
         return;
     }
-    if (beams_cooldown(client)) return;
-    float flow = 0.0;
-    int i_start = g_GuideCells.Length - 1;
-    static float last_pos[3], eye_pos[3];
-    GetClientEyePosition(client,eye_pos);
-    if (IsPlayerAlive(client))
+    for (int i = 1; i <= MaxClients; i++)
     {
-        if (g_hCvarAlive.IntValue == ACCEPT_DEAD) return; // alive state blocked by cvar
-        flow = L4D2Direct_GetFlowDistance(client);
-        GetClientAbsOrigin(client,last_pos);
-        last_pos[2] += 16.0;
-        switch (GetEntProp(client, Prop_Send, "m_nWaterLevel"))
-        {
-            case 1: last_pos[2] += 16.0;
-            case 2: last_pos[2] += 32.0;
-        }
+        playertime = g_PlayerTime[i];
+        playertime.t_game = -1.0; playertime.t_engine = -1.0; playertime.t_cooldown = -1.0;
+        g_PlayerTime[i] = playertime;
     }
-    else
-    {
-        if (g_hCvarAlive.IntValue == ACCEPT_ALIVE) return; // alive state blocked by cvar
-        last_pos = eye_pos;
-        last_pos[2] -= 48.0;
-        if (pos_underwater(last_pos)) last_pos[2] += 32.0;
-    }
-    static Cell cell;
-    bool use_flow = flow>0.0;
-    float min_dist = -1.0;
-    float dist;
-    for (int i = 0; i < g_GuideCells.Length; i++)
-    {
-        g_GuideCells.GetArray(i,cell,sizeof(Cell));
-        if ( use_flow && ( cell.flow >= flow ) )
-        {
-            i_start = i;
-            break;
-        }
-        else
-        {
-            dist = GetVectorDistance(last_pos,cell.center,true);
-            if (min_dist<0.0 || dist<min_dist)
-            {
-                min_dist = dist;
-                i_start = i;
-            }
-        }
-    }
-    if (!use_flow && min_dist<0.0) return;
-    
-    // Try starting at a more reasonable position with LOS
-    if ( join_client && (i_start+1)<g_GuideCells.Length && cell_visible(i_start+1,last_pos)) i_start += 1; // Move forward
-    else if (i_start>0 && !cell_visible(i_start,last_pos) && cell_visible(i_start-1,last_pos)) i_start -=1; // Move backward
-    
-    int i_draw = 0;
-    g_GuideCells.GetArray(i_start,cell,sizeof(Cell));
-
-    if (join_client) // Connect client to starting cell
-    {
-        DrawBeam(client,last_pos,cell.center,duration);
-        i_draw += 1;
-    }
-
-    int i_forward = i_start;
-    int i_backward = i_start;
-    static float pos_forward[3], pos_backward[3];
-    pos_forward = cell.center;
-    pos_backward = cell.center;
-    bool end = false;
-    while (!end)
-    {
-        end = true;
-        if ((i_forward+1)<g_GuideCells.Length)
-        {
-            i_forward += 1;
-            g_GuideCells.GetArray(i_forward,cell,sizeof(Cell));
-            DrawBeam(client,pos_forward,cell.center,duration);
-            pos_forward = cell.center;
-            end = false;
-            i_draw += 1;
-            if (i_draw>=g_hCvarMax.IntValue) break;
-        }
-        if (backward && i_backward>0)
-        {
-            i_backward -= 1;
-            g_GuideCells.GetArray(i_backward,cell,sizeof(Cell));
-            DrawBeam(client,pos_backward,cell.center,duration,{200,100,100,100});
-            pos_backward = cell.center;
-            end = false;
-            i_draw += 1;
-            if (i_draw>=g_hCvarMax.IntValue) break;
-        }
-    }
-    if (i_draw>0) beams_cooldown_update(client,duration);
-    #if DEBUG
-        LogMessage("RequestGuide: client %d flow %f cells %d i_start %d (%f ms)", client, flow, i_draw, i_start, (GetEngineTime()-t)*1000.0);
-    #endif
-}
-
-
-void DrawBeam(int client, float pos_start[3], float pos_end[3], float duration = 10.0, int color[4] = {100,200,100,100})
-{
-    if (g_iLaser==0) return;
-    float start_width = 1.0;
-    float end_width = 1.0;
-    int fade_length = 1;
-    float amp = 0.0;
-    TE_SetupBeamPoints(pos_start,pos_end,g_iLaser,0,0,0,duration,start_width,end_width,fade_length,amp,color,0);
-    TE_SendToClient(client); // no LOS
 }
 
 // Test if cell is visible from given position

@@ -64,6 +64,7 @@ public void OnPluginStart()
     GetCvars();
     
     nav_started = true;
+    guide_prep = false;
     HookEvent("round_start_post_nav", evtPostNav,    EventHookMode_PostNoCopy);
     HookEvent("nav_blocked",          evtNavChange,  EventHookMode_PostNoCopy);
     HookEvent("nav_generate",         evtNavChange,  EventHookMode_PostNoCopy);
@@ -170,6 +171,7 @@ public void OnClientPutInServer(int client)
 {
     if (!IsValidClient(client) || IsFakeClient(client)) return;
     beams_cooldown_reset(client);
+    g_CellRequests[client].duration = -1.0; // cancel pending beams
 }
 
 // NATIVE //
