@@ -29,6 +29,7 @@ native void L4D_Path_To_Goal(int client = -1, float duration = 5.0, bool backwar
 #define TEAM_SPECTATOR		1
 #define TEAM_SURVIVOR		2
 #define TEAM_INFECTED		3
+
 #define VMT_LASERBEAM       "sprites/laserbeam.vmt"
 
 #define ACCEPT_ALL   0 // accept all players

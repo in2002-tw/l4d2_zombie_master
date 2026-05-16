@@ -159,12 +159,15 @@ public void OnMapEnd()
     map_started = false;
     nav_started = false;
     t_nav = -1.0;
-    Guide_Cleanup(); 
+    Guide_Cleanup();
+    guide_prep = false;
 }
 
 public void OnPluginEnd()
 {
     Guide_Cleanup();
+    guide_prep = false;
+    g_iPrepStage = STAGE_NONE;
 }
 
 public void OnClientPutInServer(int client)
