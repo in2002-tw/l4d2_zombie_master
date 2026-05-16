@@ -334,7 +334,7 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
     {
         float newPos[3];
         if (!skip_gridlib && g_bGridReady && g_iSpawnerMode>0 && g_GridHasValidCell && can_ZM_see(g_GridClosestValidPos)
-            && ( (GetGameTime()-t_last_spawner_grid_update)<0.1 || Analog_CanSpawnPos(newPos,zClass,false,false,true)==SPAWNER_OK)) // grid may be outdated
+            && ( (GetGameTime()-t_last_spawner_grid_update)<0.1 || Analog_CanSpawnPos(g_GridClosestValidPos,zClass,false,false,true)==SPAWNER_OK)) // grid may be outdated
         {
             newPos = g_GridClosestValidPos;
             Grid_InvalidateClosestValid();
