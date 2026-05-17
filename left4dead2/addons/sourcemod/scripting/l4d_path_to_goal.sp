@@ -1,3 +1,14 @@
+//This program is free software: you can redistribute it and/or modify
+//it under the terms of the GNU General Public License as published by
+//the Free Software Foundation, either version 3 of the License, or
+//(at your option) any later version.
+//This program is distributed in the hope that it will be useful,
+//but WITHOUT ANY WARRANTY; without even the implied warranty of
+//MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//GNU General Public License for more details.
+//You should have received a copy of the GNU General Public License
+//along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 #pragma semicolon 1
 #pragma newdecls required
 
@@ -6,11 +17,9 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.03 2026-05-15"
+#define PLUGIN_VERSION 			"1.06 2026-05-17"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
-
-// Try escape_route entity
 
 public Plugin myinfo =
 {
@@ -39,7 +48,7 @@ public void OnPluginStart()
     g_hCvarEnable.AddChangeHook(ConVarChanged_Cvars);
   	
     g_hCvarMax = CreateConVar("l4d_path_to_goal_max", "16",
-    "Max beams per request. Increasing this can potentially cause crashes.",FCVAR_NOTIFY, true, 1.0, true, 1000.0);
+    "Max beams per request. Increasing this can potentially cause crashes for clients.",FCVAR_NOTIFY, true, 1.0, true, 1000.0);
 
     g_hCvarSurvivors = CreateConVar("l4d_path_to_goal_survivor", "1",
     "Allow survivors to request.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
@@ -77,7 +86,7 @@ void ConVarChanged_Cvars(ConVar convar, const char[] oldValue, const char[] newV
 
 void evtPostNav(Event event, const char[] name, bool dontBroadcast)
 {
-    #if DEBUG
+    #if DEBUG>1
         LogMessage("round_start_post_nav");
     #endif
     nav_started = true;
@@ -93,6 +102,8 @@ void NavChanged()
 {
     Guide_Cleanup();
     t_nav = GetGameTime();
+    if (timer_nav != null) return;
+    timer_nav = CreateTimer(NAV_COOLDOWN,Timer_CheckRequests,_,TIMER_FLAG_NO_MAPCHANGE);
 }
 
 //public void OnEntityCreated(int entity, const char[] classname)
@@ -130,14 +141,19 @@ Action CmdRequestGuide(int client, int args)
         }
     }
     RequestGuide(client,duration,backward);
+    if (!guide_ready && g_CellRequests[client].duration > 0.0) PrintToChat(client,"[PTG] Please wait...");
     return Plugin_Continue;
 }
 
 Action CmdRecalculate(int client, int args)
 {
     if (!enable || !map_started || !nav_started || !gamemode_guidable) return Plugin_Continue;
-    if (!guide_prep) Guide_Cleanup();
-    Guide_Prep();
+    if (!guide_prep)
+    {
+        Guide_Cleanup();
+        Guide_Prep();
+    }
+    else ReplyToCommand(client, "[PTG] Busy, try again later.");
     return Plugin_Continue;
 }
 
@@ -151,7 +167,7 @@ void MapStarted()
 {
     map_started = true;
     t_nav = -1.0;
-    //if (nav_started && gamemode_guidable && !guide_ready) Guide_Prep();
+    timer_nav = null;
 }
 
 public void OnMapEnd()
@@ -161,6 +177,9 @@ public void OnMapEnd()
     t_nav = -1.0;
     Guide_Cleanup();
     guide_prep = false;
+    g_iPrepStage = STAGE_NONE;
+    beams_cooldown_reset(_,true); // reset all requests and cooldowns
+    timer_nav = null;
 }
 
 public void OnPluginEnd()
@@ -173,8 +192,7 @@ public void OnPluginEnd()
 public void OnClientPutInServer(int client)
 {
     if (!IsValidClient(client) || IsFakeClient(client)) return;
-    beams_cooldown_reset(client);
-    g_CellRequests[client].duration = -1.0; // cancel pending beams
+    beams_cooldown_reset(client,true); // reset cooldown, and last request from client
 }
 
 // NATIVE //
