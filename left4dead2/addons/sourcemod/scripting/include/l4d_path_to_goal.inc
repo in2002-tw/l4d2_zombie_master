@@ -264,7 +264,7 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
 
     if (join_client) // Connect client to starting cell
     {
-        int num_beams = (navArea!=Address_Null && !LOS && use_flow && flow<cell.flow) ? detour_join(client,navArea,last_pos,flow,cell.center,cell.flow,duration) : 0;
+        int num_beams = (navArea!=Address_Null && !LOS && use_flow) ? detour_join(client,navArea,last_pos,flow,cell.center,cell.flow,duration) : 0;
         if (num_beams<=0)
         {
             DrawBeam(client,last_pos,cell.center,duration);
@@ -381,12 +381,12 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
                 L4D_GetNavAreaCenter(adjArea,pos_temp);
                 flow_temp = L4D_GetFlowFromPoint(pos_temp);
                 if (flow_temp<=flow_curr) continue;
-                //if (!L4D_NavArea_IsConnected(adjArea,navArea_curr,-1)) continue;
+                //if (!L4D_NavArea_IsConnected(navArea_curr,adjArea,dir)) continue;
                 //if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
                 //if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
                 pos_temp[2] += 16.0;
                 if (pos_underwater(pos_temp)) pos_temp[2] += 32.0;
-                //if (!twopos_visible(pos_curr,pos_temp)) continue;
+                if (!twopos_visible(pos_curr,pos_temp)) continue;
                 found = true;
                 navArea_curr = adjArea;
                 pos_curr = pos_temp;
@@ -405,6 +405,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
                     static Cell cell;
                     g_GuideCells.GetArray(g_iStart,cell,sizeof(Cell));
                     pos_end = cell.center;
+                    //if (twopos_visible(pos_curr,pos_end)) queue.Erase(queue.Length-1);
                     success = true;
                     break;
                 }
@@ -812,11 +813,49 @@ void guide_add_cell(Cell cell)
 void cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, bool prev2_exists, Cell cell_prev2)
 {
     static Cell cell;
+    static Address navAreas[2];
+    static float diff[3], diff_candidate[3], diff_template[3], pos_candidate[3], pos_template[3];
+    navAreas[0] = cell_new.navArea;
+    navAreas[1] = cell_old.navArea;
+    ArrayList adjAreas = new ArrayList();
+    for (int i_nav = 0; i_nav < sizeof(navAreas); i_nav++) // Check adjacent areas
+    {
+        Address navArea = navAreas[i_nav];
+        for (int dir = 0; dir < 4; dir++) // Enqueue adjacent nav areas (all 4 directions)
+        {
+            adjAreas.Clear();
+            L4D_NavArea_GetAdjacentAreas(navArea, dir, adjAreas);
+            for (int i = 0; i < adjAreas.Length; i++)
+            {
+                Address adjArea = adjAreas.Get(i);
+                if (adjArea == Address_Null) continue;
+                L4D_GetNavAreaCenter(adjArea,pos_candidate);
+                //flow_temp = L4D_GetFlowFromPoint(pos_candidate);
+                //if (flow_temp<=flow_curr) continue;
+                //if (!L4D_NavArea_IsConnected(navArea,adjArea,dir)) continue;
+                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
+                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
+                pos_candidate[2] += 16.0;
+                if (pos_underwater(pos_candidate)) pos_candidate[2] += 32.0;
+                if (twopos_visible(pos_candidate,cell_new.center) && twopos_visible(pos_candidate,cell_old.center))
+                {
+                    float d_flow = GetVectorDistance(cell_old.center,pos_candidate);
+                    cell.flow = cell_old.flow + d_flow;
+                    if (cell.flow>=cell_new.flow) cell.flow = (cell_old.flow + cell_new.flow)/2.0;
+                    cell.navArea = adjArea;
+                    cell.center = pos_candidate;
+                    cells.PushArray(cell);
+                    cells.PushArray(cell_new);
+                    delete adjAreas;
+                    return;
+                }
+            }
+        }
+    }
+    delete adjAreas;
+
     ArrayList pos_candidates = new ArrayList(3);
 
-    // cell_new and cell_old do not have LOS
-
-    static float diff[3], diff_candidate[3], diff_template[3], pos_candidate[3], pos_template[3];
     SubtractVectors(cell_new.center,cell_old.center,diff);
     diff_candidate = diff;
 

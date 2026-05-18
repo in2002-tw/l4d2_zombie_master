@@ -17,7 +17,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.07 2026-05-17"
+#define PLUGIN_VERSION 			"1.09 2026-05-17"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -105,15 +105,6 @@ void NavChanged()
     if (timer_nav != null) return;
     timer_nav = CreateTimer(NAV_COOLDOWN,Timer_CheckRequests,_,TIMER_FLAG_NO_MAPCHANGE);
 }
-
-//public void OnEntityCreated(int entity, const char[] classname)
-//{
-//    if (!nav_started || !map_started) return;
-//    if (strcmp(classname,"func_nav_blocker",false)==0 || strcmp(classname,"script_nav_blocker",false)==0)
-//    {
-//        NavChanged();
-//    }
-//}
 
 void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
 {
@@ -205,7 +196,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 void Native_RequestGuide(Handle plugin, int numParams)
 {
-    if (!enable || !gamemode_guidable) return;
+    if (!enable || !gamemode_guidable || !nav_started || !map_started) return;
     int client = (numParams>0) ? GetNativeCell(1) : -1;
     float duration = (numParams>1) ? view_as<float>(GetNativeCell(2)) : 5.0;
     bool backward = (numParams>2) ? view_as<bool>(GetNativeCell(3)) : false;
