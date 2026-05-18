@@ -109,7 +109,9 @@ Action Timer_CheckRequests(Handle timer)
         return Plugin_Stop;
     }
     timer_nav = null;
+    #if DEBUG>1
     LogMessage("Timer_CheckRequests");
+    #endif
     if (!enable || !gamemode_guidable || g_iLaser==0 || guide_prep) return Plugin_Stop;
     for (int i = 1; i <= MaxClients; i++) // Draw beams immediately for pending clients
     {
@@ -262,7 +264,7 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
 
     if (join_client) // Connect client to starting cell
     {
-        int num_beams = (navArea!=Address_Null && !LOS && use_flow && flow<cell.flow) ? detour_join(client,navArea,last_pos,flow,cell.center,duration) : 0;
+        int num_beams = (navArea!=Address_Null && !LOS && use_flow && flow<cell.flow) ? detour_join(client,navArea,last_pos,flow,cell.center,cell.flow,duration) : 0;
         if (num_beams<=0)
         {
             DrawBeam(client,last_pos,cell.center,duration);
@@ -281,7 +283,7 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     pos_forward = cell.center;
     pos_backward = cell.center;
     bool end = false;
-    while (!end)
+    while (!end && i_draw<g_hCvarMax.IntValue)
     {
         end = true;
         if ((i_forward+1)<g_GuideCells.Length)
@@ -302,7 +304,6 @@ void RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
             pos_backward = cell.center;
             end = false;
             i_draw += 1;
-            if (i_draw>=g_hCvarMax.IntValue) break;
         }
     }
     if (i_draw>0) beams_cooldown_update(client,duration);
@@ -343,14 +344,13 @@ int get_flow_iStart(float flow, bool check_LOS = true, float pos[3])
 #define DETOUR_BUDGET_MS 1.0
 
 // detour client_join, return how many beams were drawn
-int detour_join(int client, Address navArea, float pos[3], float flow, float pos_end[3], float duration)
+int detour_join(int client, Address navArea, float pos[3], float flow, float pos_end[3], float flow_end, float duration)
 {
     float t = GetEngineTime();
 
     static float pos_curr[3];
     float flow_curr = flow;
     pos_curr = pos;
-    int beams = 0; 
     ArrayList adjAreas = new ArrayList();
     ArrayList queue = new ArrayList(3);
     queue.PushArray(pos);
@@ -386,7 +386,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
                 //if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
                 pos_temp[2] += 16.0;
                 if (pos_underwater(pos_temp)) pos_temp[2] += 32.0;
-                if (!twopos_visible(pos_curr,pos_temp)) continue;
+                //if (!twopos_visible(pos_curr,pos_temp)) continue;
                 found = true;
                 navArea_curr = adjArea;
                 pos_curr = pos_temp;
@@ -414,7 +414,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
         }
         
         if (!found || success) break;
-        if (found && twopos_visible(pos_curr,pos_end))
+        if (found && flow_curr <= flow_end && twopos_visible(pos_curr,pos_end))
         {
             success = true;
             break;
@@ -422,6 +422,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
 
     }
 
+    int beams = 0; 
     if (success) // Path found, draw beams.
     {
         queue.GetArray(0,pos_curr,3);
@@ -430,10 +431,14 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
 			queue.GetArray(i,pos_temp,3);
             DrawBeam(client,pos_curr,pos_temp,duration);
             pos_curr = pos_temp;
+            beams += 1;
+            if (beams>=g_hCvarMax.IntValue) break;
         }
-        beams = queue.Length;
-        DrawBeam(client,pos_curr,pos_end,duration);
-        beams += 1;
+        if (beams<g_hCvarMax.IntValue)
+        {
+            DrawBeam(client,pos_curr,pos_end,duration);
+            beams += 1;
+        }
     }
 
     delete adjAreas;
@@ -482,7 +487,9 @@ Address g_aNavStart, g_aNavCheckpoint;
 void Guide_Prep()
 {
     if (!enable || !gamemode_guidable || !map_started || !nav_started || guide_prep || is_prep_cooldown()) return;
+    #if DEBUG>1
     LogMessage("Guide_Prep");
+    #endif
     guide_prep = true;
     g_iPrepStage = STAGE_PREP;
     g_iPrepFrames = 0;
@@ -495,7 +502,9 @@ void Guide_Cleanup()
     g_iPrepStage = STAGE_NONE;
     if (guide_ready)
     {
+        #if DEBUG>1
         LogMessage("Guide_Cleanup");
+        #endif
         guide_ready = false;
         delete g_GuideCells;
     }
