@@ -17,7 +17,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.09 2026-05-17"
+#define PLUGIN_VERSION 			"1.10 2026-05-18"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -42,6 +42,8 @@ public void OnPluginStart()
     RegConsoleCmd("ptg",                CmdRequestGuide, "Point where to go to progress in the map.");
     
     RegAdminCmd("l4d_path_to_goal_recalculate", CmdRecalculate, ADMFLAG_ROOT,"Recalculate guide points.");
+
+    g_bL4D2 = GetEngineVersion()==Engine_Left4Dead2;
 
     g_hCvarEnable = CreateConVar("l4d_path_to_goal_enable", "1",
     "0=OFF, 1=ON.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
