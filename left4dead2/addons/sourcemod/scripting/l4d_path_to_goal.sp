@@ -17,7 +17,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.10 2026-05-18"
+#define PLUGIN_VERSION 			"1.11 2026-05-18"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -33,6 +33,7 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
     AutoExecConfig(true, CONFIG_FILENAME);
+    LoadTranslations("l4d_path_to_goal.phrases");
 
     RegConsoleCmd("path_to_goal",       CmdRequestGuide, "Point where to go to progress in the map.");
     RegConsoleCmd("pathtogoal",         CmdRequestGuide, "Point where to go to progress in the map.");
@@ -133,8 +134,38 @@ Action CmdRequestGuide(int client, int args)
             if (strcmp(arg,"backward")==0) backward = true;
         }
     }
-    RequestGuide(client,duration,backward);
-    if (!guide_ready && g_CellRequests[client].duration > 0.0) PrintToChat(client,"[PTG] Please wait...");
+    switch (RequestGuide(client,duration,backward))
+    {
+        case true: // beams drawn
+        {
+            static float eye_client[3], ang_client[3], ang_beam[3];
+            GetClientEyeAngles(client,ang_client);
+            GetClientEyePosition(client,eye_client);
+            SubtractVectors(g_RequestFirstPos,eye_client,ang_beam);
+            GetVectorAngles(ang_beam,ang_beam);  
+            if (ang_beam[0] > 180.0) ang_beam[0] -= 360.0;
+            if (ang_beam[1] > 180.0) ang_beam[1] -= 360.0;
+            SubtractVectors(ang_beam,ang_client,ang_beam);
+            //LogMessage("%.1f %.1f %.1f", ang_beam[0], ang_beam[1], ang_beam[2]);
+
+            static char str1[32], str2[32];
+            
+            if (FloatAbs(ang_beam[1]) <= 45.0) Format(str1,sizeof(str1),"%T", "ptg_ahead", client);
+            else if ( FloatAbs(FloatAbs(ang_beam[1])-180.0) <= 45.0 ) Format(str1,sizeof(str1),"%T", "ptg_behind", client);
+            else if (ang_beam[1]>0.0) Format(str1,sizeof(str1),"%T", "ptg_left", client);
+            else Format(str1,sizeof(str1),"%T", "ptg_right", client);
+
+            if (ang_beam[0]>=30.0) Format(str2,sizeof(str2),"%T", "ptg_down", client);
+            else if (ang_beam[0]<=(-30.0)) Format(str2,sizeof(str2),"%T", "ptg_up", client);
+            else str2 = "";
+
+            ReplyToCommand(client, "[PTG] %t%s %s", "ptg_look", str1, str2);
+        }
+        default: // beams not drawn
+        {
+            if (!guide_ready && g_CellRequests[client].duration > 0.0) ReplyToCommand(client, "[PTG] %t", "ptg_wait");
+        }
+    }
     return Plugin_Continue;
 }
 
@@ -146,7 +177,7 @@ Action CmdRecalculate(int client, int args)
         Guide_Cleanup();
         Guide_Prep();
     }
-    else ReplyToCommand(client, "[PTG] Busy, try again later.");
+    else ReplyToCommand(client, "[PTG] %t", "ptg_busy");
     return Plugin_Continue;
 }
 
