@@ -17,7 +17,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.11 2026-05-18"
+#define PLUGIN_VERSION 			"1.12 2026-05-19"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -116,7 +116,7 @@ void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
 
 Action CmdRequestGuide(int client, int args)
 {
-    if (!enable || !map_started || !nav_started || !gamemode_guidable) return Plugin_Continue;
+    if (!enable || !map_started || !nav_started || !gamemode_guidable || !IsValidClient(client)) return Plugin_Continue;
     float duration = 5.0;
     bool backward = GetClientTeam(client)!=TEAM_SURVIVOR;
     if (args>0)
@@ -139,8 +139,18 @@ Action CmdRequestGuide(int client, int args)
         case true: // beams drawn
         {
             static float eye_client[3], ang_client[3], ang_beam[3];
-            GetClientEyeAngles(client,ang_client);
             GetClientEyePosition(client,eye_client);
+
+            float dx = FloatAbs(eye_client[0] - g_RequestFirstPos[0]);
+            float dy = FloatAbs(eye_client[1] - g_RequestFirstPos[1]);
+            if (dx<=5.0 && dy<=5.0) // Direction will be spurious if we are on the point
+            {
+                ReplyToCommand(client, "[PTG] %t%t", "ptg_look", "ptg_down");
+                return Plugin_Continue;
+            }
+
+            GetClientEyeAngles(client,ang_client);
+    
             SubtractVectors(g_RequestFirstPos,eye_client,ang_beam);
             GetVectorAngles(ang_beam,ang_beam);  
             if (ang_beam[0] > 180.0) ang_beam[0] -= 360.0;

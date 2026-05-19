@@ -144,6 +144,7 @@ float g_RequestFirstPos[3]; // for hint system
 // Draw survivor path for client, for duration in seconds
 // backward: include backwards-going path.
 // join_client: draw connection between client's origin and nearest point in survivor path.
+// return true if beams drawn, otherwise false
 bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool join_client = true)
 {
     #if DEBUG>2
@@ -195,7 +196,6 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
         return false;
     }
     if (beams_cooldown(client)) return false;
-    
 
     float flow = 0.0;
     g_iStart = g_GuideCells.Length - 1;
@@ -265,7 +265,7 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     bool LOS = cell_visible(g_iStart,last_pos);
 
     // Try starting at a more reasonable position with LOS
-    if ( join_client && (g_iStart+1)<g_GuideCells.Length && cell_visible(g_iStart+1,last_pos))
+    if ( (join_client || !LOS) && (g_iStart+1)<g_GuideCells.Length && cell_visible(g_iStart+1,last_pos))
     {
         g_iStart += 1; // Move forward
         LOS = true;
@@ -401,10 +401,10 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
                 //if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
                 //if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
                 L4D_GetNavAreaCenter(adjArea,pos_temp);
-                dz = pos_temp[2] - pos_curr[2];
                 flow_temp = L4D_GetFlowFromPoint(pos_temp);
                 if (flow_temp<=flow_best) continue;
-                if (dz>=32.0 && dz>dz_best) continue; // avoid vertical jumps that can't be crouch jumped
+                dz = pos_temp[2] - pos_curr[2];
+                if (dz>=32.0 && dz>dz_best) continue; // avoid vertical changes that can't be crouch jumped
                 dz_best = dz;
                 flow_best = flow_temp;
                 navArea_best = adjArea;
@@ -467,7 +467,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
             #if DEBUG>1
             LogMessage("detour_join exceeded budget");
             #endif
-            return 0;
+            break;
         }
 
     }
