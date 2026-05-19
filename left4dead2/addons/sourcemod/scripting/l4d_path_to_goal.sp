@@ -150,10 +150,11 @@ Action CmdRequestGuide(int client, int args)
 
             static char str1[32], str2[32];
             
-            if (FloatAbs(ang_beam[1]) <= 45.0) Format(str1,sizeof(str1),"%T", "ptg_ahead", client);
-            else if ( FloatAbs(FloatAbs(ang_beam[1])-180.0) <= 45.0 ) Format(str1,sizeof(str1),"%T", "ptg_behind", client);
-            else if (ang_beam[1]>0.0) Format(str1,sizeof(str1),"%T", "ptg_left", client);
-            else Format(str1,sizeof(str1),"%T", "ptg_right", client);
+            if (FloatAbs(ang_beam[1]) < 90.0) Format(str1,sizeof(str1),"%T", "ptg_ahead", client);
+            else Format(str1,sizeof(str1),"%T", "ptg_behind", client);
+            //else if ( FloatAbs(FloatAbs(ang_beam[1])-180.0) <= 45.0 ) Format(str1,sizeof(str1),"%T", "ptg_behind", client);
+            //else if (ang_beam[1]>0.0) Format(str1,sizeof(str1),"%T", "ptg_left", client);
+            //else Format(str1,sizeof(str1),"%T", "ptg_right", client);
 
             if (ang_beam[0]>=30.0) Format(str2,sizeof(str2),"%T", "ptg_down", client);
             else if (ang_beam[0]<=(-30.0)) Format(str2,sizeof(str2),"%T", "ptg_up", client);

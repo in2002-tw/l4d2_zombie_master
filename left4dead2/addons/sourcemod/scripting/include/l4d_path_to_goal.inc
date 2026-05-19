@@ -42,6 +42,8 @@ native void L4D_Path_To_Goal(int client = -1, float duration = 5.0, bool backwar
 #define TEAM_INFECTED		3
 
 #define VMT_LASERBEAM       "sprites/laserbeam.vmt"
+//#define VMT_LASERBEAM       "sprites/bubble.vmt"
+//#define VMT_LASERBEAM       "sprites/white.vmt"
 
 #define ACCEPT_ALL   0 // accept all players
 #define ACCEPT_ALIVE 1 // accept only alive players
@@ -316,7 +318,7 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
         {
             i_backward -= 1;
             g_GuideCells.GetArray(i_backward,cell,sizeof(Cell));
-            DrawBeam(client,pos_backward,cell.center,duration,{255,25,25,200});
+            DrawBeam(client,pos_backward,cell.center,duration,{255,25,25,255});
             pos_backward = cell.center;
             end = false;
             i_draw += 1;
@@ -501,7 +503,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
 }
 
 
-void DrawBeam(int client, float pos_start[3], float pos_end[3], float duration = 10.0, int color[4] = {25,255,25,200})
+void DrawBeam(int client, float pos_start[3], float pos_end[3], float duration = 10.0, int color[4] = {25,255,25,255})
 {
     if (g_iLaser==0) return;
     float start_width = 1.5;

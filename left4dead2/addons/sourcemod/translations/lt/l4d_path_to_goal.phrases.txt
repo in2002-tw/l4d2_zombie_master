@@ -23,7 +23,7 @@
 
 	"ptg_behind"
 	{
-		"lt"			"atgal"
+		"lt"			"į nugarą"
 	}
 	
 	"ptg_left"
@@ -38,7 +38,7 @@
 
 	"ptg_up"
 	{
-		"lt"			"į viršų"
+		"lt"			"aukštyn"
 	}
 
 	"ptg_down"
