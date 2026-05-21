@@ -334,12 +334,12 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     if (i_draw>0)
     {
         beams_cooldown_update(client,duration);
+        #if DEBUG>2
+        LogMessage("RequestGuide: client %d flow %f cells %d g_iStart %d (%f ms)", client, flow, i_draw, g_iStart, (GetEngineTime()-t)*1000.0);
+        #endif
         return true;
     }
     return false;
-    #if DEBUG>2
-        LogMessage("RequestGuide: client %d flow %f cells %d g_iStart %d (%f ms)", client, flow, i_draw, g_iStart, (GetEngineTime()-t)*1000.0);
-    #endif
 }
 
 // Find closest guide cell for given flow value. 
@@ -542,7 +542,7 @@ void Check_Guidable()
 #define STAGE_COLLECT 2
 #define STAGE_SORT 3
 #define STAGE_BUILD 4
-//#define STAGE_START_CLEANUP 5
+//#define STAGE_FINALE 5
 #define STAGE_VALIDATE 5
 #define STAGE_END 6
 
@@ -592,6 +592,8 @@ bool frame_budget_exceeded()
     bool exceeded = dt_ms >= g_hCvarBudget.FloatValue;
     return exceeded;
 }
+
+// NAV_SPAWN_RESCUE_VEHICLE
 
 void OnFramePrep(bool new_frame = true)
 {
@@ -821,65 +823,6 @@ void OnFramePrep(bool new_frame = true)
                 g_iLoop = 1;
             }
         }
-        //case STAGE_START_CLEANUP: // Clean up start area if there's no LOS between at least one cell
-        //{
-        //    if (g_bFoundStart)
-        //    {
-        //        if (g_GuideCells==null)
-        //        {
-        //            guide_prep = false;
-        //            return;
-        //        }
-        //        bool bad = false;
-        //        float flow_min; // minimum flow that exploration must hit
-        //        while (g_iLoop<(g_GuideCells.Length-1)) // Check if starting area cells cannot see each other
-        //        {
-        //            g_GuideCells.GetArray(g_iLoop,cell,sizeof(Cell));
-        //            g_GuideCells.GetArray(g_iLoop-1,cell_before,sizeof(Cell));
-        //            if (L4D_GetNavArea_SpawnAttributes(cell.navArea) & NAV_SPAWN_PLAYER_START ||
-        //                L4D_GetNavArea_SpawnAttributes(cell_before.navArea) & NAV_SPAWN_PLAYER_START)
-        //            {
-        //                if (!twopos_visible(cell_before.center,cell.center))
-        //                {
-        //                    bad = true;
-        //                    flow_min = cell.flow;
-        //                    LogMessage("Bad start %f", flow_min);
-        //                }
-        //            }
-        //            else break;
-        //            g_iLoop += 1;
-        //        }
-        //        if (bad) // Cells cannot see each other, explore manually.
-        //        {
-        //            ArrayList start_cells = new ArrayList(sizeof(Cell));
-        //            L4D_GetNavAreaCenter(g_aNavStart,pos);
-        //            pos[2] += 16.0; 
-        //            if (pos_underwater(pos)) pos[2] += 16.0;
-        //            bool success = explore_to_escape_route(start_cells,g_aNavStart,pos,g_fFlowStart,flow_min);
-        //            if (success)
-        //            {
-        //                // Delete guide cells smaller than max flow of exploration. Fill up with new cells up to that flow value
-        //                LogMessage("Replacing %d start area cells", start_cells.Length);
-        //                g_iLoop = 0;
-        //                while (g_iLoop<(g_GuideCells.Length-1)) 
-        //                {
-        //                    if (g_GuideCells.Get(g_iLoop,0) <= flow_min) g_GuideCells.Erase(g_iLoop);
-        //                    else g_iLoop += 1;
-        //                }
-        //                g_iLoop = start_cells.Length-1;
-        //                while (g_iLoop>=0) 
-        //                {
-        //                    g_GuideCells.ShiftUp(0);
-        //                   start_cells.GetArray(g_iLoop,cell,sizeof(Cell));
-        //                    g_GuideCells.SetArray(0,cell,sizeof(Cell));
-        //                    g_iLoop -= 1;
-        //                }
-        //            }
-        //            delete start_cells;
-        //        }
-        //    }
-        //    g_iLoop = 1;
-        //}
         case STAGE_VALIDATE:
         {
             if (g_GuideCells != null && g_GuideCells.Length>2) // Erase inbetween cells with mutual LOS
@@ -1307,10 +1250,10 @@ bool cell_visible(int i, float pos[3], bool world_only = true)
 // Test if two vector positions are visible to one another. world_only to hit only world and static props
 bool twopos_visible(float pos1[3], float pos2[3], bool world_only = true)
 {
-    //if (world_only) TR_TraceRayFilter(pos1,pos2,CONTENTS_SOLID,RayType_EndPoint,TraceFilterStatic);
+    //if (world_only) TR_TraceRayFilter(pos1,pos2,MASK_SOLID,RayType_EndPoint,TraceFilterStatic);
     //else TR_TraceRayFilter(pos1,pos2,MASK_SOLID,RayType_EndPoint,TraceFilterNoClients);
-    if (world_only) TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,-2.0},{2.0,2.0,16.0},CONTENTS_SOLID,TraceFilterStatic);
-    else            TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,-2.0},{2.0,2.0,10.0},MASK_SOLID,TraceFilterNoClients);
+    if (world_only) TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,-2.0},{2.0,2.0,16.0},MASK_PLAYERSOLID,TraceFilterStatic);
+    else            TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,-2.0},{2.0,2.0,10.0},MASK_PLAYERSOLID,TraceFilterNoClients);
     if (!TR_DidHit(INVALID_HANDLE)) return true;
     return false;
 }
