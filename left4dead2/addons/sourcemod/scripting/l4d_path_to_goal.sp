@@ -17,7 +17,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.12 2026-05-19"
+#define PLUGIN_VERSION 			"1.15 2026-05-20"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -68,6 +68,9 @@ public void OnPluginStart()
     g_hCvarBudget = CreateConVar("l4d_path_to_goal_budget", "0.5",
     "Max CPU budget (ms per frame) for escape route calculation. Larger budget makes requests available faster at the expense of server lag. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 1000.0);
 
+    //g_hCvarDz = CreateConVar("l4d_path_to_goal_dz", "16.0",
+    //"Max absolute dz between cells considered safe for LOS merging. 0.0 to disable (cells will always merge) for reduced server strain.",FCVAR_NOTIFY, true, 0.0, true, 10000.0);
+
   	g_hCvarMPGameMode = FindConVar("mp_gamemode");
   	g_hCvarMPGameMode.AddChangeHook(ConVarGameMode);
     
@@ -77,9 +80,27 @@ public void OnPluginStart()
     
     nav_started = true;
     guide_prep = false;
-    HookEvent("round_start_post_nav", evtPostNav,    EventHookMode_PostNoCopy);
-    HookEvent("nav_blocked",          evtNavChange,  EventHookMode_PostNoCopy);
-    HookEvent("nav_generate",         evtNavChange,  EventHookMode_PostNoCopy);
+    HookEvent("round_start_post_nav",   evtPostNav,        EventHookMode_PostNoCopy);
+    HookEvent("nav_blocked",            evtNavChange,      EventHookMode_PostNoCopy);
+    HookEvent("nav_generate",           evtNavChange,      EventHookMode_PostNoCopy);
+	HookEvent("finale_start", 			evtFinaleStart,    EventHookMode_PostNoCopy); //final starts, some of final maps won't trigger
+	HookEvent("finale_radio_start", 	EvtFinaleRadio,    EventHookMode_PostNoCopy); //final starts, all final maps trigger
+	HookEvent("gauntlet_finale_start", 	evtGauntletStart,  EventHookMode_PostNoCopy); //final starts, only rushing maps trigger (C5M5, C13M4)
+}
+
+void evtFinaleStart(Event event, const char[] name, bool dontBroadcast)
+{
+    LogMessage("finale_start");
+}
+
+void EvtFinaleRadio(Event event, const char[] name, bool dontBroadcast)
+{
+    LogMessage("finale_radio_start");
+}
+
+void evtGauntletStart(Event event, const char[] name, bool dontBroadcast)
+{
+    LogMessage("gauntlet_finale_start");
 }
 
 void ConVarChanged_Cvars(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -93,6 +114,7 @@ void evtPostNav(Event event, const char[] name, bool dontBroadcast)
         LogMessage("round_start_post_nav");
     #endif
     nav_started = true;
+    finale = false;
     NavChanged();
 }
 
@@ -105,7 +127,7 @@ void NavChanged()
 {
     Guide_Cleanup();
     t_nav = GetGameTime();
-    if (timer_nav != null) return;
+    if (!enable || !gamemode_guidable || !map_started || !nav_started || timer_nav != null) return;
     timer_nav = CreateTimer(NAV_COOLDOWN,Timer_CheckRequests,_,TIMER_FLAG_NO_MAPCHANGE);
 }
 
@@ -215,6 +237,7 @@ public void OnMapEnd()
     g_iPrepStage = STAGE_NONE;
     beams_cooldown_reset(_,true); // reset all requests and cooldowns
     timer_nav = null;
+    finale = false;
 }
 
 public void OnPluginEnd()
@@ -227,7 +250,7 @@ public void OnPluginEnd()
 public void OnClientPutInServer(int client)
 {
     if (!IsValidClient(client) || IsFakeClient(client)) return;
-    beams_cooldown_reset(client,true); // reset cooldown, and last request from client
+    beams_cooldown_reset(client,true); // reset cooldown and last request from client
 }
 
 // NATIVE //
