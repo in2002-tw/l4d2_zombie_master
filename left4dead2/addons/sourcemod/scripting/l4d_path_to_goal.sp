@@ -180,7 +180,7 @@ Action CmdRequestGuide(int client, int args)
             SubtractVectors(ang_beam,ang_client,ang_beam);
             //LogMessage("%.1f %.1f %.1f", ang_beam[0], ang_beam[1], ang_beam[2]);
 
-            static char str1[32], str2[32];
+            static char str1[PLATFORM_MAX_PATH], str2[PLATFORM_MAX_PATH];
             
             if (FloatAbs(ang_beam[1]) < 90.0) Format(str1,sizeof(str1),"%T", "ptg_ahead", client);
             else Format(str1,sizeof(str1),"%T", "ptg_behind", client);

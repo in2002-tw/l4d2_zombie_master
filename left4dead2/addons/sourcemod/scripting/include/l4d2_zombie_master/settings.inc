@@ -192,6 +192,7 @@ int gamemode_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
 	return 0;
 }
 
+Menu menu_VoteGamemode;
 int Handle_VoteGamemode(Menu menu, MenuAction action, int param1, int param2)
 {
     if (action == MenuAction_End) delete menu;
@@ -204,14 +205,15 @@ int Handle_VoteGamemode(Menu menu, MenuAction action, int param1, int param2)
 void create_gamemode_vote()
 {
     if (IsVoteInProgress()) return;
-    Menu menu = new Menu(Handle_VoteGamemode);
+    delete menu_VoteGamemode;
+    menu_VoteGamemode = new Menu(Handle_VoteGamemode);
     char buffer[128];
     Format(buffer,sizeof(buffer), "zm_gamemode -> %s?", new_gamemode);
-    menu.SetTitle(buffer);
-    menu.AddItem("yes", "Yes");
-    menu.AddItem("no", "No");
-    menu.ExitButton = false;
-    menu.DisplayVoteToAll(20);
+    menu_VoteGamemode.SetTitle(buffer);
+    menu_VoteGamemode.AddItem("yes", "Yes");
+    menu_VoteGamemode.AddItem("no", "No");
+    menu_VoteGamemode.ExitButton = false;
+    menu_VoteGamemode.DisplayVoteToAll(20);
 }
 
 void random_gamemode()
