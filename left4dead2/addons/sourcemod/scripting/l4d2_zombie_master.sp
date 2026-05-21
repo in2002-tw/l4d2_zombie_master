@@ -78,6 +78,7 @@ public Plugin myinfo =
 // 4. Player data: remember grid mode, autocommon settings, PTG
 // 5. Traditional Chinese localization updated (thanks in2002)
 // 6. Start area fixes for better compatibility with custom maps.
+// 7. Common flow spawns fixed. Should fail less.
 
 // TO DO LIST:
 // 5. Gas station tornado (done by zyiks, not implemented)

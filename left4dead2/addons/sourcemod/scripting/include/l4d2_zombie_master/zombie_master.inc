@@ -979,7 +979,8 @@ stock bool nav_can_spawn_zombies(const int zClass = ZOMBIECLASS_COMMON,
     if (flow)
     {
         if (navSpawnAttributes&NAV_SPAWN_EMPTY) return false;
-        if (navSpawnAttributes&NAV_SPAWN_NOTHREAT) return false;
+        //if (navSpawnAttributes&NAV_SPAWN_NOTHREAT) return false;
+        // NAV_SPAWN_NO_MOBS
     }
     if (flow || zClass!=ZOMBIECLASS_WITCH)
     {
