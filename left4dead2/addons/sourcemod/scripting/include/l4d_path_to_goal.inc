@@ -1511,7 +1511,7 @@ bool TraceFilterStatic(int entity, int contentsMask)
     if (entity > 0 && entity <= MaxClients) return false;
     static char class[16];
     GetEntityClassname(entity,class,sizeof(class));
-    LogMessage("TraceFilterStatic hit %d %s", entity, class);
+    //LogMessage("TraceFilterStatic hit %d %s", entity, class);
     if (strncmp(class,"prop_static",11,false)==0) return true;
     return false;
 }
