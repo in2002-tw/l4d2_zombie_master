@@ -2106,10 +2106,39 @@ bool can_change_finale_stage()
     int current = L4D2_GetCurrentFinaleStage();
     if (current==FINALE_CUSTOM_SCRIPTED || current==FINALE_CUSTOM_DELAY || current==FINALE_CUSTOM_CLEAROUT)
         return true;
-    if (bank<g_iBonusFinaleStage) return true;
+    int cheapest = cheapest_zombie();
+    if (cheapest < 0 || cheapest > bank) return true;
+    if (bank<=0 || bank<g_iBonusFinaleStage) return true;
     if ( bank>=(0.5*g_iBonusFinaleStage*g_iAliveSurvivors) ) return false;
     if ( live_SI<=1 && live_zombie_arr[ZOMBIECLASS_TANK]<=0 ) return true;
     return false;
+}
+
+// Find cheapest zombie in ZM arsenal.
+int cheapest_zombie()
+{
+   int cost = -1;
+   if (max_SI>0)
+   {
+        for(int i = 0; i < sizeof(available_zombie_arr); i++)
+        {
+            if (i==ZOMBIECLASS_COMMON || i==ZOMBIECLASS_WITCH) continue;
+            if (costs_SI[i]<=0) continue;
+            if (max_zombie_arr[i]<=0) continue;
+            if (cost<0 || costs_SI[i] < cost) cost = costs_SI[i];
+        }
+   }
+   if (max_zombie_arr[ZOMBIECLASS_WITCH]>0)
+   {
+        if (g_iCostWitchStatic>0 && g_iCostWitchStatic<cost) cost = g_iCostWitchStatic;
+        if (g_iCostWitchMoving>0 && g_iCostWitchMoving<cost) cost = g_iCostWitchMoving;
+   }
+   if (max_zombie_arr[ZOMBIECLASS_COMMON]>0)
+   {
+        if (g_iCostCommon>0 && g_iCostCommon<cost) cost = g_iCostCommon;
+        if (g_iCostUncommon>0 && g_iCostUncommon<cost) cost = g_iCostUncommon;
+   }
+   return cost;
 }
 
 void announce_finale()
