@@ -45,6 +45,7 @@ native void L4D_Path_To_Goal(int client = -1, float duration = 5.0, bool backwar
 //#define VMT_LASERBEAM       "sprites/bubble.vmt"
 //#define VMT_LASERBEAM       "sprites/white.vmt"
 
+ConVar g_hCvarAlive;
 #define ACCEPT_ALL   0 // accept all players
 #define ACCEPT_ALIVE 1 // accept only alive players
 #define ACCEPT_DEAD  2 // accept only non-alive players
@@ -58,16 +59,27 @@ enum struct Cell
 }
 
 ArrayList g_GuideCells;
-ConVar g_hCvarMPGameMode, g_hCvarEnable, g_hCvarMax, g_hCvarSurvivors, g_hCvarInfected, g_hCvarSpec, g_hCvarAlive, g_hCvarBudget;
+ConVar g_hCvarMPGameMode, g_hCvarEnable, g_hCvarMax, g_hCvarSurvivors, g_hCvarInfected, g_hCvarSpec, g_hCvarBudget, g_hCvarFinaleAuto;
 //ConVar g_hCvarDz;
-bool gamemode_guidable, guide_ready, guide_prep, map_started, nav_started, enable, g_bL4D2, finale;
+bool gamemode_guidable, guide_ready, guide_prep, map_started, nav_started, enable, g_bL4D2, finale, finale_rescue, finale_gauntlet;
 int g_iLaser;
 float t_nav = -1.0; // nav event gametime
 Handle timer_nav;
 
+bool finale_stitched; // finale guide was drawn
+bool finale_backwards; // rescue vehicle is not at max flow -> flow cannot be used for guiding
+
+ConVar g_hCvarFinale;
+#define FINALE_ALWAYS 0 
+#define FINALE_STARTED 1
+#define FINALE_RESCUE 2
+#define FINALE_NEVER 3
+bool g_bFoundRescueVehicle;
+float g_fFlowRescueVehicle;
+
 bool is_prep_cooldown() // Prevent Guide_Prep() from firing if navmesh just changed
 {
-    if (t_nav<=0.0) return false;
+    if (t_nav<=0.0 || finale_rescue) return false;
     if ((t_nav+NAV_COOLDOWN)>GetGameTime()) return true;
     return false;
 }
@@ -138,6 +150,16 @@ Action Timer_CheckRequests(Handle timer = null)
         }
     }
     return Plugin_Stop;
+}
+
+// Draw beams for all clients
+void Guide_All_Clients()
+{
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        g_CellRequests[i].duration = 5.0;
+    }
+    Timer_CheckRequests(null);
 }
 
 int g_iStart;
@@ -239,13 +261,19 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     }
 
     static Cell cell;
+
     
-    bool use_flow = flow>0.0;
+    // Use flow when it makes sense to be used.
+    bool use_flow = flow>0.0 && (!g_bFoundRescueVehicle || !finale_stitched || !finale_backwards); 
+    
     if (!use_flow && navArea != Address_Null) // use flow if in starting area
     {
         int navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
         use_flow = navSpawnAttrs & NAV_SPAWN_PLAYER_START || navSpawnAttrs & NAV_SPAWN_CHECKPOINT;
     }
+
+    // TBD: Optimize both vector distance and flow!
+    // Find nearest vector distance with LOS and best flow.
 
     float min_dist = -1.0;
     float dist;
@@ -411,6 +439,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
                 flow_temp = L4D_GetFlowFromPoint(pos_temp);
                 if (flow_temp<=flow_best) continue;
                 pos_temp[2] += 16.0;
+                if (g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
                 dz = pos_temp[2] - pos_curr[2];
                 if (dz>=32.0 && dz>dz_best) continue; // avoid vertical changes that can't be crouch jumped
                 dz_best = dz;
@@ -454,7 +483,8 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
             pos_curr = pos_best;
             navArea_curr = navArea_best;
             flow_curr = flow_best;
-            if (L4D_GetNavArea_SpawnAttributes(navArea_curr) & NAV_SPAWN_ESCAPE_ROUTE)
+            int spawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea_curr);
+            if ( spawnAttrs & NAV_SPAWN_ESCAPE_ROUTE || (finale_rescue && spawnAttrs & NAV_SPAWN_RESCUE_VEHICLE) )
             {
                 g_iStart = get_flow_iStart(flow_curr,true,pos_curr);
                 static Cell cell;
@@ -542,15 +572,16 @@ void Check_Guidable()
 #define STAGE_COLLECT 2
 #define STAGE_SORT 3
 #define STAGE_BUILD 4
-//#define STAGE_FINALE 5
-#define STAGE_VALIDATE 5
-#define STAGE_END 6
+#define STAGE_FINALE 5
+#define STAGE_VALIDATE 6
+#define STAGE_END 7
 
 int g_iPrepStage, g_iLoop;
 float g_fMaxFlow, g_fFlowStart, g_fFlowCheckpoint, g_tFrameStart;
-ArrayList allAreas, all_cells;
+ArrayList allAreas, all_cells, RescueVehicleCells;
 bool g_bMissingStart, g_bMissingCheckpoint, g_bFoundStart, g_bFoundCheckpoint;
-Address g_aNavStart, g_aNavCheckpoint;
+Address g_aNavStart, g_aNavCheckpoint, g_aNavRescueVehicle;
+
 
 #if DEBUG
 float g_fPrepTotalTime;
@@ -593,8 +624,6 @@ bool frame_budget_exceeded()
     return exceeded;
 }
 
-// NAV_SPAWN_RESCUE_VEHICLE
-
 void OnFramePrep(bool new_frame = true)
 {
     if (!enable || guide_ready || !gamemode_guidable || !map_started || !nav_started || g_iPrepStage<=STAGE_NONE || g_iPrepStage>=STAGE_END)
@@ -607,6 +636,7 @@ void OnFramePrep(bool new_frame = true)
     static float pos[3];
     float flow;
     static Cell cell, cell_before, cell_after;
+    Address navArea;
     bool budget_spent = false; // same variable for all stages
     if (new_frame)
     {
@@ -636,7 +666,6 @@ void OnFramePrep(bool new_frame = true)
             {
                 g_fMaxFlow = 0.0;
                 g_iLoop = 0;
-                Address navArea;
                 while (g_iLoop<allAreas.Length)
                 {
                     navArea = allAreas.Get(g_iLoop);
@@ -659,11 +688,17 @@ void OnFramePrep(bool new_frame = true)
                 return;
             }
 
+            g_fFlowRescueVehicle = -1.0;
+            g_bFoundRescueVehicle = false;
+
             delete all_cells;
             all_cells = new ArrayList(sizeof(Cell)); // Collect nav areas in survivor path
             
             delete g_GuideCells;
             g_GuideCells = new ArrayList(sizeof(Cell));
+
+            delete RescueVehicleCells;
+            RescueVehicleCells = new ArrayList(sizeof(Cell));
 
             g_bMissingStart = true; // do we have a confirmed start area navmesh in g_GuideCells?
             g_bMissingCheckpoint = true; // do we have a confirmed end area navmesh in g_GuideCells?
@@ -673,6 +708,9 @@ void OnFramePrep(bool new_frame = true)
             
             g_fFlowStart = g_fMaxFlow;
             g_fFlowCheckpoint = 0.0;
+
+            finale_stitched = false;
+            finale_backwards = false;
 
             g_iLoop = 0;
             #if DEBUG
@@ -691,9 +729,24 @@ void OnFramePrep(bool new_frame = true)
             while (g_iLoop<allAreas.Length)
             {
                 if (frame_budget_exceeded()) { budget_spent = true; break; }
-                Address navArea = allAreas.Get(g_iLoop);
+                navArea = allAreas.Get(g_iLoop);
                 g_iLoop += 1;
                 if (!navArea) continue;
+                L4D_GetNavAreaCenter(navArea,pos);
+                flow = L4D_GetFlowFromPoint(pos);
+                if (flow>g_fMaxFlow) continue;
+                int navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
+
+                if (flow > 0.0 && g_hCvarFinale.IntValue < FINALE_NEVER && navSpawnAttrs & NAV_SPAWN_RESCUE_VEHICLE )
+                {
+                    if (flow>g_fFlowRescueVehicle)
+                    {
+                        g_bFoundRescueVehicle = true;
+                        g_fFlowRescueVehicle = flow;
+                        g_aNavRescueVehicle = navArea;
+                    }
+                }
+
                 if (L4D_NavArea_IsBlocked(navArea,TEAM_SURVIVOR,true) || L4D_NavArea_IsBlocked(navArea,TEAM_SURVIVOR,false))
                 {
                     #if DEBUG
@@ -701,14 +754,11 @@ void OnFramePrep(bool new_frame = true)
                     #endif
                     continue;
                 }
-                L4D_GetNavAreaCenter(navArea,pos);
-                flow = L4D_GetFlowFromPoint(pos);
-                if (flow>g_fMaxFlow) continue;
-                int navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
+
                 bool checkpoint = navSpawnAttrs & NAV_SPAWN_PLAYER_START || navSpawnAttrs & NAV_SPAWN_CHECKPOINT;
-                if (navSpawnAttrs & NAV_SPAWN_ESCAPE_ROUTE)
+
+                if (flow > 0.0 && navSpawnAttrs & NAV_SPAWN_ESCAPE_ROUTE)
                 {
-                    //if (flow<0.0) continue;
                     if (all_cells.FindValue(flow,0)>=0) continue; // if identical flow exists, ignore this cell
                     pos[2] += 16.0;
                     if (pos_underwater(pos))
@@ -746,6 +796,7 @@ void OnFramePrep(bool new_frame = true)
                         g_fFlowCheckpoint = flow;
                     }
                 }
+
             }
             
             if (!budget_spent) // Stage has ended, prep for next stage.
@@ -783,6 +834,18 @@ void OnFramePrep(bool new_frame = true)
                     guide_prep = false;
                     return;
                 }
+
+                if (g_bFoundRescueVehicle)
+                {
+                    cell.navArea = g_aNavRescueVehicle;
+                    cell.flow = g_fFlowRescueVehicle;
+                    L4D_GetNavAreaCenter(cell.navArea,pos);
+                    pos[2] += 16.0;
+                    if (pos_underwater(pos)) pos[2] += 16.0;
+                    cell.center = pos;
+                    RescueVehicleCells.PushArray(cell); 
+                }
+
             }
         }
         case STAGE_SORT:
@@ -808,7 +871,7 @@ void OnFramePrep(bool new_frame = true)
             {
                 if (frame_budget_exceeded()) { budget_spent = true; break; }
                 all_cells.GetArray(g_iLoop,cell,sizeof(Cell));
-                guide_add_cell(cell);
+                guide_add_cell(g_GuideCells,cell);
                 g_iLoop += 1;
             }
             if (!budget_spent) // Stage has ended, prep for next stage
@@ -820,8 +883,132 @@ void OnFramePrep(bool new_frame = true)
                     guide_prep = false;
                     return;
                 }
+                if (g_bFoundRescueVehicle)
+                {
+                    float max_guide_flow = g_GuideCells.Get(g_GuideCells.Length-1,0);
+                    LogMessage("rescue vehicle flow %f max guide flow %f", g_fFlowRescueVehicle, max_guide_flow);
+                    finale_backwards = g_fFlowRescueVehicle<max_guide_flow;
+                }
                 g_iLoop = 1;
             }
+        }
+        case STAGE_FINALE:
+        {
+            if (RescueVehicleCells == null || RescueVehicleCells.Length <= 0 || g_hCvarFinale.IntValue == FINALE_NEVER)
+                g_bFoundRescueVehicle = false;
+
+            if (g_bFoundRescueVehicle)
+            {
+                RescueVehicleCells.GetArray(RescueVehicleCells.Length-1,cell,sizeof(Cell));
+                static float pos_curr[3];
+                float flow_curr = cell.flow;
+                pos_curr = cell.center;
+                ArrayList adjAreas = new ArrayList();
+                    
+                Address navArea_curr = cell.navArea;
+                float flow_temp, flow_best;
+                //float dz, dz_best;
+                static float pos_temp[3], pos_best[3];
+                Address navArea_best;
+
+                while (navArea_curr != Address_Null)
+                {
+                    if (frame_budget_exceeded()) { budget_spent = true; break; }
+                    bool found = false;
+                    flow_best = flow_curr;
+                    //dz_best = 10000.0;
+                    for (int dir = 0; dir < 4; dir++) // Enqueue adjacent nav areas (all 4 directions)
+                    {
+                        adjAreas.Clear();
+                        L4D_NavArea_GetAdjacentAreas(navArea_curr, dir, adjAreas);
+                        for (int i = 0; i < adjAreas.Length; i++)
+                        {
+                            Address adjArea = adjAreas.Get(i);
+                            if (adjArea == Address_Null) continue;
+                            //if (!L4D_NavArea_IsConnected(navArea_curr,adjArea,dir)) continue;
+                            //if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
+                            //if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
+                            L4D_GetNavAreaCenter(adjArea,pos_temp);
+                            flow_temp = L4D_GetFlowFromPoint(pos_temp);
+                            if (finale_backwards && flow_temp<=flow_best) continue; // from rescue zone -> go upwards in flow
+                            else if (!finale_backwards && flow_temp>=flow_best) continue; // from rescue zone -> go downwards in flow
+                            pos_temp[2] += 16.0;
+                            //if (g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
+                            //dz = FloatAbs(pos_temp[2] - pos_curr[2]);
+                            //if (dz>=32.0 && dz>dz_best) continue;
+                            //dz_best = dz;
+                            flow_best = flow_temp;
+                            navArea_best = adjArea;
+                            pos_best = pos_temp;
+                            found = true;
+                        }
+                    }
+
+                    if (found)
+                    {
+                        if (pos_underwater(pos_best)) pos_best[2] += 32.0;
+                        //if (!twopos_visible(pos_curr,pos_best))
+                        //{
+                        //    static float pos_mid[3];
+                        //    if (LOS_rescue_cheap(pos_curr,pos_best,pos_mid)) RescueVehicleCells.PushArray(pos_mid);
+                        //    else if (queue.Length == 1) // Try nav center of client origin
+                        //    {
+                        //        L4D_GetNavAreaCenter(navArea,pos_mid);
+                        //        pos_mid[2] += 16.0;
+                        //        if (pos_underwater(pos_mid)) pos_mid[2] += 32.0;
+                        //        if (twopos_visible(pos_curr,pos_mid) && twopos_visible(pos_best,pos_mid)) RescueVehicleCells.PushArray(pos_mid);
+                        //    }
+                        //    RescueVehicleCells.PushArray(pos_best);
+                        //}
+                        //else if (queue.Length>1)
+                        //{
+                        //    RescueVehicleCells.GetArray(RescueVehicleCells.Length-2,pos_last,3);
+                            //if (g_hCvarDz.FloatValue>0.0) // reduce floating cells
+                            //{
+                            //    if (FloatAbs(pos_last[2]-pos_best[2])>g_hCvarDz.FloatValue)
+                            //    {
+                            //        queue.PushArray(pos_best);
+                            //    }
+                            //}
+                        //    if (twopos_visible(pos_best,pos_last)) RescueVehicleCells.SetArray(queue.Length-1,pos_best,3);
+                        //    else RescueVehicleCells.PushArray(pos_best);
+                        //}
+                        //else RescueVehicleCells.PushArray(pos_best);
+                        pos_curr = pos_best;
+                        navArea_curr = navArea_best;
+                        flow_curr = flow_best;
+                        
+                        cell.flow = flow_curr;
+                        cell.navArea = navArea_curr;
+                        cell.center = pos_curr;
+                        //RescueVehicleCells.PushArray(cell,sizeof(Cell));
+                        guide_add_cell(RescueVehicleCells,cell);
+                        //LogMessage("STAGE_FINALE %d %f", RescueVehicleCells.Length, cell.flow);
+                        //if (L4D_GetNavArea_SpawnAttributes(navArea_curr) & NAV_SPAWN_ESCAPE_ROUTE)
+                        //{
+                        //    g_iStart = get_flow_iStart(flow_curr,true,pos_curr);
+                        //    static Cell cell;
+                        //    g_GuideCells.GetArray(g_iStart,cell,sizeof(Cell));
+                        //    pos_end = cell.center;
+                        //    if (RescueVehicleCells.Length>1 && twopos_visible(pos_curr,pos_end))
+                        //    {
+                        //        RescueVehicleCells.GetArray(RescueVehicleCells.Length-2,pos_last,3);
+                        //        if (twopos_visible(pos_last,pos_end)) RescueVehicleCells.Erase(RescueVehicleCells.Length-1);
+                        //    }
+                        //    success = true;
+                        //    break;
+                        //}
+                    }
+                    else break;
+                }
+                if (!budget_spent)
+                {
+                    LogMessage("Rescue vehicle cells %d", RescueVehicleCells.Length);
+                    if (should_stitch_finale()) stitch_finale();
+                }
+                delete adjAreas;
+            }
+            g_iLoop = 1;
         }
         case STAGE_VALIDATE:
         {
@@ -908,6 +1095,65 @@ void OnFramePrep(bool new_frame = true)
 
 }
 
+// Check if escape vehicle should be connected to RequestGuide
+bool should_stitch_finale()
+{
+    if (!enable || !map_started || !nav_started || finale_stitched || !g_bFoundRescueVehicle) return false;
+    switch (g_hCvarFinale.IntValue)
+    {
+        case FINALE_NEVER: return false;
+        case FINALE_RESCUE: return finale && finale_rescue;
+        case FINALE_STARTED: return finale;
+        default: return true;
+    }
+}
+
+void stitch_finale()
+{
+    if (!enable || finale_stitched) return;
+    if (g_GuideCells == null || RescueVehicleCells == null) return;
+    static Cell cell;
+    if (!finale_backwards) // simplest case. extend guide cells to escape vehicle
+    {
+        LogMessage("Finale increasing in flow, extended by %d cells", RescueVehicleCells.Length);
+    }
+    else
+    {
+        if (finale_gauntlet) // Erase g_GuideCells after rescue flow
+        {
+            g_iLoop = g_GuideCells.Length-1;
+            int erased = 0;
+            while (g_iLoop>=0 && g_iLoop<=(g_GuideCells.Length-1))
+            {
+                if (g_GuideCells.Get(g_iLoop,0)>=g_fFlowRescueVehicle)
+                {
+                    g_GuideCells.Erase(g_iLoop);
+                    erased += 1;
+                }
+                else g_iLoop -= 1;
+            }
+            LogMessage("Gauntlet flow backwards, erased %d cells, added %d cells", erased, RescueVehicleCells.Length);
+        }
+        else // Keep only last guide cell, connect to rescue zone.
+        {
+            LogMessage("Finale flow backwards, guide from radio only. %d cells", RescueVehicleCells.Length);
+            g_GuideCells.GetArray(g_GuideCells.Length-1,cell,sizeof(Cell));
+            g_GuideCells.Clear();
+            g_GuideCells.PushArray(cell,sizeof(Cell));
+        }
+    }
+    // Merge g_GuideCells with rescue vehicle cells
+    // in RescueVehicleCells, the first cell is the rescue position, i.e. the very last point.
+    g_iLoop = RescueVehicleCells.Length-1;
+    while (g_iLoop>=0 && g_iLoop<=(RescueVehicleCells.Length-1))
+    {
+        RescueVehicleCells.GetArray(g_iLoop,cell,sizeof(Cell));
+        g_GuideCells.PushArray(cell,sizeof(Cell));
+        g_iLoop -= 1;
+    }
+    finale_stitched = true;
+}
+
 // Explore from starting position up to flow_min until we hit ESCAPE_ROUTE
 stock bool explore_to_escape_route(ArrayList cells, Address navArea, float pos[3], float flow, float flow_min, int max_steps = 50)
 {
@@ -988,34 +1234,34 @@ stock bool explore_to_escape_route(ArrayList cells, Address navArea, float pos[3
     return false;
 }
 
-void guide_add_cell(Cell cell)
+void guide_add_cell(ArrayList cells, Cell cell)
 {
-    if (g_GuideCells.Length<=1) // no LOS shortcuts available
+    if (cells.Length<=1) // no LOS shortcuts available
     {
-        g_GuideCells.PushArray(cell);
+        cells.PushArray(cell);
         return;
     }
     static Cell cell_prev, cell_prev2;
-    g_GuideCells.GetArray(g_GuideCells.Length-1,cell_prev,sizeof(Cell)); // last cell
-    g_GuideCells.GetArray(g_GuideCells.Length-2,cell_prev2,sizeof(Cell)); // cell before last cell
+    cells.GetArray(cells.Length-1,cell_prev,sizeof(Cell)); // last cell
+    cells.GetArray(cells.Length-2,cell_prev2,sizeof(Cell)); // cell before last cell
     if (twopos_visible(cell.center,cell_prev.center))
     {
         //if (g_hCvarDz.FloatValue>0.0) // reduce floating cells
         //{
         //    if (FloatAbs(cell_prev.center[2]-cell.center[2])>g_hCvarDz.FloatValue)
         //    {
-        //        g_GuideCells.PushArray(cell);
+        //        cells.PushArray(cell);
         //        return;
         //    }
         //}
         if (twopos_visible(cell.center,cell_prev2.center) && twopos_visible(cell_prev2.center,cell_prev.center))
-            g_GuideCells.SetArray(g_GuideCells.Length-1,cell,sizeof(Cell));
+            cells.SetArray(cells.Length-1,cell,sizeof(Cell));
         else 
-            g_GuideCells.PushArray(cell);
+            cells.PushArray(cell);
     }
     else
     {
-        cell_rescue(g_GuideCells,cell_prev,cell,cell_prev2);
+        cell_rescue(cells,cell_prev,cell,cell_prev2);
     }
 }
 
@@ -1106,9 +1352,9 @@ void cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2)
             diff_candidate = diff_template; ScaleVector(diff_candidate,0.25); // quarter
             AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
 
-            if (!flat && i_turn_flat==0) // z is not flat
+            if (diff_template[2] != 0.0) // z is not flat
             {
-                diff_candidate = diff_template; diff_template[0] = 0.0; diff_template[1] = 0.0; // dz
+                diff_candidate = diff_template; diff_candidate[0] = 0.0; diff_candidate[1] = 0.0; // dz
                 AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
                 diff_candidate[2] *= 0.5; // dz/2
                 AddVectors(pos_template,diff_candidate,pos_candidate); pos_candidates.PushArray(pos_candidate);
@@ -1252,8 +1498,9 @@ bool twopos_visible(float pos1[3], float pos2[3], bool world_only = true)
 {
     //if (world_only) TR_TraceRayFilter(pos1,pos2,MASK_SOLID,RayType_EndPoint,TraceFilterStatic);
     //else TR_TraceRayFilter(pos1,pos2,MASK_SOLID,RayType_EndPoint,TraceFilterNoClients);
-    if (world_only) TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,-2.0},{2.0,2.0,16.0},MASK_PLAYERSOLID,TraceFilterStatic);
-    else            TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,-2.0},{2.0,2.0,10.0},MASK_PLAYERSOLID,TraceFilterNoClients);
+    if (world_only) TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,-2.0},{2.0,2.0,16.0},MASK_PLAYERSOLID | MASK_VISIBLE | CONTENTS_DETAIL,TraceFilterStatic);
+    //if (world_only) TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,-2.0},{2.0,2.0,16.0},MASK_ALL,TraceFilterStatic);
+    else            TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,-2.0},{2.0,2.0,10.0},MASK_PLAYERSOLID | MASK_VISIBLE | CONTENTS_DETAIL,TraceFilterNoClients);
     if (!TR_DidHit(INVALID_HANDLE)) return true;
     return false;
 }
@@ -1264,6 +1511,7 @@ bool TraceFilterStatic(int entity, int contentsMask)
     if (entity > 0 && entity <= MaxClients) return false;
     static char class[16];
     GetEntityClassname(entity,class,sizeof(class));
+    LogMessage("TraceFilterStatic hit %d %s", entity, class);
     if (strncmp(class,"prop_static",11,false)==0) return true;
     return false;
 }

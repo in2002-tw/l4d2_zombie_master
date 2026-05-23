@@ -17,7 +17,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.15 2026-05-20"
+#define PLUGIN_VERSION 			"1.20 2026-05-23"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -41,10 +41,11 @@ public void OnPluginStart()
     RegConsoleCmd("imlost",             CmdRequestGuide, "Point where to go to progress in the map.");
     RegConsoleCmd("guide",              CmdRequestGuide, "Point where to go to progress in the map.");
     RegConsoleCmd("ptg",                CmdRequestGuide, "Point where to go to progress in the map.");
-    
-    RegAdminCmd("l4d_path_to_goal_recalculate", CmdRecalculate, ADMFLAG_ROOT,"Recalculate guide points.");
 
     g_bL4D2 = GetEngineVersion()==Engine_Left4Dead2;
+    
+    RegAdminCmd("l4d_path_to_goal_recalculate", CmdRecalculate, ADMFLAG_ROOT,"Recalculate guide points.");
+    if (g_bL4D2) RegAdminCmd("l4d_path_to_goal_rescue", CmdRescue, ADMFLAG_ROOT,"Send in rescue vehicle.");
 
     g_hCvarEnable = CreateConVar("l4d_path_to_goal_enable", "1",
     "0=OFF, 1=ON.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
@@ -68,6 +69,12 @@ public void OnPluginStart()
     g_hCvarBudget = CreateConVar("l4d_path_to_goal_budget", "0.5",
     "Max CPU budget (ms per frame) for escape route calculation. Larger budget makes requests available faster at the expense of server lag. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 1000.0);
 
+    g_hCvarFinale = CreateConVar("l4d_path_to_goal_finale", "2",
+    "On Finale maps, connect to rescue vehicle... 0: ALWAYS, 1: FINALE STARTED, 2: RESCUE ARRIVED, 3: NEVER",FCVAR_NOTIFY, true, 0.0, true, 3.0);
+
+    g_hCvarFinaleAuto = CreateConVar("l4d_path_to_goal_finale_auto", "1",
+    "Draw beams to rescue vehicle when it arrives. l4d_path_to_goal_finale must be less than 3.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    
     //g_hCvarDz = CreateConVar("l4d_path_to_goal_dz", "16.0",
     //"Max absolute dz between cells considered safe for LOS merging. 0.0 to disable (cells will always merge) for reduced server strain.",FCVAR_NOTIFY, true, 0.0, true, 10000.0);
 
@@ -86,21 +93,49 @@ public void OnPluginStart()
 	HookEvent("finale_start", 			evtFinaleStart,    EventHookMode_PostNoCopy); //final starts, some of final maps won't trigger
 	HookEvent("finale_radio_start", 	EvtFinaleRadio,    EventHookMode_PostNoCopy); //final starts, all final maps trigger
 	HookEvent("gauntlet_finale_start", 	evtGauntletStart,  EventHookMode_PostNoCopy); //final starts, only rushing maps trigger (C5M5, C13M4)
+    HookEvent("finale_vehicle_ready", 	evtFinaleVehicle,  EventHookMode_PostNoCopy);
+}
+
+void evtFinaleVehicle(Event event, const char[] name, bool dontBroadcast)
+{
+    LogMessage("finale_vehicle_ready");
+    if (finale) finale_rescue = true;
+
+    if (enable && finale_rescue)
+    {
+        if (guide_ready && should_stitch_finale() && !finale_stitched) stitch_finale();
+        if (g_hCvarFinale.IntValue < FINALE_NEVER && g_hCvarFinaleAuto.BoolValue)
+        {
+            Guide_All_Clients();
+        }
+    }
 }
 
 void evtFinaleStart(Event event, const char[] name, bool dontBroadcast)
 {
     LogMessage("finale_start");
+    finale = true;
+    if (guide_ready && should_stitch_finale() && !finale_stitched) stitch_finale();
 }
 
 void EvtFinaleRadio(Event event, const char[] name, bool dontBroadcast)
 {
     LogMessage("finale_radio_start");
+    finale = true;
+    if (guide_ready && should_stitch_finale() && !finale_stitched) stitch_finale();
 }
 
 void evtGauntletStart(Event event, const char[] name, bool dontBroadcast)
 {
     LogMessage("gauntlet_finale_start");
+    finale = true;
+    finale_gauntlet = true;
+    //finale_rescue = true;
+    if (guide_ready && should_stitch_finale() && !finale_stitched) stitch_finale();
+    if (finale_rescue && g_hCvarFinale.IntValue < FINALE_NEVER && g_hCvarFinaleAuto.BoolValue)
+    {
+        Guide_All_Clients();
+    }
 }
 
 void ConVarChanged_Cvars(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -115,6 +150,8 @@ void evtPostNav(Event event, const char[] name, bool dontBroadcast)
     #endif
     nav_started = true;
     finale = false;
+    finale_rescue = false;
+    finale_gauntlet = false;
     NavChanged();
 }
 
@@ -211,6 +248,13 @@ Action CmdRecalculate(int client, int args)
         Guide_Prep();
     }
     else ReplyToCommand(client, "[PTG] %t", "ptg_busy");
+    return Plugin_Continue;
+}
+
+Action CmdRescue(int client, int args)
+{
+    //LogMessage("CmdRescue");
+    L4D2_SendInRescueVehicle();
     return Plugin_Continue;
 }
 
