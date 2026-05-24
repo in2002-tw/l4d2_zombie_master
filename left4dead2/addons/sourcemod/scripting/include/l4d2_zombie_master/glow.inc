@@ -118,6 +118,12 @@ Action OnTransmitZM(int entity, int client)
    	int parent = GetEntPropEnt(entity,Prop_Data,"m_pParent");
    	bool valid = IsValidEntity(parent);
    	if (valid && IsValidClient(parent) && !IsPlayerAlive(parent)) valid = false;
+    //if (valid)
+    //{
+    //    static float pos[3];
+    //    GetEntPropVector(entity, Prop_Send, "m_vecOrigin", pos);
+    //    if (pos[0]==0.0 && pos[1]==0.0 && pos[2]==0.0) valid = false;
+    //}
    	if (!valid || zm_client<0)
    	{
        	if (DEBUG) LogMessage("[zm] OnTransmitZM killing glow %d, parent %d", entity, parent); 
@@ -134,6 +140,12 @@ Action OnTransmitZM_FlowSurvivor(int entity, int client)
    	int parent = GetEntPropEnt(entity,Prop_Data,"m_pParent");
    	bool valid = IsValidClient(parent) && IsPlayerAlive(parent) && zm_menu_state!=ZM_MENU_CLOSED;
    	if (valid) valid = get_spawner_target_survivor()==parent;
+    //if (valid)
+    //{
+    //    static float pos[3];
+    //    GetEntPropVector(entity, Prop_Send, "m_vecOrigin", pos);
+    //    if (pos[0]==0.0 && pos[1]==0.0 && pos[2]==0.0) valid = false;
+    //}
    	if (!valid || zm_client<0)
    	{
        	if (DEBUG) LogMessage("[zm] OnTransmitZM_FlowSurvivor killing glow %d, parent %d", entity, parent);

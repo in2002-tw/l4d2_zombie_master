@@ -273,14 +273,14 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
             fail = true;
         }
     }
-    if (!fail)
-    {
-        if (!Valid_Ground(vPos_spawner))
-        {
-            fail = true;
-            spawner_state = SPAWNER_OTHER;
-        }
-    }
+    //if (!fail)
+    //{
+    //    if (!Valid_Ground(vPos_spawner))
+    //    {
+    //        fail = true;
+    //        spawner_state = SPAWNER_OTHER;
+    //    }
+    //}
     if (!fail || draw) // nav area travel distance is expensive, skip if not needed
     {
         //float t = GetEngineTime();
@@ -825,7 +825,12 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
                 //LogMessage("Analog_ResolveCommonPositions %d Bad nav", i);
                 continue;
             }
-            if (!expected_angry && !Survivors_CanTravelTo_Pos(randomPos,navArea)) // automatic zombies should slow down survivors
+            if (navArea != Address_Null && g_fSpawnMinDistance>0.0 && distance_too_close(min_distance_to_survivors(randomPos,false,_,navArea)) )
+            {
+                //LogMessage("Analog_ResolveCommonPositions %d too close", i);
+                continue;
+            }
+            if (!expected_angry && !Survivors_CanTravelTo_Pos(randomPos,navArea)) // automatic zombies should get in the way of survivor path
             {
                 //LogMessage("Analog_ResolveCommonPositions %d No travel", i);
                 continue;
@@ -977,6 +982,7 @@ bool Analog_ResolveWitchPosition(bool flow, float outPos[3])
             if (IsObstructed(outPos,_,_,false)) continue; // use zyiks obstruction correction
             navArea = L4D_GetNearestNavArea(outPos, 300.0, true, true, true, TEAM_INFECTED);
             if (navArea == Address_Null || !nav_can_spawn_zombies(ZOMBIECLASS_WITCH,navArea,_,_,_,_,true)) continue;
+            if (navArea != Address_Null && g_fSpawnMinDistance>0.0 && distance_too_close(min_distance_to_survivors(outPos,false,_,navArea)) ) continue;
             if (!Survivors_CanTravelTo_Pos(outPos,navArea)) continue; // witch must be a potential obstacle
             if (can_any_alive_survivor_see_cheap(outPos,_,navArea,_)) continue;
             g_bAnalogFlowUsed = true;
@@ -1022,7 +1028,8 @@ bool Analog_ResolveSpecialPosition(int zombieclass, bool flow, float outPos[3])
             if (IsObstructed(outPos,_,_,false)) continue; // use zyiks obstruction correction
             navArea = L4D_GetNearestNavArea(outPos, 300.0, true, true, true, TEAM_INFECTED);
             if (navArea == Address_Null || !nav_can_spawn_zombies(zombieclass,navArea)) continue;
-            if (zm_stage < ZM_STARTED && can_any_alive_survivor_see_cheap(outPos,_,navArea,_)) continue;
+            if (navArea != Address_Null && g_fSpawnMinDistance>0.0 && distance_too_close(min_distance_to_survivors(outPos,false,_,navArea)) ) continue;
+            if (can_any_alive_survivor_see_cheap(outPos,_,navArea,_)) continue;
             g_bAnalogFlowUsed = true;
             g_iAnalogTargetClient = target_client;
             return true;

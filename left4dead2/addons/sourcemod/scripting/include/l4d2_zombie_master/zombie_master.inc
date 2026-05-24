@@ -1566,7 +1566,7 @@ stock bool IsObstructed(float pos[3], int entity = -1, bool debug=false, bool ig
     	{
 		     static char classname[64];
              GetEntityClassname(g_iObstructingEntity, classname, sizeof(classname));
-             LogMessage("IsObstructed hit %d %s %d %d %d",g_iObstructingEntity, classname);
+             LogMessage("IsObstructed hit %d %s",g_iObstructingEntity, classname);
         }
 		if (g_iObstructingEntity == 0) // Hit world
 		{
@@ -3063,6 +3063,6 @@ stock bool Valid_Ground(float pos[3], float dz = 40.0)
     static float pos2[3];
     pos2 = pos;
     pos2[2] -= dz;
-    TR_TraceHullFilter(pos,pos2,{-HULL_DX_STRICT,-HULL_DX_STRICT,-1.0},{HULL_DX_STRICT,HULL_DX_STRICT,0.0},MASK_PLAYERSOLID,TraceFilter_Stuck_IgnoreZombies);
-    return TR_DidHit(INVALID_HANDLE);
+    TR_TraceHullFilter(pos,pos2,{-HULL_DX_STRICT,-HULL_DX_STRICT,1.0},{HULL_DX_STRICT,HULL_DX_STRICT,2.0},MASK_PLAYERSOLID,TraceFilter_Stuck_IgnoreZombies);
+    return TR_DidHit(INVALID_HANDLE) || TR_StartSolid(INVALID_HANDLE) || TR_AllSolid(INVALID_HANDLE);
 }
