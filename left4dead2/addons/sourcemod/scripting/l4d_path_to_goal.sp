@@ -69,7 +69,7 @@ public void OnPluginStart()
     g_hCvarBudget = CreateConVar("l4d_path_to_goal_budget", "0.5",
     "Max CPU budget (ms per frame) for escape route calculation. Larger budget makes requests available faster at the expense of server lag. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 1000.0);
 
-    g_hCvarFinale = CreateConVar("l4d_path_to_goal_finale", "2",
+    g_hCvarFinale = CreateConVar("l4d_path_to_goal_finale", "1",
     "On Finale maps, connect to rescue vehicle... 0: ALWAYS, 1: FINALE STARTED, 2: RESCUE ARRIVED, 3: NEVER",FCVAR_NOTIFY, true, 0.0, true, 3.0);
 
     g_hCvarFinaleAuto = CreateConVar("l4d_path_to_goal_finale_auto", "1",
@@ -87,18 +87,22 @@ public void OnPluginStart()
     
     nav_started = true;
     guide_prep = false;
-    HookEvent("round_start_post_nav",   evtPostNav,        EventHookMode_PostNoCopy);
-    HookEvent("nav_blocked",            evtNavChange,      EventHookMode_PostNoCopy);
-    HookEvent("nav_generate",           evtNavChange,      EventHookMode_PostNoCopy);
-	HookEvent("finale_start", 			evtFinaleStart,    EventHookMode_PostNoCopy); //final starts, some of final maps won't trigger
-	HookEvent("finale_radio_start", 	EvtFinaleRadio,    EventHookMode_PostNoCopy); //final starts, all final maps trigger
-	HookEvent("gauntlet_finale_start", 	evtGauntletStart,  EventHookMode_PostNoCopy); //final starts, only rushing maps trigger (C5M5, C13M4)
-    HookEvent("finale_vehicle_ready", 	evtFinaleVehicle,  EventHookMode_PostNoCopy);
+    HookEvent("round_start_post_nav",     evtPostNav,        EventHookMode_PostNoCopy);
+    HookEvent("nav_blocked",              evtNavChange,      EventHookMode_PostNoCopy);
+    HookEvent("nav_generate",             evtNavChange,      EventHookMode_PostNoCopy);
+	HookEvent("finale_start", 			  evtFinaleStart,    EventHookMode_PostNoCopy); //final starts, some of final maps won't trigger
+	HookEvent("finale_radio_start", 	  EvtFinaleRadio,    EventHookMode_PostNoCopy); //final starts, all final maps trigger
+    HookEvent("finale_vehicle_ready", 	  evtFinaleVehicle,  EventHookMode_PostNoCopy);
+    if (g_bL4D2)
+    {
+    HookEvent("gauntlet_finale_start", 	  evtGauntletStart,  EventHookMode_PostNoCopy); //final starts, only rushing maps trigger (C5M5, C13M4)
+    HookEvent("finale_vehicle_incoming",  evtFinaleVehicle,  EventHookMode_PostNoCopy);
+    }
 }
 
 void evtFinaleVehicle(Event event, const char[] name, bool dontBroadcast)
 {
-    LogMessage("finale_vehicle_ready");
+    LogMessage("evtFinaleVehicle");
     if (finale) finale_rescue = true;
 
     if (enable && finale_rescue)
@@ -113,24 +117,24 @@ void evtFinaleVehicle(Event event, const char[] name, bool dontBroadcast)
 
 void evtFinaleStart(Event event, const char[] name, bool dontBroadcast)
 {
-    LogMessage("finale_start");
+    LogMessage("evtFinaleStart");
     finale = true;
     if (guide_ready && should_stitch_finale() && !finale_stitched) stitch_finale();
 }
 
 void EvtFinaleRadio(Event event, const char[] name, bool dontBroadcast)
 {
-    LogMessage("finale_radio_start");
+    LogMessage("EvtFinaleRadio");
     finale = true;
     if (guide_ready && should_stitch_finale() && !finale_stitched) stitch_finale();
 }
 
 void evtGauntletStart(Event event, const char[] name, bool dontBroadcast)
 {
-    LogMessage("gauntlet_finale_start");
+    LogMessage("evtGauntletStart");
     finale = true;
+    if (!finale_gauntlet && finale_stitched) Guide_Cleanup();
     finale_gauntlet = true;
-    //finale_rescue = true;
     if (guide_ready && should_stitch_finale() && !finale_stitched) stitch_finale();
     if (finale_rescue && g_hCvarFinale.IntValue < FINALE_NEVER && g_hCvarFinaleAuto.BoolValue)
     {
