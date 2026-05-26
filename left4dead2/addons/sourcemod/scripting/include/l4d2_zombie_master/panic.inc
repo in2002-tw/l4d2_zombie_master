@@ -219,7 +219,7 @@ bool panic_conditions(bool mob_just_spawned=false, bool ignore_spacing = false)
     //}
     if (script_CommonLimit<=0)
     {
-        LogMessage("panic_conditions: script_CommonLimit");
+        if (DEBUG_PANIC) LogMessage("panic_conditions: script_CommonLimit");
         return false;
     }
     if (!natural_mob)

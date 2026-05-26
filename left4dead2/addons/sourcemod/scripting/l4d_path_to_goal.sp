@@ -17,7 +17,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.20 2026-05-23"
+#define PLUGIN_VERSION 			"1.21 2026-05-25"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -105,13 +105,10 @@ void evtFinaleVehicle(Event event, const char[] name, bool dontBroadcast)
     LogMessage("evtFinaleVehicle");
     if (finale) finale_rescue = true;
 
-    if (enable && finale_rescue)
+    if (enable && finale_rescue && g_hCvarFinale.IntValue < FINALE_NEVER)
     {
-        if (guide_ready && should_stitch_finale() && !finale_stitched) stitch_finale();
-        if (g_hCvarFinale.IntValue < FINALE_NEVER && g_hCvarFinaleAuto.BoolValue)
-        {
-            Guide_All_Clients();
-        }
+        if (guide_ready && !finale_stitched && should_stitch_finale()) stitch_finale();
+        if (g_hCvarFinaleAuto.BoolValue) Guide_All_Clients();
     }
 }
 
@@ -119,14 +116,14 @@ void evtFinaleStart(Event event, const char[] name, bool dontBroadcast)
 {
     LogMessage("evtFinaleStart");
     finale = true;
-    if (guide_ready && should_stitch_finale() && !finale_stitched) stitch_finale();
+    if (guide_ready && !finale_stitched && should_stitch_finale()) stitch_finale();
 }
 
 void EvtFinaleRadio(Event event, const char[] name, bool dontBroadcast)
 {
     LogMessage("EvtFinaleRadio");
     finale = true;
-    if (guide_ready && should_stitch_finale() && !finale_stitched) stitch_finale();
+    if (guide_ready && !finale_stitched && should_stitch_finale()) stitch_finale();
 }
 
 void evtGauntletStart(Event event, const char[] name, bool dontBroadcast)
@@ -135,7 +132,7 @@ void evtGauntletStart(Event event, const char[] name, bool dontBroadcast)
     finale = true;
     if (!finale_gauntlet && finale_stitched) Guide_Cleanup();
     finale_gauntlet = true;
-    if (guide_ready && should_stitch_finale() && !finale_stitched) stitch_finale();
+    if (guide_ready && !finale_stitched && should_stitch_finale()) stitch_finale();
     if (finale_rescue && g_hCvarFinale.IntValue < FINALE_NEVER && g_hCvarFinaleAuto.BoolValue)
     {
         Guide_All_Clients();

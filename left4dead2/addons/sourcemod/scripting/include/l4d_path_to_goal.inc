@@ -77,6 +77,9 @@ ConVar g_hCvarFinale;
 bool g_bFoundRescueVehicle;
 float g_fFlowRescueVehicle;
 
+int color_forward[4] = {25,255,25,255};
+int color_backward[4] = {255,25,25,255};
+
 bool is_prep_cooldown() // Prevent Guide_Prep() from firing if navmesh just changed
 {
     if (t_nav<=0.0 || finale_rescue) return false;
@@ -165,6 +168,13 @@ void Guide_All_Clients()
 int g_iStart;
 float g_RequestFirstPos[3]; // for hint system
 
+// Use Gauntlet-type logic for stitching escape route with rescue vehicle.
+bool use_gauntlet_logic()
+{
+    if (!finale) return false;
+    return finale_gauntlet || g_hCvarFinale.IntValue == FINALE_ALWAYS;
+}
+
 // Draw survivor path for client, for duration in seconds
 // backward: include backwards-going path.
 // join_client: draw connection between client's origin and nearest point in survivor path.
@@ -233,12 +243,12 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     GetClientAbsOrigin(client,origin);
     GetClientEyePosition(client,eye_pos);
     Address navArea = L4D_GetNearestNavArea(origin,500.0,true,true,true,TEAM_SURVIVOR);
-    if (navArea != Address_Null)
-    {
-        // Verify that navArea makes sense
-        L4D_GetNavAreaCenter(navArea,last_pos);
-        if (GetVectorDistance(last_pos,origin)>500.0) navArea = Address_Null;
-    }
+    //if (navArea != Address_Null)
+    //{
+    //    // Verify that navArea makes sense
+    //    L4D_GetNavAreaCenter(navArea,last_pos);
+    //    if (GetVectorDistance(last_pos,origin)>500.0) navArea = Address_Null;
+    //}
     if (navArea == Address_Null)
     {
         // search for navareas within radius of client origin... native not available yet
@@ -269,7 +279,7 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     static Cell cell;
 
     // Use flow when it makes sense to be used.
-    bool use_flow = navArea != Address_Null && ( !finale_stitched || !finale_backwards || (finale_gauntlet && flow<g_fFlowRescueVehicle) ); 
+    bool use_flow = navArea != Address_Null && ( !finale_stitched || !finale_backwards || (use_gauntlet_logic() && flow<g_fFlowRescueVehicle) ); 
     
     //if (!use_flow && navArea != Address_Null) // use flow if in starting area
     //{
@@ -301,33 +311,52 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
         }
     }
     if (!use_flow && min_dist<0.0) return false;
-    
-    bool LOS = cell_visible(g_iStart,last_pos);
+
+    int i_forward = g_iStart;
+    int i_backward = g_iStart;
+
+    // Try cell splitting technique first. If it fails try usual LOS adjustments
+    //static bool pos_split[3];
+    //bool found_split = try_guide_cellsplit(client,g_iStart,last_pos,pos_split,i_forward,i_backward);
+    bool found_split = false;
+    //if (found_split)
+    //{
+    //    if (GetVectorDistance(last_pos,pos_split,true)>25.0) // Connect unless they are very close to each other.
+    //   {
+    //        DrawBeam(client,last_pos,pos_split,duration,color_forward);
+    //        i_draw += 1;
+    //    }
+    //    last_pos = pos_split;
+    //}
+
+    bool LOS = found_split || cell_visible(g_iStart,last_pos);
 
     // Try starting at a more reasonable position with LOS
-    if ( (join_client || !LOS) && (g_iStart+1)<g_GuideCells.Length && cell_visible(g_iStart+1,last_pos,_,250.0))
+    if (!found_split)
     {
-        g_iStart += 1; // Move forward
-        LOS = true;
-    }
-    else if (g_iStart>0 && !LOS && cell_visible(g_iStart-1,last_pos,_,250.0))
-    {
-        g_iStart -=1; // Move backward
-        LOS = true;
+        if ( (join_client || !LOS) && (g_iStart+1)<g_GuideCells.Length && cell_visible(g_iStart+1,last_pos,_,250.0))
+        {
+            g_iStart += 1; // Move forward
+            LOS = true;
+        }
+        else if (g_iStart>0 && !LOS && cell_visible(g_iStart-1,last_pos,_,250.0))
+        {
+            g_iStart -=1; // Move backward
+            LOS = true;
+        }
+        i_forward = g_iStart;
+        i_backward = g_iStart;
     }
 
     int i_draw = 0;
     g_GuideCells.GetArray(g_iStart,cell,sizeof(Cell));
-
-    // Cell Splitter
-    // 
 
     if (join_client) // Connect client to starting cell
     {
         int num_beams = (navArea!=Address_Null && !LOS && use_flow) ? detour_join(client,navArea,last_pos,flow,cell.center,cell.flow,duration) : 0;
         if (num_beams<=0)
         {
-            DrawBeam(client,last_pos,cell.center,duration);
+            DrawBeam(client,last_pos,cell.center,duration,color_forward);
             g_RequestFirstPos = cell.center;
             i_draw += 1;
         }
@@ -338,8 +367,6 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
         }
     }
 
-    int i_forward = g_iStart;
-    int i_backward = g_iStart;
     static float pos_forward[3], pos_backward[3];
     pos_forward = cell.center;
     pos_backward = cell.center;
@@ -351,7 +378,7 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
         {
             i_forward += 1;
             g_GuideCells.GetArray(i_forward,cell,sizeof(Cell));
-            DrawBeam(client,pos_forward,cell.center,duration);
+            DrawBeam(client,pos_forward,cell.center,duration,color_forward);
             pos_forward = cell.center;
             end = false;
             i_draw += 1;
@@ -361,7 +388,7 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
         {
             i_backward -= 1;
             g_GuideCells.GetArray(i_backward,cell,sizeof(Cell));
-            DrawBeam(client,pos_backward,cell.center,duration,{255,25,25,255});
+            DrawBeam(client,pos_backward,cell.center,duration,color_backward);
             pos_backward = cell.center;
             end = false;
             i_draw += 1;
@@ -376,6 +403,81 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
         return true;
     }
     return false;
+}
+
+// See if pos can be connected to a split inbetween two cells. return true on success
+// Outputs pos_split on success, and sets correct i_forward and i_backward values
+stock bool try_guide_cellsplit(int client, int i_start,float pos[3],float pos_split[3], int &i_forward, int &i_backward)
+{
+    if (g_GuideCells.Length<=1) return false;
+    float dist;
+    float best_dist = -1.0;
+    static float pos_temp[3];
+
+    // Find closest cell: i_start-1,i_start,i_start+1
+
+    // Determine if we are ahead or behind closest cell.
+    // Check i_start+1 and i_start-1 distances.
+    
+    // See if there's a better i_start
+    int i_closest = i_start;
+    if (i_start>0)
+    {
+        g_GuideCells.GetArray(i_start-1,pos_temp,3,2);
+        dist = GetVectorDistance(pos,pos_temp,true);
+        if (best_dist<0.0 || dist<best_dist)
+        {
+            i_closest = i_start-1;
+            best_dist = dist;
+        }
+    }
+    g_GuideCells.GetArray(i_start,pos_temp,3,2);
+    dist = GetVectorDistance(pos,pos_temp,true);
+    if (best_dist<0.0 || dist<best_dist)
+    {
+        i_closest = i_start;
+        best_dist = dist;
+    }
+    if ((i_start+1)<g_GuideCells.Length)
+    {
+        g_GuideCells.GetArray(i_start+1,pos_temp,3,2);
+        dist = GetVectorDistance(pos,pos_temp,true);
+        if (best_dist<0.0 || dist<best_dist)
+        {
+            i_closest = i_start+1;
+            best_dist = dist;
+        }
+    }
+
+    bool closest_ahead;
+    if (i_closest==0) closest_ahead = false;
+    else if (i_closest==(g_GuideCells.Length-1)) closest_ahead = true;
+    else
+    {
+        g_GuideCells.GetArray(i_closest-1,pos_temp,3,2);
+        float dist_behind = GetVectorDistance(pos_temp,pos);
+        g_GuideCells.GetArray(i_closest+1,pos_temp,3,2);
+        float dist_ahead = GetVectorDistance(pos_temp,pos);
+        if (dist_behind>dist_ahead) closest_ahead = true;
+        else closest_ahead = false;
+    }
+
+    if (closest_ahead)
+    {
+        i_forward = i_closest;
+        i_backward = i_closest-1;
+    }
+    else
+    {
+        i_backward = i_closest;
+        i_forward = i_closest+1;
+    }
+
+    // if closest_ahead: green to closest. red to closest-1
+    // else: red to closest. green to closest+1
+
+    return false;
+
 }
 
 // Find closest guide cell for given flow value. 
@@ -532,7 +634,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
         for (int i = 1; i < queue.Length; i++)
 		{
 			queue.GetArray(i,pos_temp,3);
-            DrawBeam(client,pos_curr,pos_temp,duration);
+            DrawBeam(client,pos_curr,pos_temp,duration,color_forward);
             pos_curr = pos_temp;
             beams += 1;
             if (beams==1) g_RequestFirstPos = pos_curr;
@@ -540,7 +642,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
         }
         if (beams<g_hCvarMax.IntValue)
         {
-            DrawBeam(client,pos_curr,pos_end,duration);
+            DrawBeam(client,pos_curr,pos_end,duration,color_forward);
             beams += 1;
         }
     }
@@ -554,7 +656,6 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
 
     return beams;
 }
-
 
 void DrawBeam(int client, float pos_start[3], float pos_end[3], float duration = 10.0, int color[4] = {25,255,25,255})
 {
@@ -1213,7 +1314,7 @@ void stitch_finale()
         g_iLoop += 1;
     }
 
-    if ( (!finale_backwards || finale_gauntlet) && i_finale_cut_rescue>=0 && i_finale_cut>0)
+    if ( (!finale_backwards || use_gauntlet_logic()) && i_finale_cut_rescue>=0 && i_finale_cut>0)
     {
         // keep g_GuideCells up to i_finale_cut. keep i_finale_cut
         g_GuideCells.Resize(i_finale_cut+1);
@@ -1227,7 +1328,7 @@ void stitch_finale()
     }
     else
     {
-        if (finale_gauntlet)
+        if (use_gauntlet_logic())
         {
             // Erase g_GuideCells after rescue flow
             g_iLoop = g_GuideCells.Length-1;
