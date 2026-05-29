@@ -1,0 +1,12 @@
+1. Molotov
+2. Pipe Bomb
+3. Bile Jar
+4. Medkit
+5. Defib
+6. Incendiary
+7. Explosive
+8. Pills
+9. Adrenaline
+0. <-- (R)
+
+100/100 HP Molotov Medkit

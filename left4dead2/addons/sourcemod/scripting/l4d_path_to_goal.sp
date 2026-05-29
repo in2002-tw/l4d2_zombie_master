@@ -17,7 +17,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.21 2026-05-25"
+#define PLUGIN_VERSION 			"1.22 2026-05-28"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -45,6 +45,7 @@ public void OnPluginStart()
     g_bL4D2 = GetEngineVersion()==Engine_Left4Dead2;
     
     RegAdminCmd("l4d_path_to_goal_recalculate", CmdRecalculate, ADMFLAG_ROOT,"Recalculate guide points.");
+    RegAdminCmd("l4d_path_to_goal_print",       CmdPrint, ADMFLAG_ROOT,"Print g_GuideCells.");
     if (g_bL4D2) RegAdminCmd("l4d_path_to_goal_rescue", CmdRescue, ADMFLAG_ROOT,"Send in rescue vehicle.");
 
     g_hCvarEnable = CreateConVar("l4d_path_to_goal_enable", "1",
@@ -90,12 +91,12 @@ public void OnPluginStart()
     HookEvent("round_start_post_nav",     evtPostNav,        EventHookMode_PostNoCopy);
     HookEvent("nav_blocked",              evtNavChange,      EventHookMode_PostNoCopy);
     HookEvent("nav_generate",             evtNavChange,      EventHookMode_PostNoCopy);
-	HookEvent("finale_start", 			  evtFinaleStart,    EventHookMode_PostNoCopy); //final starts, some of final maps won't trigger
-	HookEvent("finale_radio_start", 	  EvtFinaleRadio,    EventHookMode_PostNoCopy); //final starts, all final maps trigger
+	HookEvent("finale_start", 			  evtFinaleStart,    EventHookMode_PostNoCopy);
+	HookEvent("finale_radio_start", 	  evtFinaleStart,    EventHookMode_PostNoCopy);
     HookEvent("finale_vehicle_ready", 	  evtFinaleVehicle,  EventHookMode_PostNoCopy);
     if (g_bL4D2)
     {
-    HookEvent("gauntlet_finale_start", 	  evtGauntletStart,  EventHookMode_PostNoCopy); //final starts, only rushing maps trigger (C5M5, C13M4)
+    HookEvent("gauntlet_finale_start", 	  evtGauntletStart,  EventHookMode_PostNoCopy);
     HookEvent("finale_vehicle_incoming",  evtFinaleVehicle,  EventHookMode_PostNoCopy);
     }
 }
@@ -104,8 +105,8 @@ void evtFinaleVehicle(Event event, const char[] name, bool dontBroadcast)
 {
     LogMessage("evtFinaleVehicle");
     if (finale) finale_rescue = true;
-
-    if (enable && finale_rescue && g_hCvarFinale.IntValue < FINALE_NEVER)
+    if (!enable) return;
+    if (finale_rescue && g_hCvarFinale.IntValue < FINALE_NEVER)
     {
         if (guide_ready && !finale_stitched && should_stitch_finale()) stitch_finale();
         if (g_hCvarFinaleAuto.BoolValue) Guide_All_Clients();
@@ -119,19 +120,13 @@ void evtFinaleStart(Event event, const char[] name, bool dontBroadcast)
     if (guide_ready && !finale_stitched && should_stitch_finale()) stitch_finale();
 }
 
-void EvtFinaleRadio(Event event, const char[] name, bool dontBroadcast)
-{
-    LogMessage("EvtFinaleRadio");
-    finale = true;
-    if (guide_ready && !finale_stitched && should_stitch_finale()) stitch_finale();
-}
-
 void evtGauntletStart(Event event, const char[] name, bool dontBroadcast)
 {
     LogMessage("evtGauntletStart");
     finale = true;
-    if (!finale_gauntlet && finale_stitched) Guide_Cleanup();
+    if (!use_gauntlet_logic() && finale_stitched) Guide_Cleanup(); // need to recalculate cells
     finale_gauntlet = true;
+    if (!enable) return;
     if (guide_ready && !finale_stitched && should_stitch_finale()) stitch_finale();
     if (finale_rescue && g_hCvarFinale.IntValue < FINALE_NEVER && g_hCvarFinaleAuto.BoolValue)
     {
@@ -176,7 +171,7 @@ void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
 
 Action CmdRequestGuide(int client, int args)
 {
-    if (!enable || !map_started || !nav_started || !gamemode_guidable || !IsValidClient(client)) return Plugin_Continue;
+    if (!enable || !map_started || !nav_started || !gamemode_guidable || !IsValidClient(client) || IsFakeClient(client)) return Plugin_Continue;
     float duration = 5.0;
     bool backward = GetClientTeam(client)!=TEAM_SURVIVOR;
     if (args>0)
@@ -249,6 +244,19 @@ Action CmdRecalculate(int client, int args)
         Guide_Prep();
     }
     else ReplyToCommand(client, "[PTG] %t", "ptg_busy");
+    return Plugin_Continue;
+}
+
+Action CmdPrint(int client, int args)
+{
+    if (!guide_ready || g_GuideCells==null || g_GuideCells.Length<=0) return Plugin_Continue;
+    static Cell cell;
+    ReplyToCommand(client, "index navArea flow pos");
+    for (int i = 0; i < g_GuideCells.Length; i++)
+    {
+        g_GuideCells.GetArray(i,cell,sizeof(Cell));
+        ReplyToCommand(client, "%d %d %.1f (%.1f %1.f %.1f)", i, cell.navArea, cell.flow, cell.center[0], cell.center[1], cell.center[2]);
+    }
     return Plugin_Continue;
 }
 
