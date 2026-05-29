@@ -270,6 +270,7 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
             int target = GetEntPropEnt(client, Prop_Send, "m_hObserverTarget");
             if (IsValidEntity(target) && target!=INVALID_ENT_REFERENCE) GetEntPropVector(target, Prop_Send, "m_vecOrigin", last_pos);
         }
+        else last_pos[2] -= 16.0;
     }
     last_pos[2] += 16.0;
     if (alive)
@@ -331,12 +332,21 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     // Try cell splitting technique first. If it fails try usual LOS adjustments
     static float pos_split[3];
     bool LOS = false;
-    bool found_split = try_guide_cellsplit(last_pos,pos_split,i_forward); // if successful, adjusts pos_split and i_forward
-    found_split = found_split && twopos_visible(last_pos,pos_split);
+    bool found_split = try_guide_cellsplit(last_pos,pos_split,i_forward) && twopos_visible(last_pos,pos_split); // if successful, adjusts pos_split and i_forward
+    //if (found_split)
+    //{
+    //    found_split = twopos_visible(last_pos,pos_split) || cell_visible(i_forward,last_pos);
+    //    if (!found_split && i_forward>0) found_split = cell_visible(i_forward-1,last_pos);
+    //}
+    //if (found_split)
+    //{
+    //    found_split = twopos_visible(last_pos,pos_split) || cell_visible(i_forward,last_pos);
+    //    if (!found_split && i_forward>0) found_split = cell_visible(i_forward-1,last_pos);
+    //{
     if (found_split)
     {
         i_backward = i_forward - 1;
-        if (join_client && GetVectorDistance(last_pos,pos_split,true)>=100.0) // Connect unless they are very close to each other.
+        if (join_client && GetVectorDistance(last_pos,pos_split,true)>=256.0) // Connect unless they are very close to each other.
         {
             DrawBeam(client,last_pos,pos_split,duration,color_forward);
             i_draw += 1;
@@ -740,7 +750,7 @@ Address g_aNavStart, g_aNavCheckpoint, g_aNavRescueVehicle;
 
 #if DEBUG
 float g_fPrepTotalTime;
-int g_iPrepFrames, g_iErased, g_iNavBlocked;
+int g_iPrepFrames, g_iErased, g_iNavBlocked, g_iTotalCollected;
 #endif
 
 void Guide_Prep()
@@ -872,6 +882,7 @@ void OnFramePrep(bool new_frame = true)
             g_fPrepTotalTime = 0.0;
             g_iErased = 0;
             g_iNavBlocked = 0;
+            g_iTotalCollected = 0;
             #endif
         }
         case STAGE_COLLECT:
@@ -1017,6 +1028,9 @@ void OnFramePrep(bool new_frame = true)
                 guide_prep = false;
                 return;
             }
+            #if DEBUG
+            g_iTotalCollected = all_cells.Length;
+            #endif
             all_cells.SortCustom(SortFlow);
             all_cells.GetArray(0,cell,sizeof(Cell));
             g_GuideCells.PushArray(cell);
@@ -1304,7 +1318,7 @@ void OnFramePrep(bool new_frame = true)
         delete all_cells;
         #if DEBUG
         g_fPrepTotalTime += (GetEngineTime()-g_tFrameStart);
-        LogMessage("Final cell num %d (%d erased, %d blocked) (%f ms %d frames)", g_GuideCells.Length, g_iErased, g_iNavBlocked, g_fPrepTotalTime*1000.0, g_iPrepFrames);
+        LogMessage("Final cell num %d (%d collected, %d erased, %d blocked) (%f ms %d frames)", g_GuideCells.Length, g_iTotalCollected, g_iErased, g_iNavBlocked, g_fPrepTotalTime*1000.0, g_iPrepFrames);
         #endif
         g_iPrepStage = STAGE_NONE;
         timer_nav = null;
