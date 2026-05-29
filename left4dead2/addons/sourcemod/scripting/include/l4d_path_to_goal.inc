@@ -161,7 +161,7 @@ void Guide_All_Clients(float duration = 5.0, bool override = false)
     for (int i = 1; i <= MaxClients; i++)
     {
         if (g_CellRequests[i].duration>=0.1) continue; // already requested
-        if (!override && g_PlayerTime[i].t_cooldown>=0.1) g_CellRequests[i].duration = g_PlayerTime[i].t_cooldown;
+        if (!override && g_PlayerTime[i].t_cooldown>=0.1) g_CellRequests[i].duration = g_PlayerTime[i].t_cooldown*2.0;
         else g_CellRequests[i].duration = duration;
     }
     Timer_CheckRequests(null);
@@ -225,18 +225,14 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
 
     if (duration < 0.1) duration = 0.1; // prevent beams with infinite lifetime
 
+    g_CellRequests[client].join_client = join_client;
+    g_CellRequests[client].duration = duration;
+    g_CellRequests[client].backward = backward;
+
     if (!guide_ready)
     {
         Guide_Prep();
-        if (!guide_ready || g_GuideCells==null)
-        {
-            static CellRequest request;
-            request.duration = duration;
-            request.backward = backward;
-            request.join_client = join_client;
-            g_CellRequests[client] = request;
-            return false;
-        }
+        if (!guide_ready || g_GuideCells==null) return false;
     }
     else if (g_GuideCells==null || g_GuideCells.Length<=0) return false;
 
@@ -345,7 +341,8 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     //{
     if (found_split)
     {
-        i_backward = i_forward - 1;
+        if (i_forward>=g_GuideCells.Length) i_forward = g_GuideCells.Length-1;
+        i_backward = (i_forward>0) ? i_forward-1 : 0;
         if (join_client && GetVectorDistance(last_pos,pos_split,true)>=256.0) // Connect unless they are very close to each other.
         {
             DrawBeam(client,last_pos,pos_split,duration,color_forward);
@@ -607,6 +604,18 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
                     pos_best = pos_temp;
                     found = true;
                 }
+            }
+        }
+
+        if (!found)
+        {
+            static Cell cell;
+            if (try_ladder(flow_curr,pos_curr,cell))
+            {
+                found = true;
+                flow_best = cell.flow;
+                navArea_best = cell.navArea;
+                pos_best = cell.center;
             }
         }
 
@@ -1122,53 +1131,13 @@ void OnFramePrep(bool new_frame = true)
 
                     if (!found)
                     {
-                        // Look for closest survivor ladder
-                        int entity = INVALID_ENT_REFERENCE;
-                        int closest = -1;
-                        static float mins[3],maxs[3];
-                        float best_dist = -1.0;
-                        while ((entity = FindEntityByClassname(entity, "func_simpleladder")) != INVALID_ENT_REFERENCE)
+                        if (try_ladder(flow_curr,pos_curr,cell,finale_backwards))
                         {
-                            int team = GetEntProp(entity, Prop_Send, "m_iTeamNum");
-                            if (team!=0 && team!=TEAM_SURVIVOR) continue;
-                            GetEntPropVector(entity, Prop_Send, "m_vecMaxs", maxs);
-                            float dist = GetVectorDistance(pos_curr,maxs,true);
-                            if (best_dist<0.0 || dist<best_dist)
-                            {
-                                closest = entity;
-                                best_dist = dist;
-                            }
-                            GetEntPropVector(entity, Prop_Send, "m_vecMins", mins);
-                            dist = GetVectorDistance(pos_curr,maxs,true);
-                            if (best_dist<0.0 || dist<best_dist)
-                            {
-                                closest = entity;
-                                best_dist = dist;
-                            }
+                            found = true;
+                            flow_best = cell.flow;
+                            navArea_best = cell.navArea;
+                            pos_best = cell.center;
                         }
-
-                        if (closest>0 && best_dist<100000.0)
-                        {
-                            //LogMessage("Found survivor ladder %d %f", closest, best_dist);
-                            flow_best = flow_curr;
-                            for (int i_nav = 0; i_nav < 2; i_nav++)
-                            {
-                                if (i_nav==0) GetEntPropVector(closest, Prop_Send, "m_vecMaxs", pos_temp);
-                                else GetEntPropVector(closest, Prop_Send, "m_vecMins", pos_temp);
-                                Address adjArea = L4D_GetNearestNavArea(pos_temp,500.0,true,false,true,TEAM_SURVIVOR);
-                                if (adjArea == Address_Null) continue;
-                                flow_temp = get_navFlow(adjArea);
-                                if (finale_backwards && flow_temp<=flow_best) continue; // from rescue zone -> go upwards in flow
-                                else if (!finale_backwards && flow_temp>=flow_best) continue; // from rescue zone -> go downwards in flow
-                                L4D_GetNavAreaCenter(adjArea,pos_temp);
-                                pos_temp[2] += 16.0;
-                                flow_best = flow_temp;
-                                navArea_best = adjArea;
-                                pos_best = pos_temp;
-                                found = true;
-                            }
-                        }
-
                     }
 
                     if (found)
@@ -1322,9 +1291,71 @@ void OnFramePrep(bool new_frame = true)
         #endif
         g_iPrepStage = STAGE_NONE;
         timer_nav = null;
-        Timer_CheckRequests(); // Draw beams immediately for pending clients
+        if (finale_stitched && finale_rescue && g_hCvarFinaleAuto.BoolValue) Guide_All_Clients();
+        else Timer_CheckRequests(); // Draw beams immediately for pending clients
     }
 
+}
+
+// Look for closest survivor ladder. Output cell_ladder
+bool try_ladder(float flow_curr,float pos_curr[3],Cell cell_ladder,bool flow_increasing = true)
+{
+    int entity = INVALID_ENT_REFERENCE;
+    int closest = -1;
+    static float mins[3],maxs[3],pos_temp[3],pos_best[3];
+    float best_dist = -1.0;
+    float flow_best = -1.0;
+    float flow_temp;
+    bool found = false;
+    Address navArea_best;
+    while ((entity = FindEntityByClassname(entity, "func_simpleladder")) != INVALID_ENT_REFERENCE)
+    {
+        int team = GetEntProp(entity, Prop_Send, "m_iTeamNum");
+        if (team!=0 && team!=TEAM_SURVIVOR) continue;
+        GetEntPropVector(entity, Prop_Send, "m_vecMaxs", maxs);
+        float dist = GetVectorDistance(pos_curr,maxs,true);
+        if (best_dist<0.0 || dist<best_dist)
+        {
+            closest = entity;
+            best_dist = dist;
+        }
+        GetEntPropVector(entity, Prop_Send, "m_vecMins", mins);
+        dist = GetVectorDistance(pos_curr,maxs,true);
+        if (best_dist<0.0 || dist<best_dist)
+        {
+            closest = entity;
+            best_dist = dist;
+        }
+    }
+    if (closest>0 && best_dist<100000.0)
+    {
+        //LogMessage("Found survivor ladder %d %f", closest, best_dist);
+        flow_best = flow_curr;
+        for (int i_nav = 0; i_nav < 2; i_nav++)
+        {
+            if (i_nav==0) GetEntPropVector(closest, Prop_Send, "m_vecMaxs", pos_temp);
+            else GetEntPropVector(closest, Prop_Send, "m_vecMins", pos_temp);
+            Address adjArea = L4D_GetNearestNavArea(pos_temp,500.0,true,false,true,TEAM_SURVIVOR);
+            if (adjArea == Address_Null) continue;
+            flow_temp = get_navFlow(adjArea);
+            if (flow_increasing && flow_temp<=flow_best) continue;
+            else if (!flow_increasing && flow_temp>=flow_best) continue;
+            L4D_GetNavAreaCenter(adjArea,pos_temp);
+            pos_temp[2] += 16.0;
+            flow_best = flow_temp;
+            navArea_best = adjArea;
+            pos_best = pos_temp;
+            found = true;
+        }
+    }
+    if (found)
+    {
+        cell_ladder.flow = flow_best;
+        cell_ladder.navArea = navArea_best;
+        cell_ladder.center = pos_best;
+        return true;
+    }
+    return false;
 }
 
 // Check if escape vehicle should be connected to RequestGuide
@@ -1370,13 +1401,14 @@ void stitch_finale()
             LogMessage("Rescue zone is close to last guide cell. Added 1 cell.");
             return;
         }
-
-
-        i_finale_cut = g_GuideCells.FindValue(cell.navArea,1);
-        if (i_finale_cut>=0)
+        if (cell.navArea != Address_Null)
         {
-            i_finale_cut_rescue = g_iLoop;
-            break;
+            i_finale_cut = g_GuideCells.FindValue(cell.navArea,1);
+            if (i_finale_cut>=0)
+            {
+                i_finale_cut_rescue = g_iLoop;
+                break;
+            }
         }
         g_iLoop += 1;
     }
@@ -1387,6 +1419,7 @@ void stitch_finale()
         g_GuideCells.Resize(i_finale_cut+1);
         // keep RescueVehicleCells up to i_finale_cut_rescue. don't keep i_finale_cut_rescue
         RescueVehicleCells.Resize(i_finale_cut_rescue);
+        LogMessage("resize g_GuideCells %d RescueVehicleCells %d", i_finale_cut+1, i_finale_cut_rescue);
     }
 
     if (!finale_backwards) // simplest case. extend guide cells to escape vehicle
