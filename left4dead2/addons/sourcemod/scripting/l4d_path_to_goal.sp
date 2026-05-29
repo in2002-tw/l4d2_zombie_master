@@ -17,7 +17,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.25 2026-05-28"
+#define PLUGIN_VERSION 			"1.26 2026-05-29"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -128,10 +128,6 @@ void evtGauntletStart(Event event, const char[] name, bool dontBroadcast)
     finale_gauntlet = true;
     if (!enable) return;
     if (guide_ready && !finale_stitched && should_stitch_finale()) stitch_finale();
-    if (finale_rescue && g_hCvarFinale.IntValue < FINALE_NEVER && g_hCvarFinaleAuto.BoolValue)
-    {
-        Guide_All_Clients();
-    }
 }
 
 void ConVarChanged_Cvars(ConVar convar, const char[] oldValue, const char[] newValue)

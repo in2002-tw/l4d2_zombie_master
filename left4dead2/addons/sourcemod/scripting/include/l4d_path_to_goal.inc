@@ -225,6 +225,7 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
 
     if (duration < 0.1) duration = 0.1; // prevent beams with infinite lifetime
 
+    // Store info of latest request from client
     g_CellRequests[client].join_client = join_client;
     g_CellRequests[client].duration = duration;
     g_CellRequests[client].backward = backward;
@@ -237,12 +238,31 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     else if (g_GuideCells==null || g_GuideCells.Length<=0) return false;
 
     static float last_pos[3], origin[3];
-    GetClientAbsOrigin(client,origin);
-    //GetEntPropVector(client, Prop_Send, "m_vecOrigin", origin);
+
+    bool self_origin = true;
+    int target = INVALID_ENT_REFERENCE;
+    if (!alive) // Check who their chase camera is set to. Take that origin instead.
+    {
+        int observermode = GetEntProp(client, Prop_Send, "m_iObserverMode");
+        if (observermode==4 || observermode==5)
+        {
+            target = GetEntPropEnt(client, Prop_Send, "m_hObserverTarget");
+            if (IsValidEntity(target) && target!=INVALID_ENT_REFERENCE)
+            {
+                GetEntPropVector(target, Prop_Send, "m_vecOrigin", origin);
+                self_origin = false;
+                if (IsValidClient(target)) alive = IsPlayerAlive(target);
+            }
+        }
+    }
+    if (self_origin) GetEntPropVector(client, Prop_Send, "m_vecOrigin", origin);
     float flow = L4D_GetFlowFromPoint(origin);
 
+    g_iStart = -1;
+    g_iClosestFlow = -1;
+    g_iClosestDist = -1;
+
     Address navArea = L4D_GetNearestNavArea(origin,500.0,true,true,true,TEAM_SURVIVOR);
-    //if (navArea == Address_Null) navArea = L4D_GetNearestNavArea(origin,500.0,true,false,true,TEAM_SURVIVOR);
     if (navArea != Address_Null)
     {
         g_iClosestFlow = g_GuideCells.FindValue(navArea,1);
@@ -254,37 +274,21 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
         }
     }
 
-    //if (alive)
-    //{
     last_pos = origin;
-    if (!alive) // Check who their chase camera is set to. Take that origin instead.
-    {
-        int observermode = GetEntProp(client, Prop_Send, "m_iObserverMode");
-        if (observermode==4 || observermode==5)
-        {
-
-            int target = GetEntPropEnt(client, Prop_Send, "m_hObserverTarget");
-            if (IsValidEntity(target) && target!=INVALID_ENT_REFERENCE) GetEntPropVector(target, Prop_Send, "m_vecOrigin", last_pos);
-        }
-        else last_pos[2] -= 16.0;
-    }
-    last_pos[2] += 16.0;
+    if (alive || !self_origin) last_pos[2] += 16.0;
     if (alive)
     {
-        switch (GetEntProp(client,Prop_Send,"m_nWaterLevel"))
+        switch (GetEntProp( (self_origin) ? client : target , Prop_Send, "m_nWaterLevel"))
         {
             case 1: last_pos[2] += 16.0;
             case 2: last_pos[2] += 32.0;
         }
     }
+    else if (self_origin) last_pos[2] -= 16.0; // origin is client eye pos
 
     static Cell cell;
 
     bool use_flow = flow>0.0 && flow<=g_fMaxFlow && ( !finale_stitched || !finale_backwards || (use_gauntlet_logic() && flow<g_fFlowRescueVehicle) ); 
-
-    g_iStart = -1;
-    g_iClosestFlow = -1;
-    g_iClosestDist = -1;
 
     if (g_iStart<0) // if we aren't standing on a guide cell, search all guide cells.
     {
@@ -294,14 +298,20 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
         for (int i = 0; i < g_GuideCells.Length; i++)
         {
             g_GuideCells.GetArray(i,cell,sizeof(Cell));
-            dist = GetVectorDistance(last_pos,cell.center,true);
-            if (min_dist<0.0 || dist<min_dist)
+            bool end = true;
+            if (min_dist<0.0 || min_dist>256.0) // end if very close cell already found
             {
-                min_dist = dist;
-                g_iClosestDist = i;
+                end = false;
+                dist = GetVectorDistance(last_pos,cell.center,true);
+                if (min_dist<0.0 || dist<min_dist)
+                {
+                    min_dist = dist;
+                    g_iClosestDist = i;
+                }
             }
             if (use_flow && min_dist_flow!=0.0) // exact flow match means we found the cell already
             {
+                end = false;
                 dist_flow = FloatAbs(cell.flow - flow);
                 if (min_dist_flow<0.0 || dist_flow<min_dist_flow)
                 {
@@ -309,6 +319,7 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
                     g_iClosestFlow = i;
                 }
             }
+            if (end) break;
         }
     }
 
@@ -329,16 +340,6 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     static float pos_split[3];
     bool LOS = false;
     bool found_split = try_guide_cellsplit(last_pos,pos_split,i_forward) && twopos_visible(last_pos,pos_split); // if successful, adjusts pos_split and i_forward
-    //if (found_split)
-    //{
-    //    found_split = twopos_visible(last_pos,pos_split) || cell_visible(i_forward,last_pos);
-    //    if (!found_split && i_forward>0) found_split = cell_visible(i_forward-1,last_pos);
-    //}
-    //if (found_split)
-    //{
-    //    found_split = twopos_visible(last_pos,pos_split) || cell_visible(i_forward,last_pos);
-    //    if (!found_split && i_forward>0) found_split = cell_visible(i_forward-1,last_pos);
-    //{
     if (found_split)
     {
         if (i_forward>=g_GuideCells.Length) i_forward = g_GuideCells.Length-1;
@@ -354,8 +355,11 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
         if (backward)
         {
             g_GuideCells.GetArray(i_backward,cell,sizeof(Cell));
-            DrawBeam(client,pos_split,cell.center,duration,color_backward);
-            i_draw += 1;
+            if (GetVectorDistance(last_pos,cell.center,true)>=256.0)
+            {
+                DrawBeam(client,pos_split,cell.center,duration,color_backward);
+                i_draw += 1;
+            }
         }
         last_pos = pos_split;
         LOS = true;
@@ -452,8 +456,6 @@ stock bool try_guide_cellsplit(float pos[3],float pos_split[3], int &i_forward)
     i_candidates.Clear();
     i_explored.Clear();
 
-    // Check distance to cell. Stick to cells if they are closer.
-
     // Each index in i_candidates will be i_backward from which split is drawn towards i_forward
     if (g_iClosestFlow>=0)
     {
@@ -506,10 +508,9 @@ stock bool try_guide_cellsplit(float pos[3],float pos_split[3], int &i_forward)
         dot = GetVectorDotProduct(vDiff,vDiff2);
         if (dot<=0.0) continue; // not pointing in the right direction
         scale = dot/mag_sq;
-        if (scale>=1.0) continue;
+        if (scale>=0.999 || scale<=0.001) continue; // projection is crappy
         ScaleVector(vDiff,scale);
         AddVectors(pos_start,vDiff,pos_temp);
-        //if (!twopos_visible(pos,pos_temp)) continue;
         dist = GetVectorDistance(pos,pos_temp,true);
         if (best_dist<0.0 || dist<best_dist)
         {
@@ -1071,7 +1072,9 @@ void OnFramePrep(bool new_frame = true)
                 if (g_bFoundRescueVehicle)
                 {
                     float max_guide_flow = g_GuideCells.Get(g_GuideCells.Length-1,0);
+                    #if DEBUG
                     LogMessage("rescue vehicle flow %f max guide flow %f", g_fFlowRescueVehicle, max_guide_flow);
+                    #endif
                     finale_backwards = g_fFlowRescueVehicle<max_guide_flow;
                 }
                 g_iLoop = 1;
@@ -1204,7 +1207,9 @@ void OnFramePrep(bool new_frame = true)
                 }
                 if (!budget_spent)
                 {
+                    #if DEBUG
                     LogMessage("Rescue vehicle cells %d", RescueVehicleCells.Length);
+                    #endif
                     if (should_stitch_finale()) stitch_finale();
                 }
                 delete adjAreas;
@@ -1338,8 +1343,11 @@ bool try_ladder(float flow_curr,float pos_curr[3],Cell cell_ladder,bool flow_inc
             Address adjArea = L4D_GetNearestNavArea(pos_temp,500.0,true,false,true,TEAM_SURVIVOR);
             if (adjArea == Address_Null) continue;
             flow_temp = get_navFlow(adjArea);
-            if (flow_increasing && flow_temp<=flow_best) continue;
-            else if (!flow_increasing && flow_temp>=flow_best) continue;
+            switch (flow_increasing)
+            {
+                case true: { if (flow_temp<=flow_best) continue; }
+                default: { if (flow_temp>=flow_best) continue; }
+            }
             L4D_GetNavAreaCenter(adjArea,pos_temp);
             pos_temp[2] += 16.0;
             flow_best = flow_temp;
@@ -1398,7 +1406,9 @@ void stitch_finale()
             g_GuideCells.PushArray(cell,sizeof(Cell));
             finale_backwards = false;
             finale_stitched = true;
+            #if DEBUG
             LogMessage("Rescue zone is close to last guide cell. Added 1 cell.");
+            #endif
             return;
         }
         if (cell.navArea != Address_Null)
@@ -1419,12 +1429,16 @@ void stitch_finale()
         g_GuideCells.Resize(i_finale_cut+1);
         // keep RescueVehicleCells up to i_finale_cut_rescue. don't keep i_finale_cut_rescue
         RescueVehicleCells.Resize(i_finale_cut_rescue);
-        LogMessage("resize g_GuideCells %d RescueVehicleCells %d", i_finale_cut+1, i_finale_cut_rescue);
+        #if DEBUG
+        LogMessage("Finale resize g_GuideCells %d RescueVehicleCells %d", i_finale_cut+1, i_finale_cut_rescue);
+        #endif
     }
 
     if (!finale_backwards) // simplest case. extend guide cells to escape vehicle
     {
+        #if DEBUG
         LogMessage("Finale increasing in flow, erased %d cells, added %d cells", erased, RescueVehicleCells.Length);
+        #endif
     }
     else
     {
@@ -1441,13 +1455,16 @@ void stitch_finale()
                 }
                 else g_iLoop -= 1;
             }
-            // 
+            #if DEBUG
             LogMessage("Gauntlet flow backwards, erased %d cells, added %d cells", erased, RescueVehicleCells.Length);
+            #endif
         }
         else
         {
             // Keep only last guide cell, connect to rescue zone.
+            #if DEBUG
             LogMessage("Finale flow backwards, guide from radio only. %d cells", RescueVehicleCells.Length);
+            #endif
             g_GuideCells.GetArray(g_GuideCells.Length-1,cell,sizeof(Cell));
             g_GuideCells.Clear();
             g_GuideCells.PushArray(cell,sizeof(Cell));
@@ -1468,7 +1485,6 @@ void stitch_finale()
 // Explore from starting position up to flow_min until we hit ESCAPE_ROUTE
 stock bool explore_to_escape_route(ArrayList cells, Address navArea, float pos[3], float flow, float flow_min, int max_steps = 50)
 {
-    LogMessage("explore_to_escape_route %f %f", flow, flow_min);
     static float pos_curr[3];
     float flow_curr = flow;
     pos_curr = pos;
