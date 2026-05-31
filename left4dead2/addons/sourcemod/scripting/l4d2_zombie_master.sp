@@ -54,6 +54,10 @@ bool DEBUG = false;
 #include <l4d2_zombie_master/saferoom>
 #include <l4d2_zombie_master/unitmanager>
 #include <l4d2_zombie_master/panic>
+#include <l4d2_zombie_master/traps/traps>
+#include <l4d2_zombie_master/traps/trap_door>
+#include <l4d2_zombie_master/traps/trap_car>
+#include <l4d2_zombie_master/traps/trap_tornado>
 #include <l4d2_zombie_master/survivor_inventory>
 
 #undef REQUIRE_PLUGIN
@@ -259,7 +263,38 @@ public void OnPluginStart()
     
     g_hBonusSurvival = CreateConVar("zm_bonus_survival", "300", "ZM bank reward per player when an automatic Tank dies in Survival.",FCVAR_PROTECTED, true, 0.0, true, 10000.0);
     g_hBonusSurvival.AddChangeHook(ConVarChanged_Cvars);
-    
+
+    g_hCostTrapDoor = CreateConVar("zm_cost_trap_door", "100", "ZM cost to arm a panic door. -1 to disable.", FCVAR_PROTECTED, true, -1.0, true, 10000.0);
+    g_hCostTrapDoor.AddChangeHook(ConVarChanged_Cvars_ZMenu);
+
+    g_hCostTrapCar = CreateConVar("zm_cost_trap_car", "150", "ZM cost to arm an alarm car. -1 to disable.", FCVAR_PROTECTED, true, -1.0, true, 10000.0);
+    g_hCostTrapCar.AddChangeHook(ConVarChanged_Cvars_ZMenu);
+
+    g_hMaxTrapDoor = CreateConVar("zm_max_trap_door", "3", "Maximum simultaneously-armed panic doors.", FCVAR_PROTECTED, true, 0.0, true, 16.0);
+    g_hMaxTrapDoor.AddChangeHook(ConVarChanged_Cvars_ZMenu);
+
+    g_hMaxTrapCar = CreateConVar("zm_max_trap_car", "2", "Maximum simultaneously-armed alarm cars.", FCVAR_PROTECTED, true, 0.0, true, 16.0);
+    g_hMaxTrapCar.AddChangeHook(ConVarChanged_Cvars_ZMenu);
+
+    g_hTrapCooldown = CreateConVar("zm_trap_cooldown", "2", "Minimum seconds between arming any two traps.", FCVAR_PROTECTED, true, 0.0, true, 120.0);
+    g_hTrapCooldown.AddChangeHook(ConVarChanged_Cvars);
+
+    g_hTrapDoorBurst = CreateConVar("zm_trap_door_common_burst", "0", "Free angry commons spawned when a panic door is opened. 0 = none.", FCVAR_PROTECTED, true, 0.0, true, 50.0);
+    g_hTrapDoorBurst.AddChangeHook(ConVarChanged_Cvars);
+
+    g_hCostTrapTornado = CreateConVar("zm_cost_trap_tornado", "600", "ZM cost to place a tornado. -1 to disable.", FCVAR_PROTECTED, true, -1.0, true, 10000.0);
+    g_hCostTrapTornado.AddChangeHook(ConVarChanged_Cvars_ZMenu);
+    g_hMaxTrapTornado = CreateConVar("zm_max_trap_tornado", "1", "Maximum simultaneously-active tornadoes.", FCVAR_PROTECTED, true, 0.0, true, 16.0);
+    g_hMaxTrapTornado.AddChangeHook(ConVarChanged_Cvars_ZMenu);
+    g_hTornadoDuration = CreateConVar("zm_trap_tornado_duration", "12.0", "Tornado active duration (seconds) before it dissipates.", FCVAR_PROTECTED, true, 1.0, true, 60.0);
+    g_hTornadoDuration.AddChangeHook(ConVarChanged_Cvars);
+    g_hTornadoRadius = CreateConVar("zm_trap_tornado_radius", "800.0", "Tornado horizontal radius.", FCVAR_PROTECTED, true, 100.0, true, 2000.0);
+    g_hTornadoRadius.AddChangeHook(ConVarChanged_Cvars);
+    g_hTornadoHeight = CreateConVar("zm_trap_tornado_height", "800.0", "Tornado vertical reach.", FCVAR_PROTECTED, true, 100.0, true, 2000.0);
+    g_hTornadoHeight.AddChangeHook(ConVarChanged_Cvars);
+    g_hTornadoGrace = CreateConVar("zm_trap_tornado_grace", "6.0", "Fall-damage immunity seconds after the tornado releases (covers the descent from the fling).", FCVAR_PROTECTED, true, 0.0, true, 15.0);
+    g_hTornadoGrace.AddChangeHook(ConVarChanged_Cvars);
+
     g_hLockSaferoom = CreateConVar("zm_lock_saferoom", "1", "Allow players to leave safezone only if: there is a ZM, zm prep time is over, and players have stopped joining.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
     g_hLockSaferoom.AddChangeHook(ConVarChanged_Cvars);
     
@@ -346,6 +381,7 @@ public void OnPluginStart()
 	g_hCursed = CreateConVar("zm_cursed", "0", "Enable dumb stuff.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 	
 	GetCvars();
+	Traps_Init();
 
 	g_iAliveSurvivors = -1;
 	zm_client = -1;
@@ -363,6 +399,9 @@ public void OnPluginStart()
     TopMenu topmenu;
     if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != null))
         OnAdminMenuReady(topmenu);
+
+    for (int i = 1; i <= MaxClients; i++)
+        if (IsClientInGame(i)) SDKHook(i, SDKHook_OnTakeDamage, TrapTornado_OnTakeDamage);
 }
 
 public void OnAdminMenuReady(Handle aTopMenu)
@@ -1065,7 +1104,8 @@ Action zm_new_round(Handle timer = null)
 	check_fog_distance();
 	
 	remove_all_ZM_glows();
-	
+	Traps_TeardownAll();
+
 	lastdoor = -1;
 	
 	update_director_script_scopes(false);
@@ -1739,6 +1779,9 @@ public void OnMapStart()
     PrecacheSound(SOUND_CONDITIONAL);
     PrecacheSound(SOUND_HITMARKER);
 
+    TrapCar_Precache();
+    TrapTornado_Precache();
+
 	g_bSpawnWitchBride = false;
 	char sMap[64];
 	GetCurrentMap(sMap, sizeof(sMap));
@@ -1797,6 +1840,7 @@ public void OnMapEnd()
 	if (!g_bCvarAllow) return;
 	g_bRescueDoor = false;
 	g_iLockedDoor = INVALID_ENT_REFERENCE; // we don't know if there's gonna be a door next map
+	Traps_TeardownAll();
 	ResetTimer();
 	zm_stage = ZM_END;
 	clients_in_server = false;
@@ -1928,10 +1972,11 @@ void evtRoundEnd(Event event, const char[] name, bool dontBroadcast)
 	}
 	g_iLockedDoor = INVALID_ENT_REFERENCE;
 	saferoom_locked = false;
+	Traps_TeardownAll();
 	set_zm_stage(ZM_END,true);
 	ResetTimer();
 	update_EMS_HUD();
-	
+
 }
 
 void evtRoundStart(Event event, const char[] name, bool dontBroadcast)
@@ -2090,6 +2135,7 @@ public void OnPluginEnd()
     Spawner_OnDisabled(zm_client);
     zm_client = -1;
     if (saferoom_locked) saferoom_lock(false);
+    Traps_TeardownAll();
     ResetTimer();
     ResetCvars();
     reset_time_of_day();
@@ -2261,6 +2307,7 @@ void evt_ZM_start_imminent(Event event, const char[] name, bool dontBroadcast)
 
 public void OnClientPutInServer(int client)
 {
+    SDKHook(client, SDKHook_OnTakeDamage, TrapTornado_OnTakeDamage);
 	if(!g_bCvarAllow) return;
 	if (!IsValidClient(client)) return;
 	if (DEBUG) LogMessage("[zm] OnClientPutInServer %d", client);
@@ -2322,6 +2369,12 @@ public void OnClientDisconnect(int client)
 }
 
 // Refund zombie delete
+public void OnGameFrame()
+{
+    if (Trap_CountActive(ZM_TRAP_TYPE_TORNADO) == 0) return; // self-gate: no work unless a tornado is active
+    TrapTornado_Update();
+}
+
 public void OnEntityDestroyed(int entity)
 {
     if ( !g_bCvarAllow || zm_stage<ZM_PREP || !IsValidEntity(entity) ) return;

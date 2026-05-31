@@ -99,6 +99,7 @@ void open_menu(int client, int MENU=ZM_MENU_MAIN, int time=MENU_TIME_FOREVER)
             if (menu_items==null) create_items_menu();
             menu_items.Display(zm_client,time);
         }
+        case ZM_MENU_TRAPS: menu_traps.Display(zm_client,time);
         case ZM_MENU_AUTOCOMMON:
         {
             update_spawner_zombieclass(ZOMBIECLASS_COMMON);
@@ -160,7 +161,10 @@ void create_main_menu()
 
     Format(buffer, sizeof(buffer), "Items");
     AddMenuItem(menu_main, "5", buffer);
-    
+
+    Format(buffer, sizeof(buffer), "%T", "Traps", zm_language);
+    AddMenuItem(menu_main, "6", buffer);
+
     //if (g_bAllowFreeze && max_SI>0)
     //{
     //    if (ZM_specials_frozen) Format(buffer, sizeof(buffer), "%T", "Unfreeze Specials", zm_language);
@@ -192,6 +196,7 @@ int main_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
             	case 3: zm_menu_state=ZM_MENU_CLEANUP;
             	case 4: zm_menu_state=ZM_MENU_OTHER;
             	case 5: zm_menu_state=ZM_MENU_ITEMS;
+            	case 6: zm_menu_state=ZM_MENU_TRAPS;
                 default: zm_menu_state=ZM_MENU_MAIN;
             	
         	}
@@ -582,6 +587,74 @@ int boss_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
         }
     }
 
+	return 0;
+}
+
+// TRAPS MENU
+void create_traps_menu()
+{
+	if (DEBUG) LogMessage("[zm] create_traps_menu");
+	delete menu_traps;
+	menu_traps = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),traps_menu_Handler);
+    menu_traps.Pagination = MENU_NO_PAGINATION;
+    menu_traps.ExitButton = false;
+	SetMenuOptionFlags(menu_traps,MENUFLAG_NO_SOUND);
+
+	int zm_language = LANG_SERVER;
+	if (IsValidClientZM()) zm_language = zm_client;
+	char buffer[64];
+
+	Format(buffer, sizeof(buffer), "%T", "Traps", zm_language);
+	menu_traps.SetTitle(buffer);
+
+	// Row 0: Panic door
+	if (g_iCostTrapDoor>=0 && g_iMaxTrapDoor>0)
+		Format(buffer, sizeof(buffer), "%T %d %d/%d", "Trap Panic Door", zm_language, g_iCostTrapDoor, Trap_CountActive(ZM_TRAP_TYPE_DOOR), g_iMaxTrapDoor);
+	else buffer = "-";
+	AddMenuItem(menu_traps, "0", buffer);
+
+	// Row 1: Alarm car
+	if (g_iCostTrapCar>=0 && g_iMaxTrapCar>0)
+		Format(buffer, sizeof(buffer), "%T %d %d/%d", "Trap Alarm Car", zm_language, g_iCostTrapCar, Trap_CountActive(ZM_TRAP_TYPE_CAR), g_iMaxTrapCar);
+	else buffer = "-";
+	AddMenuItem(menu_traps, "1", buffer);
+
+	if (g_iCostTrapTornado>=0 && g_iMaxTrapTornado>0)
+		Format(buffer, sizeof(buffer), "%T %d %d/%d", "Trap Tornado", zm_language, g_iCostTrapTornado, Trap_CountActive(ZM_TRAP_TYPE_TORNADO), g_iMaxTrapTornado);
+	else buffer = "-";
+	AddMenuItem(menu_traps, "2", buffer);
+	AddMenuItem(menu_traps, "3", "-");
+	AddMenuItem(menu_traps, "4", "-");
+	AddMenuItem(menu_traps, "5", "-");
+	AddMenuItem(menu_traps, "6", "<-- (R)");
+
+	if (zm_menu_state == ZM_MENU_TRAPS && IsValidClientZM()) open_menu(zm_client,ZM_MENU_TRAPS);
+}
+int traps_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
+{
+    switch(action)
+    {
+        case MenuAction_Select:
+        {
+        	if (param1!=zm_client || zm_stage>=ZM_END) return 0;
+        	switch(param2)
+        	{
+            	case 0: TrapDoor_BeginArm();
+            	case 1: TrapCar_BeginArm();
+            	case 2: TrapTornado_BeginArm();
+            	default: zm_menu_state=ZM_MENU_MAIN;
+        	}
+        	RequestFrame(reopen_zm_menu,true);
+        }
+        case MenuAction_Cancel:
+        {
+           if (param1==zm_client)
+           {
+               if (param2==MenuCancel_Exit) zm_menu_state=ZM_MENU_CLOSED;
+               else RequestFrame(reopen_zm_menu,false);
+           }
+        }
+    }
 	return 0;
 }
 
@@ -980,6 +1053,7 @@ void update_menus()
     create_uncommon_menu();
     create_common_menu();
     create_autocommon_menu();
+    create_traps_menu();
 }
 
 int Handle_VoteMenu(Menu menu, MenuAction action, int param1, int param2)
