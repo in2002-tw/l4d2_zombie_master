@@ -29,8 +29,9 @@
 #define ZM_MENU_CLEANUP 6
 #define ZM_MENU_OTHER 7
 #define ZM_MENU_AUTOCOMMON 8
-#define ZM_MENU_CONTEXT 9
-#define ZM_MENU_MAX 10
+#define ZM_MENU_ITEMS 9
+#define ZM_MENU_CONTEXT 10
+#define ZM_MENU_MAX 11
 
 // enum for spawner context state. to determine spawner RGB state:
 // 0 -> GREEN
@@ -632,7 +633,7 @@ TopMenu hAdminMenu = null;
 TopMenuObject obj_zmcommands, zm_enable, zm_gamemode_menu, zm_kick_topmenu, zm_randomizer, zm_sayhorde, zm_help, zm_random;
 
 int zm_menu_state = ZM_MENU_CLOSED;
-Menu menu_main,menu_common,menu_uncommon,menu_special,menu_boss,menu_cleanup,menu_other,menu_autocommon,menu_quit = null;
+Menu menu_main,menu_common,menu_uncommon,menu_special,menu_boss,menu_cleanup,menu_other,menu_autocommon,menu_quit,menu_items;
 
 // Define groups with different spawn rules.
 // Commons cannot spawn in areas marked by IsBlocked
@@ -2481,7 +2482,8 @@ void start_zm_round(bool play_sound = true)
  freeze_team(false,TEAM_INFECTED);
  saferoom_locked = false;
  create_other_menu();
- create_main_menu();
+ //create_main_menu();
+ create_special_menu();
  //scope_changed = false;
  update_director_script_scopes(false);
  fair_exhausted = true;
@@ -2652,7 +2654,7 @@ void set_specials_frozen(bool state)
     {
         ZM_specials_frozen = state;
         freeze_team(state,TEAM_INFECTED);
-        if (IsValidClientZM()) create_main_menu();
+        if (IsValidClientZM()) create_special_menu();
     }
 }
 
@@ -2678,6 +2680,7 @@ Action JoinZM_command(int client, int args)
     JoinZM(client,args);
     return Plugin_Continue;
 }
+
 
 Action JoinZM(int client, int args)
 {

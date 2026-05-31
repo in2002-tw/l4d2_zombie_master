@@ -33,7 +33,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.12 2026-05-11"
+#define PLUGIN_VERSION 			"0.9.13 2026-05-31"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -54,6 +54,7 @@ bool DEBUG = false;
 #include <l4d2_zombie_master/saferoom>
 #include <l4d2_zombie_master/unitmanager>
 #include <l4d2_zombie_master/panic>
+#include <l4d2_zombie_master/survivor_inventory>
 
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
@@ -66,7 +67,7 @@ public Plugin myinfo =
 {
 	name = "[L4D2] Zombie Master",
 	author = "gvazdas, zyiks, Skerion",
-	description = "[coop,survival] AI Game Director is replaced by an infected player, the Zombie Master.",
+	description = "[coop,survival] An infected player, the Zombie Master, controls all zombies instead of the AI Director.",
 	version = PLUGIN_VERSION,
 	url = "https://forums.alliedmods.net/showthread.php?t=352060, https://github.com/gvazdas/l4d2_zombie_master"
 }
@@ -79,6 +80,9 @@ public Plugin myinfo =
 // 5. Traditional Chinese localization updated (thanks in2002)
 // 6. Start area fixes for better compatibility with custom maps.
 // 7. Common flow spawns fixed. Should fail less.
+// 8. PTG
+// 9. Menu overhaul.
+// 10. Items menu.
 
 // TO DO LIST:
 // 5. Gas station tornado (done by zyiks, not implemented)
@@ -476,6 +480,11 @@ void IsAllowed()
 		HookEvent("player_bot_replace", EvtBotReplacePlayer, EventHookMode_Post);
         HookEvent("bot_player_replace", EvtPlayerReplaceBot, EventHookMode_Post);
         HookEvent("player_shoved", Event_PlayerShoved, EventHookMode_Post);
+        HookEvent("item_pickup", EvtSurvivorItem, EventHookMode_Post);
+        HookEvent("spawner_give_item", EvtSurvivorItem, EventHookMode_Post);
+        HookEvent("upgrade_pack_used", EvtSurvivorItem, EventHookMode_Post);
+        HookEvent("defibrillator_used", EvtSurvivorItem, EventHookMode_Post);
+        HookEvent("adrenaline_used", EvtSurvivorItem, EventHookMode_Post);
 		
 		load_zm_gamemode();
 		GetCvars();
@@ -1172,6 +1181,7 @@ Action CountClients(Handle timer = null)
     	get_bank_rate(); // for ZM UI
     	SetCvarsZM();
     	do_zm_update = true;
+        survivor_items_changed();
 	}
 	if (live_SI!=temp_SI)
 	{
@@ -2155,6 +2165,14 @@ void evtPlayerSpawned(Event event, const char[] name, bool dontBroadcast)
       }
 }
 
+void EvtSurvivorItem(Event event, const char[] name, bool dontBroadcast)
+{
+    if (!g_bCvarAllow) return;
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (!IsValidClient(client) || GetClientTeam(client)!=TEAM_SURVIVOR) return;
+    survivor_items_changed();
+}
+
 void Event_PlayerShoved(Event event, const char[] name, bool dontBroadcast)
 {
     if (!g_bCvarAllow || !specials_frozen || zm_stage!=ZM_STARTED) return; 
@@ -2194,6 +2212,7 @@ void EvtPlayerHeal(Event event, const char[] name, bool dontBroadcast)
 	if (!g_bCvarAllow) return;
 	int client = GetClientOfUserId(event.GetInt("subject"));
 	request_update_glow(client);
+    survivor_items_changed();
 }
 
 void evtPlayerTeam(Event event, const char[] name, bool dontBroadcast)

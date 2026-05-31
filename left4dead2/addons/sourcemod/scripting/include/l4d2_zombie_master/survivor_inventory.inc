@@ -5,7 +5,68 @@
 #define _zm_inventory_included
 ///////////////////////////////////////
 
-int entref_sprites[MAXPLAYERS+1][3];
+int g_iMolotov, g_iPipeBomb, g_iBileJar, g_iMedkit, g_iDefib, g_iIncendiary, g_iExplosive, g_iPills, g_iAdrenaline;
+
+void survivor_items_changed()
+{
+	delete menu_items;
+    if (zm_menu_state == ZM_MENU_ITEMS && IsValidClientZM()) open_menu(zm_client,ZM_MENU_ITEMS);
+}
+
+void count_survivor_items()
+{
+	g_iMolotov=0;g_iPipeBomb=0;g_iBileJar=0;g_iMedkit=0;g_iDefib=0;g_iIncendiary=0;g_iExplosive=0;g_iPills=0;g_iAdrenaline=0;
+	int entity;
+	static char class[32];
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsClientInGame(i) || !IsPlayerAlive(i)) continue;
+		if (GetClientTeam(i)!=TEAM_SURVIVOR) continue;
+		for (int slot = 2; slot <= 5; slot++)
+		{
+			entity = GetPlayerWeaponSlot(i,slot);
+			if (!IsValidEntity(entity)) continue;
+			GetEntityClassname(entity,class, sizeof(class));
+			//LogMessage("%d %d %d %s", i, slot, entity, class);
+			if (class[0]!='w') continue;
+			switch (class[7])
+			{
+				case 'm':
+				{
+					if (strncmp(class,"weapon_molotov",14,false)==0) g_iMolotov += 1;
+				}
+				case 'p':
+				{
+					if (strncmp(class,"weapon_pipe_bomb",16,false)==0) g_iPipeBomb += 1;
+					if (strncmp(class,"weapon_pain_pills",17,false)==0) g_iPills += 1;
+				}
+				case 'v':
+				{
+					if (strncmp(class,"weapon_vomitjar",15,false)==0) g_iBileJar += 1;
+				}
+				case 'f':
+				{
+					if (strncmp(class,"weapon_first_aid_kit",20,false)==0) g_iMedkit += 1;
+				}
+				case 'd':
+				{
+					if (strncmp(class,"weapon_defibrillator",20,false)==0) g_iDefib += 1;
+				}
+				case 'u':
+				{
+					if (strncmp(class,"weapon_upgradepack_incendiary",29,false)==0) g_iIncendiary += 1;
+					if (strncmp(class,"weapon_upgradepack_explosive",28,false)==0) g_iExplosive += 1;
+				}
+				case 'a':
+				{
+					if (strncmp(class,"weapon_adrenaline",17,false)==0) g_iAdrenaline += 1;
+				}
+			}
+		}
+	}
+}
+
+#endinput
 
 // root\materials\vgui\terror\l4d360ui\hud\inventory_painpills.vmt
 // root\materials\vgui\terror\molotov_icon.vmt
@@ -24,6 +85,8 @@ int entref_sprites[MAXPLAYERS+1][3];
 #define SLOT_PILLS 2
 
 #define DISTANCE_INVENTORY 3000
+
+int entref_sprites[MAXPLAYERS+1][3];
 
 //0: Primary Weapon
 //1: Secondary Weapon (Pistol/Melee)
