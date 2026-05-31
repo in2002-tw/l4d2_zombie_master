@@ -549,6 +549,58 @@
 	{
 		"en"			"Unfreeze SI"
 	}
-	
-	
+
+	"Traps"
+	{
+		"en"		"Traps"
+	}
+	"Trap Panic Door"
+	{
+		"en"		"Panic Door"
+	}
+	"Trap Alarm Car"
+	{
+		"en"		"Alarm Car"
+	}
+	"Trap armed door"
+	{
+		"en"		"Panic door armed. Survivors who open it trigger a horde."
+	}
+	"Trap invalid door"
+	{
+		"en"		"Aim at a normal door to arm it."
+	}
+	"Trap max reached"
+	{
+		"en"		"Maximum traps of this type already armed."
+	}
+	"Trap on cooldown"
+	{
+		"en"		"Traps are on cooldown."
+	}
+	"Trap armed car"
+	{
+		"en"		"Alarm car armed. If survivors set it off, the horde comes."
+	}
+	"Trap invalid car"
+	{
+		"en"		"Aim at a car to arm it."
+	}
+	"Trap disabled"
+	{
+		"en"		"Trap type disabled."
+	}
+	"Trap Tornado"
+	{
+		"en"		"Tornado"
+	}
+	"Trap placed tornado"
+	{
+		"en"		"Tornado placed."
+	}
+	"Trap invalid tornado"
+	{
+		"en"		"Aim at solid ground to place a tornado."
+	}
+
 }

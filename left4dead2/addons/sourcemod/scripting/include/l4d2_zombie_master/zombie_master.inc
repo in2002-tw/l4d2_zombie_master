@@ -30,8 +30,29 @@
 #define ZM_MENU_OTHER 7
 #define ZM_MENU_AUTOCOMMON 8
 #define ZM_MENU_ITEMS 9
-#define ZM_MENU_CONTEXT 10
-#define ZM_MENU_MAX 11
+#define ZM_MENU_TRAPS 10
+#define ZM_MENU_CONTEXT 11
+#define ZM_MENU_MAX 12
+
+// --- Trap system ---
+#define ZM_TRAP_MAX 16
+
+#define ZM_TRAP_TYPE_DOOR    0
+#define ZM_TRAP_TYPE_CAR     1
+#define ZM_TRAP_TYPE_TORNADO 2
+
+#define ZM_TRAP_FX_PANIC   0
+#define ZM_TRAP_FX_ALARM   1
+#define ZM_TRAP_FX_TORNADO 2
+
+float g_fTornadoImmuneUntil[MAXPLAYERS+1]; // per-client: fall-damage immune while GetGameTime() < this
+
+#define ZM_TRAP_STATE_FREE      0
+#define ZM_TRAP_STATE_ARMED     1
+#define ZM_TRAP_STATE_TRIGGERED 2
+
+#define TRAP_GLOW_SURV 90
+#define TRAP_GLOW_ZM   255
 
 // enum for spawner context state. to determine spawner RGB state:
 // 0 -> GREEN
@@ -524,6 +545,8 @@ ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer,
        g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons, g_hAllowFreeze,
        //g_hGridSearchRadius,
        g_hGrid, g_hSpawnerMode, g_hPanicRefill, g_hCursed, g_hGridCooldown;
+ConVar g_hCostTrapDoor, g_hCostTrapCar, g_hMaxTrapDoor, g_hMaxTrapCar, g_hTrapCooldown, g_hTrapDoorBurst;
+ConVar g_hCostTrapTornado, g_hMaxTrapTornado, g_hTornadoDuration, g_hTornadoRadius, g_hTornadoHeight, g_hTornadoGrace;
 
 float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fStopInactivity,g_fSpecialCooldown, g_fPanicRateMultiplier,
 g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fSpitterCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout,
@@ -545,6 +568,11 @@ float timestamp_available_arr[9];
 int max_zombie_arr[9];
 int g_iCostCommon, g_iCostUncommon, g_iCostWitchStatic, g_iCostWitchMoving, g_iBonusCarAlarm,
 g_iBonusFinaleStage, g_iBonusSurvival, g_iMaxWitches, g_iMaxSI, g_iMaxUniqueSI;
+int g_iCostTrapDoor, g_iCostTrapCar, g_iMaxTrapDoor, g_iMaxTrapCar, g_iTrapDoorBurst;
+int g_iCostTrapTornado, g_iMaxTrapTornado;
+float g_fTornadoDuration, g_fTornadoRadius, g_fTornadoHeight, g_fTornadoGrace;
+float g_fTrapCooldown;
+float g_fTrapLastArm = 0.0; // GetGameTime of the most recent successful arm (cooldown gate)
 
 bool g_bLockSaferoom, g_bGrid;
 int g_iSpawnerMode;
@@ -633,7 +661,7 @@ TopMenu hAdminMenu = null;
 TopMenuObject obj_zmcommands, zm_enable, zm_gamemode_menu, zm_kick_topmenu, zm_randomizer, zm_sayhorde, zm_help, zm_random;
 
 int zm_menu_state = ZM_MENU_CLOSED;
-Menu menu_main,menu_common,menu_uncommon,menu_special,menu_boss,menu_cleanup,menu_other,menu_autocommon,menu_quit,menu_items;
+Menu menu_main,menu_common,menu_uncommon,menu_special,menu_boss,menu_cleanup,menu_other,menu_autocommon,menu_quit,menu_items,menu_traps;
 
 // Define groups with different spawn rules.
 // Commons cannot spawn in areas marked by IsBlocked
@@ -737,7 +765,23 @@ void GetCvars()
     g_iBonusCarAlarm = g_hBonusCarAlarm.IntValue;
     g_iBonusFinaleStage = g_hBonusFinaleStage.IntValue;
     g_iBonusSurvival = g_hBonusSurvival.IntValue;
-    
+    g_iCostTrapDoor = g_hCostTrapDoor.IntValue;
+    g_iCostTrapCar = g_hCostTrapCar.IntValue;
+    g_iMaxTrapDoor = g_hMaxTrapDoor.IntValue;
+    if (g_iMaxTrapDoor > ZM_TRAP_MAX) g_iMaxTrapDoor = ZM_TRAP_MAX;
+    g_iMaxTrapCar = g_hMaxTrapCar.IntValue;
+    if (g_iMaxTrapCar > ZM_TRAP_MAX) g_iMaxTrapCar = ZM_TRAP_MAX;
+    g_fTrapCooldown = g_hTrapCooldown.FloatValue;
+    g_iTrapDoorBurst = g_hTrapDoorBurst.IntValue;
+
+    g_iCostTrapTornado = g_hCostTrapTornado.IntValue;
+    g_iMaxTrapTornado = g_hMaxTrapTornado.IntValue;
+    if (g_iMaxTrapTornado > ZM_TRAP_MAX) g_iMaxTrapTornado = ZM_TRAP_MAX;
+    g_fTornadoDuration = g_hTornadoDuration.FloatValue;
+    g_fTornadoRadius = g_hTornadoRadius.FloatValue;
+    g_fTornadoHeight = g_hTornadoHeight.FloatValue;
+    g_fTornadoGrace = g_hTornadoGrace.FloatValue;
+
     g_iPanicCost = g_hPanicCost.IntValue;
     g_fPanicDuration = g_hPanicDuration.FloatValue;
     
