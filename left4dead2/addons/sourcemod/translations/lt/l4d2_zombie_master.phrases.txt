@@ -551,5 +551,58 @@
 		"lt"			"Atšaldyti Specialiuosius"
 	}
 
+		"Traps"
+	{
+		"lt"		"Traps"
+	}
+	"Trap Panic Door"
+	{
+		"lt"		"Panic Door"
+	}
+	"Trap Alarm Car"
+	{
+		"lt"		"Alarm Car"
+	}
+	"Trap armed door"
+	{
+		"lt"		"Panic door armed. Survivors who open it trigger a horde."
+	}
+	"Trap invalid door"
+	{
+		"lt"		"Aim at a normal door to arm it."
+	}
+	"Trap max reached"
+	{
+		"lt"		"Maximum traps of this type already armed."
+	}
+	"Trap on cooldown"
+	{
+		"lt"		"Traps are on cooldown."
+	}
+	"Trap armed car"
+	{
+		"lt"		"Alarm car armed. If survivors set it off, the horde comes."
+	}
+	"Trap invalid car"
+	{
+		"lt"		"Aim at a car to arm it."
+	}
+	"Trap disabled"
+	{
+		"lt"		"Trap type disabled."
+	}
+	"Trap Tornado"
+	{
+		"lt"		"Tornado"
+	}
+	"Trap placed tornado"
+	{
+		"lt"		"Tornado placed."
+	}
+	"Trap invalid tornado"
+	{
+		"lt"		"Aim at solid ground to place a tornado."
+	}
+
 	
 }

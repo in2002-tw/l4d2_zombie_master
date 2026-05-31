@@ -542,12 +542,12 @@
 	
 	"Freeze Specials"
 	{
-		"en"			"Freeze SI"
+		"en"			"Freeze"
 	}
 	
 	"Unfreeze Specials"
 	{
-		"en"			"Unfreeze SI"
+		"en"			"Unfreeze"
 	}
 
 	"Traps"

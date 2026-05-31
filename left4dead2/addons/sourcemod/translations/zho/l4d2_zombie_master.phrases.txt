@@ -548,6 +548,59 @@
 	{
 		"zho"			"解除凍結特感"
 	}
+
+	"Traps"
+	{
+		"zho"		"Traps"
+	}
+	"Trap Panic Door"
+	{
+		"zho"		"Panic Door"
+	}
+	"Trap Alarm Car"
+	{
+		"zho"		"Alarm Car"
+	}
+	"Trap armed door"
+	{
+		"zho"		"Panic door armed. Survivors who open it trigger a horde."
+	}
+	"Trap invalid door"
+	{
+		"zho"		"Aim at a normal door to arm it."
+	}
+	"Trap max reached"
+	{
+		"zho"		"Maximum traps of this type already armed."
+	}
+	"Trap on cooldown"
+	{
+		"zho"		"Traps are on cooldown."
+	}
+	"Trap armed car"
+	{
+		"zho"		"Alarm car armed. If survivors set it off, the horde comes."
+	}
+	"Trap invalid car"
+	{
+		"zho"		"Aim at a car to arm it."
+	}
+	"Trap disabled"
+	{
+		"zho"		"Trap type disabled."
+	}
+	"Trap Tornado"
+	{
+		"zho"		"Tornado"
+	}
+	"Trap placed tornado"
+	{
+		"zho"		"Tornado placed."
+	}
+	"Trap invalid tornado"
+	{
+		"zho"		"Aim at solid ground to place a tornado."
+	}
 	
 
 }
