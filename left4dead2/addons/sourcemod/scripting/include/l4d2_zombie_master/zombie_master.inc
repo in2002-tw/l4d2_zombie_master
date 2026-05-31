@@ -715,7 +715,6 @@ enum struct zm_data
 	int rounds;          // number of rounds played as ZM
 	int last_roundcount; // last internal roundcount value where they played as ZM
 	bool offered;        // track if offered at round start
-    bool PTG; // path to goal indicator
     int autocommon_max; // autocommon max
     int autocommon_mode; // autocommon mode: off panic always
     bool autocommon_common; // commons or autocommons
@@ -2783,8 +2782,7 @@ Action JoinZM(int client, int args)
     
     remove_all_ZM_glows();
     
-    if (!g_bGrid) g_iSpawnerMode = 0;
-    else g_iSpawnerMode = g_hSpawnerMode.IntValue;
+    ZMPrefs_Apply(client);
     g_iLastZombieClass = -1;
     
     ChangeClientTeam(client,TEAM_ZM);
@@ -2793,7 +2791,6 @@ Action JoinZM(int client, int args)
     zm_client = client;
     zm_client_userid = GetClientUserId(zm_client);
     Spawner_OnEnabled(client);
-    zm_draw_path = true;
     update_menus();
     
     // Prevent InputKill - thanks Shadowsyn

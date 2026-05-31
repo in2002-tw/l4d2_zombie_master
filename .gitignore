@@ -1,1 +1,6 @@
 *.zip
+/.env
+# Intellij IDEA
+/.idea/
+# Local documentation decompiled engine
+/docs/

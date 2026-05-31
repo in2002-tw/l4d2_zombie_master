@@ -29,6 +29,7 @@
 #include <left4dhooks>
 #include <adt_trie>
 #include <files>
+#include <clientprefs>
 
 bool DEBUG = false;
 
@@ -50,6 +51,7 @@ bool DEBUG = false;
 #include <l4d2_zombie_master/spawncommands>
 #include <l4d2_zombie_master/fair_queue>
 #include <l4d2_zombie_master/settings>
+#include <l4d2_zombie_master/prefs>
 #include <l4d2_zombie_master/hud>
 #include <l4d2_zombie_master/saferoom>
 #include <l4d2_zombie_master/unitmanager>
@@ -120,6 +122,7 @@ public void OnPluginStart()
 	CreateTimer(1.0,Timer_load_zm_global_settings);
 	//AutoExecConfig(true, CONFIG_FILENAME);
 	g_Steam = new StringMap();
+	ZMPrefs_Register();
 	g_CellCooldown = new StringMap();
 	precache_survivor_hp();
 	LoadTranslations("l4d2_zombie_master.phrases");
