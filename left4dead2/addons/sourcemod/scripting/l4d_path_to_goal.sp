@@ -17,7 +17,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.26 2026-05-29"
+#define PLUGIN_VERSION 			"1.30 2026-05-30"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -75,9 +75,6 @@ public void OnPluginStart()
 
     g_hCvarFinaleAuto = CreateConVar("l4d_path_to_goal_finale_auto", "1",
     "Draw beams to rescue vehicle when it arrives. l4d_path_to_goal_finale must be less than 3.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
-    
-    //g_hCvarDz = CreateConVar("l4d_path_to_goal_dz", "16.0",
-    //"Max absolute dz between cells considered safe for LOS merging. 0.0 to disable (cells will always merge) for reduced server strain.",FCVAR_NOTIFY, true, 0.0, true, 10000.0);
 
   	g_hCvarMPGameMode = FindConVar("mp_gamemode");
   	g_hCvarMPGameMode.AddChangeHook(ConVarGameMode);
