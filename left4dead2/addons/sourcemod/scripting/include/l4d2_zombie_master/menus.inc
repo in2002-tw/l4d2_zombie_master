@@ -733,6 +733,7 @@ int other_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
             	    else newMode = 0;
             	    Spawner_OnDisabled(zm_client);
             	    g_iSpawnerMode = newMode;
+            	    ZMPrefs_SaveSpawnerMode(zm_client);
             	    Spawner_OnEnabled(zm_client);
             	    create_other_menu(); 
             	}
@@ -740,6 +741,7 @@ int other_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
                 case 3:
                 {
                     zm_draw_path = !zm_draw_path;
+                    ZMPrefs_SavePTG(zm_client);
                     if (GetFeatureStatus(FeatureType_Native,"L4D_Path_To_Goal")==FeatureStatus_Available)
                         create_other_menu();
                 }
