@@ -17,7 +17,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.30 2026-05-30"
+#define PLUGIN_VERSION 			"1.30 2026-05-31"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -52,7 +52,7 @@ public void OnPluginStart()
     "0=OFF, 1=ON.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_hCvarEnable.AddChangeHook(ConVarChanged_Cvars);
   	
-    g_hCvarMax = CreateConVar("l4d_path_to_goal_max", "16",
+    g_hCvarMax = CreateConVar("l4d_path_to_goal_max", "32",
     "Max beams per request. Increasing this can potentially cause crashes for clients.",FCVAR_NOTIFY, true, 1.0, true, 1000.0);
 
     g_hCvarSurvivors = CreateConVar("l4d_path_to_goal_survivor", "1",
@@ -100,7 +100,9 @@ public void OnPluginStart()
 
 void evtFinaleVehicle(Event event, const char[] name, bool dontBroadcast)
 {
+    #if DEBUG
     LogMessage("evtFinaleVehicle");
+    #endif
     if (finale) finale_rescue = true;
     if (!enable) return;
     if (finale_rescue && g_hCvarFinale.IntValue < FINALE_NEVER)
@@ -112,14 +114,18 @@ void evtFinaleVehicle(Event event, const char[] name, bool dontBroadcast)
 
 void evtFinaleStart(Event event, const char[] name, bool dontBroadcast)
 {
+    #if DEBUG
     LogMessage("evtFinaleStart");
+    #endif
     finale = true;
     if (guide_ready && !finale_stitched && should_stitch_finale()) stitch_finale();
 }
 
 void evtGauntletStart(Event event, const char[] name, bool dontBroadcast)
 {
+    #if DEBUG
     LogMessage("evtGauntletStart");
+    #endif
     finale = true;
     if (!use_gauntlet_logic() && finale_stitched) Guide_Cleanup(); // need to recalculate cells
     finale_gauntlet = true;
@@ -193,7 +199,8 @@ Action CmdRequestGuide(int client, int args)
             float dy = FloatAbs(eye_client[1] - g_RequestFirstPos[1]);
             if (dx<=5.0 && dy<=5.0) // Direction will be spurious if we are on the point
             {
-                ReplyToCommand(client, "[PTG] %t%t", "ptg_look", "ptg_down");
+                if (g_fRequestFlow>0.0) ReplyToCommand(client, "[PTG|%.0f|%.0f] %t%t", g_fRequestFlow, g_fMaxFlow, "ptg_look", "ptg_down");
+                else ReplyToCommand(client, "[PTG] %t%t", "ptg_look", "ptg_down");
                 return Plugin_Continue;
             }
 
@@ -216,9 +223,9 @@ Action CmdRequestGuide(int client, int args)
 
             if (ang_beam[0]>=30.0) Format(str2,sizeof(str2),"%T", "ptg_down", client);
             else if (ang_beam[0]<=(-30.0)) Format(str2,sizeof(str2),"%T", "ptg_up", client);
-            else str2 = "";
-
-            ReplyToCommand(client, "[PTG] %t%s %s", "ptg_look", str1, str2);
+            else str2 = "\0";
+            if (g_fRequestFlow>0.0) ReplyToCommand(client, "[PTG|%.0f|%.0f] %t%s %s", g_fRequestFlow, g_fMaxFlow, "ptg_look", str1, str2);
+            else ReplyToCommand(client, "[PTG] %t%s %s", "ptg_look", str1, str2);
         }
         default: // beams not drawn
         {

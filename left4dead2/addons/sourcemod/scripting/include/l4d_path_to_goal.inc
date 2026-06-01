@@ -33,7 +33,7 @@ native void L4D_Path_To_Goal(int client = -1, float duration = 5.0, bool backwar
 #include <sourcemod>
 #include <left4dhooks>
 
-#define DEBUG 0 // 1 for basic debug, 2 for details, 3 for EXTREME amount of detail
+#define DEBUG 1 // 1 for basic debug, 2 for details, 3 for EXTREME amount of detail
 
 #define NAV_COOLDOWN 3.0 // GameTime cooldown after nav events fire before Guide_Prep can be requested
 
@@ -175,6 +175,7 @@ bool use_gauntlet_logic()
 
 int g_iClosestFlow, g_iClosestDist, g_iStart; // closest cell by flow, by distance, and final determination.
 float g_RequestFirstPos[3]; // for hint system
+float g_fRequestFlow; // for hint system
 
 // Draw survivor path for client, for duration in seconds
 // backward: include backwards-going path.
@@ -272,6 +273,7 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
             flow = L4D_GetFlowFromPoint(last_pos);
         }
     }
+    g_fRequestFlow = flow;
 
     last_pos = origin;
     if (alive || !self_origin) last_pos[2] += 16.0;
@@ -595,7 +597,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
                 if (found && g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
                 if (found && L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
                 if (found && L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
-                bool steep = vecdiff_too_steep(pos_curr,pos_temp);
+                bool steep = nav_too_steep(navArea_curr,adjArea);
                 if (found && steep) continue;
                 if ( flow_temp>flow_best || (best_steep && flow_temp>flow_curr) )
                 {
@@ -1129,7 +1131,7 @@ void OnFramePrep(bool new_frame = true)
                             //{
                             if (found && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
                             //}
-                            bool steep = vecdiff_too_steep(pos_curr,pos_temp);
+                            bool steep = nav_too_steep(navArea_curr,adjArea);
                             if (found && steep) continue;
                             if ( flow_temp>flow_best || (steep_best && flow_temp>flow_curr) )
                             {
@@ -1239,7 +1241,7 @@ void OnFramePrep(bool new_frame = true)
                         #endif
                         continue;
                     }
-                    else if (LOS1 && LOS2 && !vecdiff_too_steep(cell_before.center,cell_after.center) && twopos_visible(cell.center,cell_after.center))
+                    else if (LOS1 && LOS2 && midpoint_valid_ground(cell_before.center,cell_after.center) && twopos_visible(cell.center,cell_after.center))
                     {
                         g_GuideCells.Erase(g_iLoop);
                         #if DEBUG
@@ -1479,21 +1481,19 @@ void stitch_finale()
     finale_stitched = true;
 }
 
-// Flow-forward explore from starting position i_start until we hit any cell ahead. Exit early if we hit i_start+1.
-// If successful, stitch together and delete cells after i_start and before i_end, return true.
+// Flow-forward explore from i_start-1 until we hit any cell ahead. We give up if the only way forward is i_start.
+// If successful, replace cells from i_start to i_end with new cells and return true
 ArrayList cells_explore;
-stock bool explore_stitch(ArrayList cells, int i_start, int max_steps = 10)
+stock bool explore_stitch(ArrayList cells, int i_start, int max_steps = 1000)
 {
-    if (i_start>=(cells.Length-2)) return false;
-    static Cell cell, cell_last;
-    cells.GetArray(i_start,cell,sizeof(Cell));
+    if (i_start<=0 || i_start>=(cells.Length-2)) return false;
+    static Cell cell;
+    cells.GetArray(i_start-1,cell,sizeof(Cell));
     Address navArea_curr = cell.navArea;
     if (navArea_curr == Address_Null) return false;
     static float pos_curr[3];
     pos_curr = cell.center;
     float flow_curr = cell.flow;
-
-    LogMessage("explore_stitch");
 
     if (cells_explore==null) cells_explore = new ArrayList(sizeof(Cell));
     cells_explore.Clear();
@@ -1512,6 +1512,7 @@ stock bool explore_stitch(ArrayList cells, int i_start, int max_steps = 10)
     while (steps<max_steps)
     {
         bool found = false;
+        bool steep_best = false;
         for (int dir = 0; dir < 4; dir++)
         {
             adjAreas.Clear();
@@ -1528,14 +1529,15 @@ stock bool explore_stitch(ArrayList cells, int i_start, int max_steps = 10)
                 pos_temp[2] += 16.0;
                 if (pos_underwater(pos_temp)) pos_temp[2] += 32.0;
                 if (g_bL4D2 && found && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
-                bool steep = vecdiff_too_steep(pos_curr,pos_temp);
+                bool steep = nav_too_steep(navArea_curr,adjArea);
                 if (found && steep) continue;
-                if (flow_temp>flow_best)
+                if ( flow_temp>flow_best || (steep_best && flow_temp>flow_curr) )
                 {
                     flow_best = flow_temp;
                     navArea_best = adjArea;
                     pos_best = pos_temp;
                     found = true;
+                    steep_best = steep;
                 }
             }
         }
@@ -1544,33 +1546,53 @@ stock bool explore_stitch(ArrayList cells, int i_start, int max_steps = 10)
             cell.flow = flow_best;
             cell.navArea = navArea_best;
             cell.center = pos_best;
-            pos_curr = cell.center;
         }
         else found = try_ladder(flow_curr,pos_curr,cell);
         if (!found) break;
         pos_curr = cell.center;
-        i_end = cells.FindValue(cell.navArea,1);
-        if (i_end<=i_start || i_end==(i_start+1)) break;
-        if (i_end>(i_start+1))
-        {
-            success = true;
-            break;
-        }
+        navArea_curr = cell.navArea;
+        flow_curr = cell.flow;
+        #if DEBUG>1
+        LogMessage("explore_stitch %d found %f", i_start, flow_best);
+        #endif
         cells_explore.PushArray(cell,sizeof(Cell));
+        i_end = cells.FindValue(cell.navArea,1);
+        if (i_end>=0)
+        {
+            if (i_end<=i_start || i_end==(i_start+1)) break;
+            if (i_end>(i_start+1))
+            {
+                success = true;
+                break;
+            }
+        }
         steps += 1;
     }
 
     if (success)
     {
-        // Insert everything explored to cells
-        // Delete everything after i_start until meeting point
-        // Then carry on as usual
+        cells_explore.GetArray(0,cell,sizeof(Cell));
+        cells.SetArray(i_start,cell,sizeof(Cell));
+        int num_delete = i_end-i_start-1;
+        while (num_delete>0)
+        {
+            cells.Erase(i_start+1);
+            num_delete -= 1;
+        }
+        for (int i = 1; i < cells_explore.Length; i++)
+        {
+            cells.ShiftUp(i_start+1);
+            cells_explore.GetArray(i,cell,sizeof(Cell));
+            cells.SetArray(i_start+1,cell,sizeof(Cell));
+        }
     }
 
-    delete adjAreas;
-    delete queue;
+    #if DEBUG
+    LogMessage("explore_stitch %d %d %d", i_start, success, cells_explore.Length);
+    #endif
 
-    return false;
+    delete adjAreas;
+    return success;
 }
 
 // Add cell to cells. If there is no LOS, attempt rescue.
@@ -1587,7 +1609,7 @@ void guide_add_cell(ArrayList cells, Cell cell, ArrayList cells_all = null, int 
     cells.GetArray(cells.Length-2,cell_prev2,sizeof(Cell)); // cell before last cell
     if (twopos_visible(cell.center,cell_prev.center))
     {
-        if (!vecdiff_too_steep(cell_prev2.center,cell.center) && twopos_visible(cell.center,cell_prev2.center) && twopos_visible(cell_prev2.center,cell_prev.center))
+        if (midpoint_valid_ground(cell_prev2.center,cell.center) && twopos_visible(cell.center,cell_prev2.center) && twopos_visible(cell_prev2.center,cell_prev.center))
             cells.SetArray(cells.Length-1,cell,sizeof(Cell));
         else 
             cells.PushArray(cell);
@@ -1597,7 +1619,12 @@ void guide_add_cell(ArrayList cells, Cell cell, ArrayList cells_all = null, int 
         bool rescued = cell_rescue(cells,cell_prev,cell,cell_prev2);
         if (!rescued && cells_all != null && i_current>0)
         {
-            //rescued = explore_stitch(cells_all,i_current-1);
+            rescued = explore_stitch(cells_all,i_current);
+            if (rescued)
+            {
+                cells_all.GetArray(i_current,cell,sizeof(Cell));
+                guide_add_cell(cells,cell);
+            }
         }
         if (!rescued) cells.PushArray(cell);
     }
@@ -1733,7 +1760,7 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2)
         if (cell.flow>=cell_new.flow) cell.flow = (cell_old.flow + cell_new.flow)/2.0;
         cell.navArea = Address_Null;
         cell.center = pos_candidate;
-        if (!vecdiff_too_steep(cell_prev2.center,cell.center) && twopos_visible(cell.center,cell_prev2.center)) cells.SetArray(cells.Length-1,cell,sizeof(Cell));
+        if (midpoint_valid_ground(cell_prev2.center,cell.center) && twopos_visible(cell.center,cell_prev2.center)) cells.SetArray(cells.Length-1,cell,sizeof(Cell));
         else cells.PushArray(cell);
         success = true;
         break;
@@ -1753,7 +1780,7 @@ bool LOS_rescue_cheap(float pos1[3], float pos2[3], float pos_mid[3])
     // dx only
     if (FloatAbs(diff[0])>=5.0)
     {
-        diff_candidate = diff; diff_candidate[1] = 0.0;
+        diff_candidate = diff; diff_candidate[1] = 0.0; diff_candidate[2] = 0.0;
         AddVectors(pos1,diff_candidate,pos_mid);
         if (twopos_visible(pos_mid,pos1) && twopos_visible(pos_mid,pos2)) return true;
     }
@@ -1761,7 +1788,7 @@ bool LOS_rescue_cheap(float pos1[3], float pos2[3], float pos_mid[3])
     // dy only
     if (FloatAbs(diff[1])>=5.0)
     {
-        diff_candidate = diff; diff_candidate[0] = 0.0;
+        diff_candidate = diff; diff_candidate[0] = 0.0; diff_candidate[2] = 0.0;
         AddVectors(pos1,diff_candidate,pos_mid);
         if (twopos_visible(pos_mid,pos1) && twopos_visible(pos_mid,pos2)) return true;
     }
@@ -1906,6 +1933,7 @@ stock bool pos_underwater(const float pos[3])
 }
 
 // See if going from pos1 to pos2 is too steep (potentially dangerous, or obstacle too tall.)
+// This is mostly useless.
 stock bool vecdiff_too_steep(float pos1[3], float pos2[3])
 {
     static float diff[3];
@@ -1914,8 +1942,37 @@ stock bool vecdiff_too_steep(float pos1[3], float pos2[3])
     float length = GetVectorLength(diff);
     if (length<32.0) return false;
     float ratio = diff[2] / length;
-    //LogMessage("vecdiff_too_steep ratio %f", ratio);
     return FloatAbs(ratio)>0.5;
+}
+
+// See if going from navArea1 to navArea2 is potentially too steep, creating an impassable obstruction or one-way travel.
+stock bool nav_too_steep(Address navArea1, Address navArea2)
+{
+    static float pos1[3], pos2[3];
+    L4D_GetNavAreaCenter(navArea1,pos1);
+    L4D_GetNavAreaCenter(navArea2,pos2);
+    float dz = FloatAbs(pos2[2]-pos1[2]);
+    if (dz<32.0) return false;
+    static float size1[3], size2[3];
+    L4D_GetNavAreaSize(navArea1,size1);
+    L4D_GetNavAreaSize(navArea2,size2);
+    dz -= FloatAbs(size1[2]/2.0);
+    dz -= FloatAbs(size2[2]/2.0);
+    return dz >= 32.0;
+}
+
+// Check if midpoint between two vector positions is reasonably close to the ground.
+stock bool midpoint_valid_ground(float pos1[3], float pos2[3])
+{
+    static float diff[3], pos_mid[3];
+    SubtractVectors(pos2,pos1,diff); // how to move to go from from pos1 to pos2
+    if (GetVectorLength(diff,true)<=1000.0) return true;
+    ScaleVector(diff,0.5);
+    AddVectors(pos1,diff,pos_mid);
+    static float pos_down[3];
+    pos_down = pos_mid; pos_down[2] -= 32.0;
+    TR_TraceHullFilter(pos_mid,pos_down,{-32.0,-32.0,2.0},{32.0,32.0,5.0},MASK_PTG|MASK_WATER,TraceFilterStatic);
+    return TR_DidHit(INVALID_HANDLE);
 }
 
 stock bool IsValidClient(int client, bool replaycheck = true)
