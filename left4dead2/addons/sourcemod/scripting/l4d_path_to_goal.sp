@@ -17,7 +17,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.30 2026-05-31"
+#define PLUGIN_VERSION 			"1.31 2026-06-02"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -47,6 +47,7 @@ public void OnPluginStart()
     RegAdminCmd("l4d_path_to_goal_recalculate", CmdRecalculate, ADMFLAG_ROOT,"Recalculate guide points.");
     RegAdminCmd("l4d_path_to_goal_print",       CmdPrint, ADMFLAG_ROOT,"Print g_GuideCells.");
     if (g_bL4D2) RegAdminCmd("l4d_path_to_goal_rescue", CmdRescue, ADMFLAG_ROOT,"Send in rescue vehicle.");
+    RegAdminCmd("l4d_path_to_goal_ground", CmdGround, ADMFLAG_ROOT,"Check if origin is near ground.");
 
     g_hCvarEnable = CreateConVar("l4d_path_to_goal_enable", "1",
     "0=OFF, 1=ON.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
@@ -264,6 +265,15 @@ Action CmdRescue(int client, int args)
 {
     //LogMessage("CmdRescue");
     L4D2_SendInRescueVehicle();
+    return Plugin_Continue;
+}
+
+Action CmdGround(int client, int args)
+{
+    if (!IsValidClient(client) || IsFakeClient(client)) return Plugin_Stop;
+    static float pos[3];
+    GetEntPropVector(client, Prop_Send, "m_vecOrigin", pos);
+    ReplyToCommand(client,"Ground %d",valid_ground(pos));
     return Plugin_Continue;
 }
 
