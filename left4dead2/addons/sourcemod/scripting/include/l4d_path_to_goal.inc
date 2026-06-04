@@ -35,7 +35,7 @@ native void L4D_Path_To_Goal(int client = -1, float duration = 5.0, bool backwar
 
 #define DEBUG 1 // 1 for basic debug, 2 for details, 3 for EXTREME amount of detail
 
-#define NAV_COOLDOWN 3.0 // GameTime cooldown after nav events fire before Guide_Prep can be requested
+#define NAV_COOLDOWN 3.25 // GameTime cooldown after nav events fire before Guide_Prep can be requested
 
 #define TEAM_SPECTATOR		1
 #define TEAM_SURVIVOR		2
@@ -78,6 +78,10 @@ float g_fMaxFlow, g_fFlowRescueVehicle;
 
 int color_forward[4] = {25,255,25,255};
 int color_backward[4] = {255,25,25,255};
+
+bool g_bHitLadder = false; // kill me
+int g_iHitEntity, g_iHitSurfaceProps, g_iHitSurfaceFlags;
+char g_sHitSurfaceName[64];
 
 bool is_prep_cooldown() // Prevent Guide_Prep() from firing if navmesh just changed
 {
@@ -340,7 +344,7 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     // Try cell splitting technique first. If it fails try usual LOS adjustments
     static float pos_split[3];
     bool LOS = false;
-    bool found_split = try_guide_cellsplit(last_pos,pos_split,i_forward) && twopos_visible(last_pos,pos_split,true,_,false);
+    bool found_split = try_guide_cellsplit(last_pos,pos_split,i_forward) && twopos_traversable(last_pos,pos_split,true,_,false);
     if (found_split)
     {
         if (i_forward>=g_GuideCells.Length) i_forward = g_GuideCells.Length-1;
@@ -358,17 +362,17 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
         g_iStart = i_forward;
     }
 
-    if (!LOS) LOS = cell_visible(g_iStart,last_pos);
+    if (!LOS) LOS = cell_traversable(g_iStart,last_pos);
 
     // Try starting at a more reasonable position with LOS
     if (!found_split)
     {
-        if ( (join_client || !LOS) && (g_iStart+1)<g_GuideCells.Length && cell_visible(g_iStart+1,last_pos,_,250.0))
+        if ( (join_client || !LOS) && (g_iStart+1)<g_GuideCells.Length && cell_traversable(g_iStart+1,last_pos,_,250.0))
         {
             g_iStart += 1; // Move forward
             LOS = true;
         }
-        else if (g_iStart>0 && !LOS && cell_visible(g_iStart-1,last_pos,_,250.0))
+        else if (g_iStart>0 && !LOS && cell_traversable(g_iStart-1,last_pos,_,250.0))
         {
             g_iStart -=1; // Move backward
             LOS = true;
@@ -530,11 +534,11 @@ int get_flow_iStart(float flow, bool check_LOS = true, float pos[3])
     }
     if (check_LOS)
     {
-        if ((i_start+1)<g_GuideCells.Length && cell_visible(i_start+1,pos,_,250.0))
+        if ((i_start+1)<g_GuideCells.Length && cell_traversable(i_start+1,pos,_,250.0))
         {
             i_start += 1; // Move forward
         }
-        else if (i_start>0 && !cell_visible(i_start,pos) && cell_visible(i_start-1,pos,_,250.0))
+        else if (i_start>0 && !cell_traversable(i_start,pos) && cell_traversable(i_start-1,pos,_,250.0))
         {
             i_start -=1; // Move backward
         }
@@ -617,13 +621,13 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
         if (found)
         {
             if (pos_underwater(pos_best)) pos_best[2] += 32.0;
-            bool LOS = twopos_visible(pos_curr,pos_best);
+            bool LOS = twopos_traversable(pos_curr,pos_best);
             if (!LOS)
             {
                 static float pos_lifted[3];
                 pos_lifted = pos_best;
                 pos_lifted[2] += 16.0;
-                LOS = twopos_visible(pos_curr,pos_lifted);
+                LOS = twopos_traversable(pos_curr,pos_lifted);
                 if (LOS) pos_best = pos_lifted;
             }
             if (!LOS)
@@ -635,14 +639,15 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
                     L4D_GetNavAreaCenter(navArea,pos_mid);
                     pos_mid[2] += 16.0;
                     if (pos_underwater(pos_mid)) pos_mid[2] += 32.0;
-                    if (twopos_visible(pos_curr,pos_mid) && twopos_visible(pos_best,pos_mid)) queue.PushArray(pos_mid);
+                    if (twopos_traversable(pos_curr,pos_mid) && twopos_traversable(pos_best,pos_mid)) queue.PushArray(pos_mid);
                 }
                 queue.PushArray(pos_best);
             }
             else if (queue.Length>1)
             {
                 queue.GetArray(queue.Length-2,pos_last,3);
-                if (twopos_visible(pos_best,pos_last)) queue.SetArray(queue.Length-1,pos_best,3);
+                //if (twopos_traversable(pos_best,pos_last) && triple_valid_ground(pos_last,pos_best)) queue.SetArray(queue.Length-1,pos_best,3);
+                if (twopos_traversable(pos_best,pos_last) && midpoint_valid_ground(pos_last,pos_best)) queue.SetArray(queue.Length-1,pos_best,3);
                 else queue.PushArray(pos_best);
             }
             else queue.PushArray(pos_best);
@@ -673,10 +678,10 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
                 #endif
                 g_GuideCells.GetArray(g_iStart,cell,sizeof(Cell));
                 pos_end = cell.center;
-                if (queue.Length>1 && twopos_visible(pos_curr,pos_end))
+                if (queue.Length>1 && twopos_traversable(pos_curr,pos_end))
                 {
                     queue.GetArray(queue.Length-2,pos_last,3);
-                    if (twopos_visible(pos_last,pos_end)) queue.Erase(queue.Length-1);
+                    if (twopos_traversable(pos_last,pos_end)) queue.Erase(queue.Length-1);
                 }
                 break;
             }
@@ -818,6 +823,7 @@ void OnFramePrep(bool new_frame = true)
     {
         #if DEBUG
         g_iPrepFrames += 1;
+        //LogMessage("OnFramePrep %d %d", g_iPrepFrames, g_iPrepStage);
         #endif
         g_tFrameStart = GetEngineTime();
     }
@@ -836,26 +842,7 @@ void OnFramePrep(bool new_frame = true)
                 return;
             }
 
-            // Get max flow
-            if (g_bL4D2) g_fMaxFlow = L4D2Direct_GetMapMaxFlowDistance();
-            else
-            {
-                g_fMaxFlow = 0.0;
-                g_iLoop = 0;
-                while (g_iLoop<allAreas.Length)
-                {
-                    navArea = allAreas.Get(g_iLoop);
-                    if (navArea == Address_Null)
-                    {
-                        allAreas.Erase(g_iLoop);
-                        continue;
-                    }
-                    L4D_GetNavAreaCenter(navArea,pos);
-                    flow = L4D_GetFlowFromPoint(pos);
-                    if (flow>g_fMaxFlow) g_fMaxFlow = flow;
-                    g_iLoop += 1;
-                }
-            }
+            g_fMaxFlow = L4D2Direct_GetMapMaxFlowDistance();
 
             if (g_fMaxFlow<=0.0)
             {
@@ -1180,9 +1167,21 @@ void OnFramePrep(bool new_frame = true)
                 {
                     if (frame_budget_exceeded()) { budget_spent = true; break; }
                     g_GuideCells.GetArray(g_iLoop+1,cell_after,sizeof(Cell));
+                    g_GuideCells.GetArray(g_iLoop,cell,sizeof(Cell));
                     g_GuideCells.GetArray(g_iLoop-1,cell_before,sizeof(Cell));
-                    if (twopos_visible(cell_before.center,cell_after.center) && midpoint_valid_ground(cell_before.center,cell_after.center))
-                    //if (twopos_visible(cell_before.center,cell_after.center) && !cell_step_too_steep(cell_before,cell_after) && midpoint_valid_ground(cell_before.center,cell_after.center))
+                    //if ( !midpoint_valid_ground(cell.center,cell_after.center) )
+                    //{
+                    //    if (valid_ground(cell.center) && valid_ground(cell_after.center) && LOS_rescue_cheap(cell.center,cell_after.center,pos,true)) // grounded LOS rescue
+                    //    {
+                    //        g_GuideCells.ShiftUp(g_iLoop+1);
+                    //        cell.center = pos;
+                    //        cell.flow = (cell.flow+cell_after.flow)/2.0;
+                    //        g_GuideCells.SetArray(g_iLoop+1,cell,sizeof(Cell));
+                    //        //g_iLoop += 1;
+                    //        continue;
+                    //    }
+                    //}
+                    if (triple_valid_ground(cell_before.center,cell_after.center) && twopos_traversable(cell_before.center,cell_after.center))
                     {
                         g_GuideCells.Erase(g_iLoop); // Erase cells with mutual LOS
                         #if DEBUG
@@ -1191,10 +1190,20 @@ void OnFramePrep(bool new_frame = true)
                         if (g_iLoop>1) g_iLoop -= 1;
                         continue;
                     }
-                    g_GuideCells.GetArray(g_iLoop,cell,sizeof(Cell));
+                    
                     if (!vecdiff_too_steep(cell_before.center,cell.center))
                     {
-                        if (project_forward(cell_before.center,cell.center,cell_after.center,pos) && valid_ground(pos) && twopos_visible(pos,cell_before.center) && twopos_visible(pos,cell_after.center))
+                        if (project_forward(cell_before.center,cell.center,cell_after.center,pos) && valid_ground(pos) && twopos_traversable(pos,cell_before.center) && twopos_traversable(pos,cell_after.center))
+                        {
+                            cell.center = pos; // Tighten connection
+                            g_GuideCells.SetArray(g_iLoop,cell,sizeof(Cell));
+                            #if DEBUG
+                            g_iTighten += 1;
+                            #endif
+                            if (g_iLoop>1) g_iLoop -= 1;
+                            continue;
+                        }
+                        if (project_forward(cell.center,cell_after.center,cell_before.center,pos) && valid_ground(pos) && twopos_traversable(pos,cell_before.center) && twopos_traversable(pos,cell_after.center))
                         {
                             cell.center = pos; // Tighten connection
                             g_GuideCells.SetArray(g_iLoop,cell,sizeof(Cell));
@@ -1207,7 +1216,7 @@ void OnFramePrep(bool new_frame = true)
                         else
                         {
                             get_midpoint(cell_before.center,cell.center,pos);
-                            if (valid_ground(pos) && twopos_visible(pos,cell_before.center) && twopos_visible(pos,cell_after.center))
+                            if (valid_ground(pos) && twopos_traversable(pos,cell_before.center) && twopos_traversable(pos,cell_after.center))
                             {
                                 cell.center = pos; // Tighten connection
                                 g_GuideCells.SetArray(g_iLoop,cell,sizeof(Cell));
@@ -1346,7 +1355,7 @@ bool should_stitch_finale()
 bool cells_almost_identical(Cell cell1, Cell cell2, float max_distance = 250.0)
 {
     if (cell1.navArea != Address_Null && cell1.navArea == cell2.navArea) return true;
-    return GetVectorDistance(cell1.center,cell2.center)<=max_distance && twopos_visible(cell1.center,cell2.center);
+    return GetVectorDistance(cell1.center,cell2.center)<=max_distance && twopos_traversable(cell1.center,cell2.center);
 }
 
 void stitch_finale()
@@ -1452,11 +1461,25 @@ void stitch_finale()
 // Flow-forward explore from i_start-1 until we hit any cell ahead. We give up if the only way forward is i_start.
 // If successful, replace cells from i_start to i_end with new cells and return true
 ArrayList cells_explore;
-stock bool explore_stitch(ArrayList cells, int i_start, int max_steps = 50)
+stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
 {
     if (i_start<=0 || i_start>=(cells.Length-2)) return false;
-    static Cell cell;
-    cells.GetArray(i_start-1,cell,sizeof(Cell));
+    static Cell cell, cell2;
+    cells.GetArray(i_start-1,cell,sizeof(Cell)); // i_start-1 is the cell already explored. i_start does not have LOS.
+
+    // Check if we can connect to i_start+1. If so, change i_start to i_Start+1 and exit.
+    cells.GetArray(i_start+1,cell2,sizeof(Cell));
+    if (twopos_traversable(cell.center,cell2.center) && triple_valid_ground(cell.center,cell2.center))
+    {
+        i_start += 1;
+        return true;
+    }
+    else if (LOS_rescue_cheap(cell.center,cell2.center,_))
+    {
+        i_start += 1;
+        return true;
+    }
+
     Address navArea_curr = cell.navArea;
     if (navArea_curr == Address_Null) return false;
 
@@ -1464,7 +1487,6 @@ stock bool explore_stitch(ArrayList cells, int i_start, int max_steps = 50)
     cells_explore.Clear();
 
     static float pos_curr[3], pos_temp[3], pos_best[3];
-    //static float pos_mid[3];
     pos_curr = cell.center;
     float flow_curr = cell.flow;
     bool success = false; // success when we hit a forward navArea in cells
@@ -1492,30 +1514,30 @@ stock bool explore_stitch(ArrayList cells, int i_start, int max_steps = 50)
                 L4D_GetNavAreaCenter(adjArea,pos_temp);
                 flow_temp = L4D_GetFlowFromPoint(pos_temp);
                 if (flow_temp<=flow_curr) continue;
-                i_end = cells.FindValue(adjArea,1);
-                if (i_end<0)
-                {
-                    if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
-                    if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
-                    pos_temp[2] += 16.0;
-                    if (pos_underwater(pos_temp)) pos_temp[2] += 32.0;
-                    //if (g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
-                    //if ( !twopos_visible(pos_curr,pos_temp) && !LOS_rescue_cheap(pos_curr,pos_temp,pos_mid) ) continue;
-                    steep = nav_too_steep(navArea_curr,adjArea);
-                    if (found && steep) continue;
-                }
-                else success = true;
-                if ( i_end>=0 || flow_temp>flow_best || (steep_best && flow_temp>flow_curr) ) 
+                if ( !twopos_traversable(pos_curr,pos_temp) && !LOS_rescue_cheap(pos_curr,pos_temp,_) ) continue;
+                if (g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
+                //i_end = cells.FindValue(adjArea,1);
+                //if (i_end<0)
+                //{
+                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
+                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
+                pos_temp[2] += 16.0;
+                if (pos_underwater(pos_temp)) pos_temp[2] += 16.0;
+                steep = !g_bHitLadder && nav_too_steep(navArea_curr,adjArea);
+                if (found && steep) continue;
+                //}
+                //else success = true;
+                if ( flow_temp>flow_best || (steep_best && flow_temp>flow_curr) ) 
                 {
                     flow_best = flow_temp;
                     navArea_best = adjArea;
                     pos_best = pos_temp;
                     found = true;
                     steep_best = steep;
-                    if (success) break;
+                    //if (success) break;
                 }
             }
-            if (success) break;
+            //if (success) break;
         }
         if (found)
         {
@@ -1535,8 +1557,9 @@ stock bool explore_stitch(ArrayList cells, int i_start, int max_steps = 50)
         if (!success) i_end = cells.FindValue(navArea_curr,1);
         if (i_end>=0)
         {
+            if (i_end<=i_start) break; // fail
             success = i_end>i_start;
-            break;
+            if (success) break;
         } 
         steps += 1;
     }
@@ -1555,9 +1578,16 @@ stock bool explore_stitch(ArrayList cells, int i_start, int max_steps = 50)
         {
             for (int i = 1; i < cells_explore.Length; i++)
             {
-                cells.ShiftUp(i_start+1);
                 cells_explore.GetArray(i,cell,sizeof(Cell));
-                cells.SetArray(i_start+1,cell,sizeof(Cell));
+                if ((i_start+1)<cells.Length)
+                {
+                    cells.ShiftUp(i_start+1);
+                    cells.SetArray(i_start+1,cell,sizeof(Cell));
+                }
+                else
+                {
+                    cells.PushArray(cell,sizeof(Cell));
+                }
             }
         }
     }
@@ -1582,20 +1612,29 @@ void guide_add_cell(ArrayList cells, Cell cell, ArrayList cells_all = null, int 
     static Cell cell_prev, cell_prev2;
     cells.GetArray(cells.Length-1,cell_prev,sizeof(Cell)); // last cell
     cells.GetArray(cells.Length-2,cell_prev2,sizeof(Cell)); // cell before last cell
-    bool LOS = twopos_visible(cell.center,cell_prev.center);
-    if (!LOS)
+    bool LOS = twopos_traversable(cell.center,cell_prev.center);
+    if (!LOS) // Try lifting cells
     {
         static Cell cell_lifted;
-        cell_lifted = cell;
-        cell_lifted.center[2] += 16.0;
-        LOS = twopos_visible(cell_lifted.center,cell_prev.center);
+        cell_lifted = cell; cell_lifted.center[2] += 16.0;
+        LOS = twopos_traversable(cell_lifted.center,cell_prev.center);
         if (LOS) cell = cell_lifted;
+        else
+        {
+            cell_lifted = cell_prev; cell_lifted.center[2] += 16.0;
+            if (twopos_traversable(cell_lifted.center,cell.center) && twopos_traversable(cell_lifted.center,cell_prev2.center))
+            {
+                cell_prev = cell_lifted;
+                cells.SetArray(cells.Length-1,cell_prev,sizeof(Cell));
+                LOS = true;
+            }
+        }
     }
     if (LOS)
     {
-        if (midpoint_valid_ground(cell_prev2.center,cell.center) && twopos_visible(cell.center,cell_prev2.center))
-        //if (!cell_step_too_steep(cell_prev2,cell) && twopos_visible(cell.center,cell_prev2.center) && twopos_visible(cell_prev2.center,cell_prev.center))
-        //if (twopos_visible(cell.center,cell_prev2.center) && twopos_visible(cell_prev2.center,cell_prev.center))
+        if (triple_valid_ground(cell_prev2.center,cell.center) && twopos_traversable(cell.center,cell_prev2.center))
+        //if (!cell_step_too_steep(cell_prev2,cell) && twopos_traversable(cell.center,cell_prev2.center) && twopos_traversable(cell_prev2.center,cell_prev.center))
+        //if (twopos_traversable(cell.center,cell_prev2.center) && twopos_traversable(cell_prev2.center,cell_prev.center))
             cells.SetArray(cells.Length-1,cell,sizeof(Cell));
         else 
             cells.PushArray(cell);
@@ -1603,16 +1642,16 @@ void guide_add_cell(ArrayList cells, Cell cell, ArrayList cells_all = null, int 
     else
     {
         bool rescued = false;
+        if (!rescued) rescued = cell_rescue(cells,cell_prev,cell,cell_prev2);
         if (!rescued && cells_all != null && i_current>0)
         {
             rescued = explore_stitch(cells_all,i_current);
             if (rescued)
             {
-                cells_all.GetArray(i_current,cell,sizeof(Cell));
+                cells_all.GetArray(i_current,cell,sizeof(Cell)); // i_current may have changed due to explore_stitch
                 guide_add_cell(cells,cell);
             }
         }
-        if (!rescued) rescued = cell_rescue(cells,cell_prev,cell,cell_prev2);
         if (!rescued) cells.PushArray(cell);
     }
 }
@@ -1623,55 +1662,8 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2)
     static Cell cell;
     static Address navAreas[2];
     static float diff[3], diff_candidate[3], diff_template[3], pos_candidate[3], pos_template[3];
-    navAreas[0] = cell_new.navArea;
-    navAreas[1] = cell_old.navArea;
-    ArrayList adjAreas = new ArrayList();
-    for (int i_nav = 0; i_nav < sizeof(navAreas); i_nav++) // Check adjacent areas
-    {
-        Address navArea = navAreas[i_nav];
-        if (navArea == Address_Null) continue;
-        for (int dir = 0; dir < 4; dir++) // Enqueue adjacent nav areas (all 4 directions)
-        {
-            adjAreas.Clear();
-            L4D_NavArea_GetAdjacentAreas(navArea, dir, adjAreas);
-            for (int i = 0; i < adjAreas.Length; i++)
-            {
-                Address adjArea = adjAreas.Get(i);
-                if (adjArea == Address_Null) continue;
-                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
-                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
-                for (int i_try = 0; i_try < 2; i_try++)
-                {
-                    if (i_try == 0) L4D_GetNavAreaCenter(adjArea,pos_candidate);
-                    else L4D_GetNavAreaPos(adjArea,pos_candidate);
-                    pos_candidate[2] += 16.0;
-                    if (pos_underwater(pos_candidate)) pos_candidate[2] += 32.0;
-                    if (twopos_visible(pos_candidate,cell_new.center) && twopos_visible(pos_candidate,cell_old.center))
-                    {
-                        float d_flow = GetVectorDistance(cell_old.center,pos_candidate);
-                        cell.flow = cell_old.flow + d_flow;
-                        if (cell.flow>=cell_new.flow) cell.flow = (cell_old.flow + cell_new.flow)/2.0;
-                        cell.navArea = adjArea;
-                        cell.center = pos_candidate;
-                        cells.PushArray(cell);
-                        cells.PushArray(cell_new);
-                        delete adjAreas;
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    delete adjAreas;
 
     ArrayList pos_candidates = new ArrayList(3);
-
-    L4D_GetNavAreaPos(cell_new.navArea,pos_candidate); pos_candidate[2] += 16.0;
-    pos_candidates.PushArray(pos_candidate);
-
-    L4D_GetNavAreaPos(cell_old.navArea,pos_candidate); pos_candidate[2] += 16.0;
-    pos_candidates.PushArray(pos_candidate);
-
     SubtractVectors(cell_new.center,cell_old.center,diff);
     diff_candidate = diff;
 
@@ -1729,6 +1721,13 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2)
         }
     }
 
+    // Add known corners of navmesh. Better natives would help here...
+    L4D_GetNavAreaPos(cell_new.navArea,pos_candidate); pos_candidate[2] += 16.0;
+    pos_candidates.PushArray(pos_candidate);
+
+    L4D_GetNavAreaPos(cell_old.navArea,pos_candidate); pos_candidate[2] += 16.0;
+    pos_candidates.PushArray(pos_candidate);
+
     bool success = false;
     for (int i = 0; i < pos_candidates.Length; i++) 
     {
@@ -1738,28 +1737,76 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2)
             pos_candidate[2] += 16.0;
             if (pos_underwater(pos_candidate)) pos_candidate[2] += 16.0;
         }
-        if (!twopos_visible(cell_new.center,pos_candidate)) continue;
-        if (!twopos_visible(cell_old.center,pos_candidate)) continue;
+        if (!twopos_traversable(cell_new.center,pos_candidate)) continue;
+        if (!twopos_traversable(cell_old.center,pos_candidate)) continue;
         float d_flow = GetVectorDistance(cell_old.center,pos_candidate);
         cell.flow = cell_old.flow + d_flow;
         if (cell.flow>=cell_new.flow) cell.flow = (cell_old.flow + cell_new.flow)/2.0;
         cell.navArea = Address_Null;
         cell.center = pos_candidate;
-        if (midpoint_valid_ground(cell_prev2.center,cell.center) && twopos_visible(cell.center,cell_prev2.center)) cells.SetArray(cells.Length-1,cell,sizeof(Cell));
-        //if (!cell_step_too_steep(cell_prev2,cell) && twopos_visible(cell.center,cell_prev2.center)) cells.SetArray(cells.Length-1,cell,sizeof(Cell));
-        //if (twopos_visible(cell.center,cell_prev2.center)) cells.SetArray(cells.Length-1,cell,sizeof(Cell));
-        else cells.PushArray(cell);
+        if (triple_valid_ground(cell_prev2.center,cell.center) && twopos_traversable(cell.center,cell_prev2.center))
+            cells.SetArray(cells.Length-1,cell,sizeof(Cell));
+        //if (!cell_step_too_steep(cell_prev2,cell) && twopos_traversable(cell.center,cell_prev2.center)) cells.SetArray(cells.Length-1,cell,sizeof(Cell));
+        //if (twopos_traversable(cell.center,cell_prev2.center)) cells.SetArray(cells.Length-1,cell,sizeof(Cell));
+        else
+            cells.PushArray(cell);
         success = true;
         break;
     }
-    if (success) cells.PushArray(cell_new);
     delete pos_candidates;
+    if (success)
+    {
+        cells.PushArray(cell_new);
+        return true;
+    }
+    
+    navAreas[0] = cell_new.navArea;
+    navAreas[1] = cell_old.navArea;
+    ArrayList adjAreas = new ArrayList();
+    for (int i_nav = 0; i_nav < sizeof(navAreas); i_nav++) // Check adjacent areas
+    {
+        Address navArea = navAreas[i_nav];
+        if (navArea == Address_Null) continue;
+        for (int dir = 0; dir < 4; dir++) // Enqueue adjacent nav areas (all 4 directions)
+        {
+            adjAreas.Clear();
+            L4D_NavArea_GetAdjacentAreas(navArea, dir, adjAreas);
+            for (int i = 0; i < adjAreas.Length; i++)
+            {
+                Address adjArea = adjAreas.Get(i);
+                if (adjArea == Address_Null) continue;
+                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
+                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
+                for (int i_try = 0; i_try < 2; i_try++)
+                {
+                    if (i_try == 0) L4D_GetNavAreaCenter(adjArea,pos_candidate);
+                    else L4D_GetNavAreaPos(adjArea,pos_candidate);
+                    pos_candidate[2] += 16.0;
+                    if (pos_underwater(pos_candidate)) pos_candidate[2] += 16.0;
+                    if (twopos_traversable(pos_candidate,cell_new.center) && twopos_traversable(pos_candidate,cell_old.center))
+                    {
+                        float d_flow = GetVectorDistance(cell_old.center,pos_candidate);
+                        cell.flow = cell_old.flow + d_flow;
+                        if (cell.flow>=cell_new.flow) cell.flow = (cell_old.flow + cell_new.flow)/2.0;
+                        cell.navArea = adjArea;
+                        cell.center = pos_candidate;
+                        cells.PushArray(cell);
+                        cells.PushArray(cell_new);
+                        delete adjAreas;
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    delete adjAreas;
+
     return success;
 }
 
-// Two vector positions do not have LOS. See if a vector position inbetween can fix it.
+// Two vector positions do not have LOS. See if a vector position inbetween can fix it. Ground to accept only grounded positions.
 // Result stored in pos_mid. Returns true on success.
-bool LOS_rescue_cheap(float pos1[3], float pos2[3], float pos_mid[3])
+bool LOS_rescue_cheap(float pos1[3], float pos2[3], float pos_mid[3] = {0.0,0.0,0.0}, bool ground = false)
 {
     static float diff[3], diff_candidate[3];
     SubtractVectors(pos2,pos1,diff);
@@ -1769,7 +1816,7 @@ bool LOS_rescue_cheap(float pos1[3], float pos2[3], float pos_mid[3])
     {
         diff_candidate = diff; diff_candidate[1] = 0.0; diff_candidate[2] = 0.0;
         AddVectors(pos1,diff_candidate,pos_mid);
-        if (twopos_visible(pos_mid,pos1) && twopos_visible(pos_mid,pos2)) return true;
+        if ( (!ground || valid_ground(pos_mid)) && twopos_traversable(pos_mid,pos1) && twopos_traversable(pos_mid,pos2) ) return true;
     }
 
     // dy only
@@ -1777,7 +1824,7 @@ bool LOS_rescue_cheap(float pos1[3], float pos2[3], float pos_mid[3])
     {
         diff_candidate = diff; diff_candidate[0] = 0.0; diff_candidate[2] = 0.0;
         AddVectors(pos1,diff_candidate,pos_mid);
-        if (twopos_visible(pos_mid,pos1) && twopos_visible(pos_mid,pos2)) return true;
+        if ( (!ground || valid_ground(pos_mid)) && twopos_traversable(pos_mid,pos1) && twopos_traversable(pos_mid,pos2) ) return true;
     }
 
     // dz only
@@ -1785,7 +1832,7 @@ bool LOS_rescue_cheap(float pos1[3], float pos2[3], float pos_mid[3])
     {
         diff_candidate = diff; diff_candidate[0] = 0.0; diff_candidate[1] = 0.0;
         AddVectors(pos1,diff_candidate,pos_mid);
-        if (twopos_visible(pos_mid,pos1) && twopos_visible(pos_mid,pos2)) return true;
+        if ( (!ground || valid_ground(pos_mid)) && twopos_traversable(pos_mid,pos1) && twopos_traversable(pos_mid,pos2) ) return true;
     }
 
     return false;
@@ -1864,24 +1911,26 @@ stock float get_navFlow(Address navArea)
     }
 }
 
-// Test if cell is visible from given position
-bool cell_visible(int i, float pos[3], bool world_only = true, float max_distance = -1.0)
+// Test if it's possible to travel to cell position from given position
+bool cell_traversable(int i, float pos[3], bool world_only = true, float max_distance = -1.0)
 {
     static Cell cell;
     g_GuideCells.GetArray(i,cell,sizeof(Cell));
-    return twopos_visible(pos,cell.center,world_only,max_distance);
+    return twopos_traversable(pos,cell.center,world_only,max_distance);
 }
 
-static int MASK_PTG = MASK_PLAYERSOLID | MASK_VISIBLE | CONTENTS_DETAIL;
+//static int MASK_PTG = MASK_PLAYERSOLID | MASK_VISIBLE | CONTENTS_DETAIL;
+static int MASK_PTG = MASK_PLAYERSOLID;
 
-// Test if two vector positions are visible to one another. world_only to hit only world and static props
-bool twopos_visible(float pos1[3], float pos2[3], bool world_only = true, float max_distance = -1.0, bool hull = true)
+// Test if you can travel between two vector positions without an obstruction. world_only to hit only world and static props
+bool twopos_traversable(float pos1[3], float pos2[3], bool world_only = true, float max_distance = -1.0, bool hull = true)
 {
+    g_bHitLadder = false;
     if (max_distance>0.0 && GetVectorDistance(pos1,pos2)>max_distance) return false;
     if (hull)
     {
-        if (world_only) TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,-1.0},{2.0,2.0,20.0},MASK_PTG,TraceFilterStatic);
-        else            TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,-1.0},{2.0,2.0,20.0},MASK_PTG,TraceFilterNoClients);
+        if (world_only) TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,1.0},{2.0,2.0,20.0},MASK_PTG,TraceFilterStatic);
+        else            TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,1.0},{2.0,2.0,20.0},MASK_PTG,TraceFilterNoClients);
     }
     else
     {
@@ -1889,6 +1938,12 @@ bool twopos_visible(float pos1[3], float pos2[3], bool world_only = true, float 
        else TR_TraceRayFilter(pos1,pos2,MASK_PTG,RayType_EndPoint,TraceFilterNoClients);
     }
     if (!TR_DidHit(INVALID_HANDLE)) return true;
+    #if DEBUG
+    g_iHitEntity = TR_GetEntityIndex(INVALID_HANDLE);
+    g_iHitSurfaceProps = TR_GetSurfaceProps(INVALID_HANDLE);
+    g_iHitSurfaceFlags = TR_GetSurfaceFlags(INVALID_HANDLE);
+    TR_GetSurfaceName(INVALID_HANDLE,g_sHitSurfaceName,sizeof(g_sHitSurfaceName));
+    #endif
     return false;
 }
 
@@ -1912,6 +1967,7 @@ bool TraceFilterStatic(int entity, int contentsMask)
         case 'f':
         {
             if (strncmp(class,"func_brush",10,false)==0) return true;
+            g_bHitLadder = strncmp(class,"func_simpleladder",17,false)==0;
         }
     }
     return false;
@@ -1998,6 +2054,14 @@ stock bool nav_too_steep(Address navArea1, Address navArea2)
     return dz >= 32.0;
 }
 
+// Check if ground is valid at both positions and inbetween.
+stock bool triple_valid_ground(float pos1[3], float pos2[3])
+{
+    if (!valid_ground(pos1)) return false;
+    if (!valid_ground(pos2)) return false;
+    return midpoint_valid_ground(pos1,pos2);
+}
+
 // Check if midpoint between two vector positions is reasonably close to the ground.
 stock bool midpoint_valid_ground(float pos1[3], float pos2[3])
 {
@@ -2009,11 +2073,13 @@ stock bool midpoint_valid_ground(float pos1[3], float pos2[3])
     return valid_ground(pos_mid);
 }
 
+#define GROUND_WIDTH 16.0
+
 stock bool valid_ground(float pos[3])
 {
     static float pos_down[3];
-    pos_down = pos; pos_down[2] -= 32.0;
-    TR_TraceHullFilter(pos,pos_down,{-5.0,-5.0,2.0},{5.0,5.0,5.0},MASK_PTG|MASK_WATER,TraceFilterStatic);
+    pos_down = pos; pos_down[2] -= 35.0;
+    TR_TraceHullFilter(pos,pos_down,{-GROUND_WIDTH,-GROUND_WIDTH,2.0},{GROUND_WIDTH,GROUND_WIDTH,5.0},MASK_PTG|MASK_WATER,TraceFilterStatic);
     return TR_DidHit(INVALID_HANDLE);
     //if (TR_DidHit(INVALID_HANDLE))
     //{
@@ -2025,6 +2091,19 @@ stock bool valid_ground(float pos[3])
     // TR_GetEndPosition(float pos[3], Handle hndl)
     // TR_GetPlaneNormal(Handle hndl, float normal[3])
     //return false;
+}
+
+// Determine if entity is solid to players and zombies from m_CollisionGroup, m_nSolidType and m_usSolidFlags
+stock bool entity_solid(int entity)
+{
+    if (GetEntProp(entity, Prop_Send, "m_nSolidType") == 0) return false;
+    if (GetEntProp(entity, Prop_Send, "m_usSolidFlags") & 0x0004) return false; // FSOLID_NOT_SOLID 
+    switch (GetEntProp(entity, Prop_Send, "m_CollisionGroup"))
+    {
+        case 1: return false; // COLLISION_GROUP_DEBRIS
+        case 2: return false; // COLLISION_GROUP_DEBRIS_TRIGGER
+    }
+    return true;
 }
 
 stock bool IsValidClient(int client, bool replaycheck = true)

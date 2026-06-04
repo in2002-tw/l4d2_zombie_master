@@ -17,9 +17,11 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.31 2026-06-02"
+#define PLUGIN_VERSION 			"1.31 2026-06-03"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
+
+// Fix detour join not working with finale cvar set to 0
 
 public Plugin myinfo =
 {
@@ -48,6 +50,9 @@ public void OnPluginStart()
     RegAdminCmd("l4d_path_to_goal_print",       CmdPrint, ADMFLAG_ROOT,"Print g_GuideCells.");
     if (g_bL4D2) RegAdminCmd("l4d_path_to_goal_rescue", CmdRescue, ADMFLAG_ROOT,"Send in rescue vehicle.");
     RegAdminCmd("l4d_path_to_goal_ground", CmdGround, ADMFLAG_ROOT,"Check if origin is near ground.");
+    #if DEBUG
+    RegAdminCmd("l4d_path_to_goal_validate", CmdValidate, ADMFLAG_ROOT,"Print validation results for cell index if provided, or closest cell to player.");
+    #endif
 
     g_hCvarEnable = CreateConVar("l4d_path_to_goal_enable", "1",
     "0=OFF, 1=ON.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
@@ -257,6 +262,57 @@ Action CmdPrint(int client, int args)
     {
         g_GuideCells.GetArray(i,cell,sizeof(Cell));
         ReplyToCommand(client, "%d %d %.1f (%.1f %1.f %.1f)", i, cell.navArea, cell.flow, cell.center[0], cell.center[1], cell.center[2]);
+    }
+    return Plugin_Continue;
+}
+
+Action CmdValidate(int client, int args)
+{
+    if (!guide_ready || g_GuideCells == null || g_GuideCells.Length<1) return Plugin_Continue;
+    int i = 0;
+    if (args>0)
+    {
+        i = GetCmdArgInt(1);
+        if (i<0) i = 0;
+        else if (i>=g_GuideCells.Length) i = g_GuideCells.Length-1;
+    }
+    else if (IsValidClient(client))
+    {
+        if (!RequestGuide(client,5.0,true)) return Plugin_Continue;
+        i = g_iStart;
+    }
+
+    static Cell cell, cell_before, cell_after;
+    
+    g_GuideCells.GetArray(i,cell,sizeof(Cell));
+    ReplyToCommand(client, "%d %d %.1f (%.1f %1.f %.1f)", i, cell.navArea, cell.flow, cell.center[0], cell.center[1], cell.center[2]);
+    ReplyToCommand(client, "valid ground %d", valid_ground(cell.center));
+    if (IsValidClient(client))
+    {
+        static float pos_down[3], pos_up[3];
+        pos_down = cell.center; pos_down[2] -= 1000.0;
+        pos_up = cell.center; pos_up[2] += 1000.0;
+        DrawBeam(client,pos_down,pos_up);
+    }
+    bool cell_behind = (i-1)>=0;
+    bool cell_ahead = (i+1)<g_GuideCells.Length;
+
+    if (cell_behind)
+    {
+        g_GuideCells.GetArray(i-1,cell_before,sizeof(Cell));
+        ReplyToCommand(client, "behind LOS %d (hit %d props %d flags %d name %s)",
+        twopos_traversable(cell_before.center,cell.center), g_iHitEntity, g_iHitSurfaceProps, g_iHitSurfaceFlags, g_sHitSurfaceName);
+    }
+    if (cell_ahead)
+    {
+        g_GuideCells.GetArray(i+1,cell_after,sizeof(Cell));
+        ReplyToCommand(client, "ahead LOS %d (hit %d props %d flags %d name %s)",
+        twopos_traversable(cell_after.center,cell.center), g_iHitEntity, g_iHitSurfaceProps, g_iHitSurfaceFlags, g_sHitSurfaceName);
+    }
+    if (cell_behind && cell_ahead)
+    {
+        ReplyToCommand(client, "ahead-behind LOS %d (hit %d props %d flags %d name %s) mid-ground %d",
+        twopos_traversable(cell_after.center,cell_before.center), g_iHitEntity, g_iHitSurfaceProps, g_iHitSurfaceFlags, g_sHitSurfaceName, midpoint_valid_ground(cell_after.center,cell_before.center));
     }
     return Plugin_Continue;
 }
