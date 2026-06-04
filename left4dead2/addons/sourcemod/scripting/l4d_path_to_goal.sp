@@ -17,7 +17,7 @@
 #include <l4d_path_to_goal>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
-#define PLUGIN_VERSION 			"1.31 2026-06-03"
+#define PLUGIN_VERSION 			"1.32 2026-06-04"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -92,8 +92,8 @@ public void OnPluginStart()
     nav_started = true;
     guide_prep = false;
     HookEvent("round_start_post_nav",     evtPostNav,        EventHookMode_PostNoCopy);
-    HookEvent("nav_blocked",              evtNavChange,      EventHookMode_PostNoCopy);
-    HookEvent("nav_generate",             evtNavChange,      EventHookMode_PostNoCopy);
+    HookEvent("nav_blocked",              evtNavBlocked,     EventHookMode_Post);
+    HookEvent("nav_generate",             evtNavGenerate,    EventHookMode_PostNoCopy);
 	HookEvent("finale_start", 			  evtFinaleStart,    EventHookMode_PostNoCopy);
 	HookEvent("finale_radio_start", 	  evtFinaleStart,    EventHookMode_PostNoCopy);
     HookEvent("finale_vehicle_ready", 	  evtFinaleVehicle,  EventHookMode_PostNoCopy);
@@ -156,8 +156,22 @@ void evtPostNav(Event event, const char[] name, bool dontBroadcast)
     NavChanged();
 }
 
-void evtNavChange(Event event, const char[] name, bool dontBroadcast)
+void evtNavBlocked(Event event, const char[] name, bool dontBroadcast)
 {
+    if (!enable || !nav_started || !map_started) return;
+    #if DEBUG>1
+    Address navArea = L4D_GetNavAreaByID(event.GetInt("area"));
+    bool blocked = event.GetBool("blocked");
+    LogMessage("nav_blocked escape %d blocked %d area %d", navArea_escape(navArea), blocked, navArea);
+    #endif
+    NavChanged();
+}
+
+void evtNavGenerate(Event event, const char[] name, bool dontBroadcast)
+{
+    #if DEBUG>1
+    LogMessage("nav_generate");
+    #endif
     NavChanged();
 }
 

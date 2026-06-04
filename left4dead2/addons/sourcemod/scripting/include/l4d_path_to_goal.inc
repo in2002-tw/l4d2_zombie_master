@@ -33,7 +33,7 @@ native void L4D_Path_To_Goal(int client = -1, float duration = 5.0, bool backwar
 #include <sourcemod>
 #include <left4dhooks>
 
-#define DEBUG 1 // 1 for basic debug, 2 for details, 3 for EXTREME amount of detail
+#define DEBUG 2 // 1 for basic debug, 2 for details, 3 for EXTREME amount of detail
 
 #define NAV_COOLDOWN 3.25 // GameTime cooldown after nav events fire before Guide_Prep can be requested
 
@@ -657,7 +657,8 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
             flow_curr = flow_best;
             static Cell cell;
             #if DEBUG>1
-            LogMessage("detour_join dir %d found %f (%d/4)", dir_curr, flow_curr, dir);
+            //LogMessage("detour_join dir %d found %f (%d/4)", dir_curr, flow_curr, dir);
+            LogMessage("detour_join dir found %f", flow_curr);
             #endif
             int i_found = g_GuideCells.FindValue(navArea_best,1);
             success = i_found>=0;
@@ -686,7 +687,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
                 break;
             }
         }
-        
+
         if (!found || success) break;
 
         if ( ((GetEngineTime()-t)*1000.0) >= DETOUR_BUDGET_MS )
@@ -2104,6 +2105,18 @@ stock bool entity_solid(int entity)
         case 2: return false; // COLLISION_GROUP_DEBRIS_TRIGGER
     }
     return true;
+}
+
+// Check if nav area is relevant to survivor escape path.
+stock bool navArea_escape(Address navArea)
+{
+    if (navArea == Address_Null) return false;
+    int spawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
+    if (spawnAttrs & NAV_SPAWN_ESCAPE_ROUTE) return true;
+    if (spawnAttrs & NAV_SPAWN_CHECKPOINT) return true;
+    if (spawnAttrs & NAV_SPAWN_PLAYER_START) return true;
+    if (spawnAttrs & NAV_SPAWN_RESCUE_VEHICLE) return true;
+    return false;
 }
 
 stock bool IsValidClient(int client, bool replaycheck = true)
