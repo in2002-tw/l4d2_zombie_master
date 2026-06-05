@@ -24,6 +24,19 @@
  */
 native void L4D_Path_To_Goal(int client = -1, float duration = 5.0, bool backward = false, bool join_client = true);
 
+public SharedPlugin __pl_l4d_path_to_goal =
+{
+    name     = "l4d_path_to_goal",
+    file     = "l4d_path_to_goal.smx",
+};
+
+#if !defined REQUIRE_PLUGIN
+public void __pl_l4d_path_to_goal_SetNTVOptional()
+{
+    MarkNativeAsOptional("L4D_Path_To_Goal");
+}
+#endif
+
 #if defined _NATIVE_ONLY
  #endinput
 #endif
@@ -32,10 +45,15 @@ native void L4D_Path_To_Goal(int client = -1, float duration = 5.0, bool backwar
 #pragma newdecls required
 #include <sourcemod>
 #include <left4dhooks>
+#include <dhooks>
+
+#define PLUGIN_NAME			    "l4d_path_to_goal"
+#define GAMEDATA_FILE           PLUGIN_NAME
+#define CONFIG_FILENAME         PLUGIN_NAME
 
 #define DEBUG 2 // 1 for basic debug, 2 for details, 3 for EXTREME amount of detail
 
-#define NAV_COOLDOWN 3.25 // GameTime cooldown after nav events fire before Guide_Prep can be requested
+#define NAV_COOLDOWN 3.1416 // GameTime cooldown after nav events fire before Guide_Prep can be requested
 
 #define TEAM_SPECTATOR		1
 #define TEAM_SURVIVOR		2
@@ -64,6 +82,9 @@ bool gamemode_guidable, guide_ready, guide_prep, map_started, nav_started, enabl
 int g_iLaser;
 float t_nav = -1.0; // nav event gametime
 Handle timer_nav;
+
+DynamicDetour g_hRecomputeFlowDetour;
+Handle g_hRecomputeFlow;
 
 bool finale_stitched; // finale guide was drawn
 bool finale_backwards; // rescue vehicle is not at max flow -> flow cannot be used for guiding
@@ -2130,3 +2151,45 @@ stock bool IsValidClient(int client, bool replaycheck = true)
 	return true;
 }
 
+void NavChanged()
+{
+    Guide_Cleanup();
+    t_nav = GetGameTime();
+    if (!enable || !gamemode_guidable || !map_started || !nav_started || timer_nav != null) return;
+    timer_nav = CreateTimer(NAV_COOLDOWN,Timer_CheckRequests,_,TIMER_FLAG_NO_MAPCHANGE);
+}
+
+void LoadSDK()
+{
+    Handle gd = LoadGameConfigFile(PLUGIN_NAME);
+    if (gd == null)
+    {
+        LogMessage("Missing gamedata file: %s.txt", PLUGIN_NAME);
+        delete gd;
+        return;
+    }
+
+    StartPrepSDKCall(SDKCall_Raw);
+    PrepSDKCall_SetFromConf(gd, SDKConf_Signature, "TerrorNavMesh::RecomputeFlowDistances");
+    g_hRecomputeFlow = EndPrepSDKCall();
+
+    g_hRecomputeFlowDetour = DHookCreateDetour(Address_Null, CallConv_THISCALL, ReturnType_Void, ThisPointer_Ignore);
+    if (g_hRecomputeFlowDetour == null)
+    {
+        LogMessage("RecomputeFlowDistances DHookCreateDetour failed");
+    }
+    if (!DHookSetFromConf(g_hRecomputeFlowDetour, gd, SDKConf_Signature, "TerrorNavMesh::RecomputeFlowDistances"))
+    {
+        LogMessage("RecomputeFlowDistances failed");
+        g_hRecomputeFlowDetour = null;
+    }
+    if (g_hRecomputeFlowDetour != null) g_hRecomputeFlowDetour.Enable(Hook_Post, Hook_RecomputeFlowPost);
+    delete gd;
+}
+
+public MRESReturn Hook_RecomputeFlowPost(Address pThis)
+{
+    LogMessage("RecomputeFlowDistances");
+    NavChanged();
+    return MRES_Ignored;
+}

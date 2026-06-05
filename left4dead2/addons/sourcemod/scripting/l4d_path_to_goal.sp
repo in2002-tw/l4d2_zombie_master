@@ -14,12 +14,10 @@
 
 #include <sourcemod>
 #include <left4dhooks>
+#include <dhooks>
 #include <l4d_path_to_goal>
 
-#define PLUGIN_NAME			    "l4d_path_to_goal"
 #define PLUGIN_VERSION 			"1.32 2026-06-04"
-#define GAMEDATA_FILE           PLUGIN_NAME
-#define CONFIG_FILENAME         PLUGIN_NAME
 
 // Fix detour join not working with finale cvar set to 0
 
@@ -45,6 +43,7 @@ public void OnPluginStart()
     RegConsoleCmd("ptg",                CmdRequestGuide, "Point where to go to progress in the map.");
 
     g_bL4D2 = GetEngineVersion()==Engine_Left4Dead2;
+    LoadSDK();
     
     RegAdminCmd("l4d_path_to_goal_recalculate", CmdRecalculate, ADMFLAG_ROOT,"Recalculate guide points.");
     RegAdminCmd("l4d_path_to_goal_print",       CmdPrint, ADMFLAG_ROOT,"Print g_GuideCells.");
@@ -53,6 +52,7 @@ public void OnPluginStart()
     #if DEBUG
     RegAdminCmd("l4d_path_to_goal_validate", CmdValidate, ADMFLAG_ROOT,"Print validation results for cell index if provided, or closest cell to player.");
     #endif
+    RegAdminCmd("l4d_path_to_goal_recomputeflow", CmdRecomputeFlow, ADMFLAG_ROOT,"Force TerrorNavMesh::RecomputeFlowDistances to fire.");
 
     g_hCvarEnable = CreateConVar("l4d_path_to_goal_enable", "1",
     "0=OFF, 1=ON.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
@@ -102,6 +102,7 @@ public void OnPluginStart()
     HookEvent("gauntlet_finale_start", 	  evtGauntletStart,  EventHookMode_PostNoCopy);
     HookEvent("finale_vehicle_incoming",  evtFinaleVehicle,  EventHookMode_PostNoCopy);
     }
+
 }
 
 void evtFinaleVehicle(Event event, const char[] name, bool dontBroadcast)
@@ -159,12 +160,15 @@ void evtPostNav(Event event, const char[] name, bool dontBroadcast)
 void evtNavBlocked(Event event, const char[] name, bool dontBroadcast)
 {
     if (!enable || !nav_started || !map_started) return;
-    #if DEBUG>1
     Address navArea = L4D_GetNavAreaByID(event.GetInt("area"));
-    bool blocked = event.GetBool("blocked");
-    LogMessage("nav_blocked escape %d blocked %d area %d", navArea_escape(navArea), blocked, navArea);
-    #endif
-    NavChanged();
+    if (navArea_escape(navArea))
+    {
+        #if DEBUG>1
+        bool blocked = event.GetBool("blocked");
+        LogMessage("nav_blocked %d %d", blocked, navArea);
+        #endif
+        //NavChanged();
+    }
 }
 
 void evtNavGenerate(Event event, const char[] name, bool dontBroadcast)
@@ -173,14 +177,6 @@ void evtNavGenerate(Event event, const char[] name, bool dontBroadcast)
     LogMessage("nav_generate");
     #endif
     NavChanged();
-}
-
-void NavChanged()
-{
-    Guide_Cleanup();
-    t_nav = GetGameTime();
-    if (!enable || !gamemode_guidable || !map_started || !nav_started || timer_nav != null) return;
-    timer_nav = CreateTimer(NAV_COOLDOWN,Timer_CheckRequests,_,TIMER_FLAG_NO_MAPCHANGE);
 }
 
 void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -344,6 +340,15 @@ Action CmdGround(int client, int args)
     static float pos[3];
     GetEntPropVector(client, Prop_Send, "m_vecOrigin", pos);
     ReplyToCommand(client,"Ground %d",valid_ground(pos));
+    return Plugin_Continue;
+}
+
+Action CmdRecomputeFlow(int client, int args)
+{
+    if (g_hRecomputeFlow == null) return Plugin_Continue;
+    Address ptr_navmesh = L4D_GetPointer(POINTER_NAVMESH);
+    if (ptr_navmesh == Address_Null) return Plugin_Continue;
+    SDKCall(g_hRecomputeFlow,ptr_navmesh);
     return Plugin_Continue;
 }
 
