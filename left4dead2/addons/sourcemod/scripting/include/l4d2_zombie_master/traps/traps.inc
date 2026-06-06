@@ -85,6 +85,7 @@ stock int Trap_TypeMax(int type)
 // True if the ZM may arm a trap of this type (cap, cooldown, bank gate).
 stock bool Trap_CanAfford(int type, bool hint)
 {
+    if (!g_hTraps.BoolValue) return false;
     int cost = Trap_TypeCost(type);
     if (cost < 0)
     {

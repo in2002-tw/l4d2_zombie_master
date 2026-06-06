@@ -28,11 +28,10 @@
 #define ZM_MENU_BOSS 5
 #define ZM_MENU_CLEANUP 6
 #define ZM_MENU_OTHER 7
-#define ZM_MENU_AUTOCOMMON 8
-#define ZM_MENU_ITEMS 9
-#define ZM_MENU_TRAPS 10
-#define ZM_MENU_CONTEXT 11
-#define ZM_MENU_MAX 12
+#define ZM_MENU_ITEMS 8
+#define ZM_MENU_TRAPS 9
+#define ZM_MENU_CONTEXT 10
+#define ZM_MENU_MAX 11
 
 // --- Trap system ---
 #define ZM_TRAP_MAX 16
@@ -513,6 +512,8 @@ int autocommon_num = 10;
 float t_last_autocommon = 0.0;
 float autocommon_updaterate = 2.0;
 
+int uncommon_num = 1;
+
 bool holdfinale = true; // hold finale stages until ZM runs out of resources. if not let stages change ASAP
 
 int g_ExplosionSprite = -1;
@@ -544,7 +545,7 @@ ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer,
        g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hSpitterCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait, g_hPanicRateMultiplier,
        g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons, g_hAllowFreeze,
        //g_hGridSearchRadius,
-       g_hGrid, g_hSpawnerMode, g_hPanicRefill, g_hCursed, g_hGridCooldown;
+       g_hGrid, g_hSpawnerMode, g_hPanicRefill, g_hCursed, g_hGridCooldown, g_hTraps;
 ConVar g_hCostTrapDoor, g_hCostTrapCar, g_hMaxTrapDoor, g_hMaxTrapCar, g_hTrapCooldown, g_hTrapDoorBurst;
 ConVar g_hCostTrapTornado, g_hMaxTrapTornado, g_hTornadoDuration, g_hTornadoRadius, g_hTornadoHeight, g_hTornadoGrace;
 
@@ -661,7 +662,7 @@ TopMenu hAdminMenu = null;
 TopMenuObject obj_zmcommands, zm_enable, zm_gamemode_menu, zm_kick_topmenu, zm_randomizer, zm_sayhorde, zm_help, zm_random;
 
 int zm_menu_state = ZM_MENU_CLOSED;
-Menu menu_main,menu_common,menu_uncommon,menu_special,menu_boss,menu_cleanup,menu_other,menu_autocommon,menu_quit,menu_items,menu_traps;
+Menu menu_main,menu_common,menu_uncommon,menu_special,menu_boss,menu_cleanup,menu_other,menu_quit,menu_items,menu_traps;
 
 // Define groups with different spawn rules.
 // Commons cannot spawn in areas marked by IsBlocked
@@ -686,7 +687,7 @@ int get_spawner_zombieclass()
    	int zClass = g_iLastZombieClass;
    	if (zClass<0)
    	{
-       	if (zm_menu_state==ZM_MENU_COMMON || zm_menu_state==ZM_MENU_UNCOMMON || zm_menu_state==ZM_MENU_AUTOCOMMON)
+       	if (zm_menu_state==ZM_MENU_COMMON || zm_menu_state==ZM_MENU_UNCOMMON)
            	zClass = ZOMBIECLASS_COMMON;
         else
             zClass = ZOMBIECLASS_BOOMER;
@@ -2782,6 +2783,8 @@ Action JoinZM(int client, int args)
     
     remove_all_ZM_glows();
     
+    autocommon_uncommons = false;
+    uncommon_num = 1;
     ZMPrefs_Apply(client);
     g_iLastZombieClass = -1;
     

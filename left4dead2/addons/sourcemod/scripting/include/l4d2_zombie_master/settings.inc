@@ -247,14 +247,21 @@ void next_autocommon_setting()
 {
     autocommon_setting += 1;
     if (autocommon_setting>AUTOCOMMON_ALWAYS) autocommon_setting = 0;
-    create_autocommon_menu();
+    create_common_menu();
+}
+
+void next_uncommon_num()
+{
+    uncommon_num += 1;
+    if (uncommon_num>3) uncommon_num = 1;
+    create_uncommon_menu();
 }
 
 void next_autocommon_num()
 {
     if (autocommon_num>10) autocommon_num -= 10;
     else autocommon_num = 30;
-    create_autocommon_menu();
+    create_common_menu();
 }
 
 Action zm_autocommon_mode(int client, int args)
@@ -268,7 +275,7 @@ Action zm_autocommon_mode(int client, int args)
         if (strcmp(type,"always",false)==0) autocommon_setting = AUTOCOMMON_ALWAYS;
         else if (strcmp(type,"panic",false)==0) autocommon_setting = AUTOCOMMON_PANIC;
         else autocommon_setting = AUTOCOMMON_OFF;
-        create_autocommon_menu();
+        create_common_menu();
     }
     else next_autocommon_setting();
     switch (autocommon_setting)
@@ -291,7 +298,7 @@ Action zm_autocommon_max(int client, int args)
         if (autocommon_num!=new_num)
         {
             autocommon_num = new_num;
-            create_autocommon_menu();
+            create_common_menu();
         }
    	}
    	else next_autocommon_num();

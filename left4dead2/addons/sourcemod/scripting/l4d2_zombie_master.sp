@@ -34,7 +34,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.13 2026-05-31"
+#define PLUGIN_VERSION 			"0.9.14 2026-06-06"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -269,6 +269,9 @@ public void OnPluginStart()
 
     g_hCostTrapDoor = CreateConVar("zm_cost_trap_door", "100", "ZM cost to arm a panic door. -1 to disable.", FCVAR_PROTECTED, true, -1.0, true, 10000.0);
     g_hCostTrapDoor.AddChangeHook(ConVarChanged_Cvars_ZMenu);
+
+    g_hTraps = CreateConVar("zm_traps", "0", "Enable traps for Zombie Master.", FCVAR_PROTECTED, true, 0.0, true, 1.0);
+    g_hTraps.AddChangeHook(ConVarChanged_Cvars_ZMenu);
 
     g_hCostTrapCar = CreateConVar("zm_cost_trap_car", "150", "ZM cost to arm an alarm car. -1 to disable.", FCVAR_PROTECTED, true, -1.0, true, 10000.0);
     g_hCostTrapCar.AddChangeHook(ConVarChanged_Cvars_ZMenu);
