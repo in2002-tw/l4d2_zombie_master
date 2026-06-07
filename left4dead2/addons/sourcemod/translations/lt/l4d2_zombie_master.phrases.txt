@@ -518,23 +518,23 @@
 	{
 		"lt"			"AutoZombiai"
 	}
-	
-	"AutoCommon ALWAYS"
+
+	"Mode"
 	{
-		"lt"			"Režimas: VISADA"
+		"lt"			"Režimas"
 	}
 	
-	"AutoCommon PANIC"
+	"ALWAYS"
 	{
-		"lt"			"Režimas: PANIKA"
+		"lt"			"VISADA"
 	}
 	
-	"AutoCommon OFF"
+	"OFF"
 	{
-		"lt"			"Režimas: IŠJUNGTA"
+		"lt"			"IŠJUNGTA"
 	}
 	
-	"AutoCommon Max"
+	"Max"
 	{
 		"#format"		"{1:d}"
 		"lt"			"Max: {1}"
@@ -543,12 +543,12 @@
 	
 	"Freeze Specials"
 	{
-		"lt"			"Užšaldyti Specialiuosius"
+		"lt"			"Užšaldyti"
 	}
 	
 	"Unfreeze Specials"
 	{
-		"lt"			"Atšaldyti Specialiuosius"
+		"lt"			"Atšaldyti"
 	}
 
 		"Traps"

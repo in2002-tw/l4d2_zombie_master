@@ -517,23 +517,23 @@
 	{
 		"en"			"AutoCommon"
 	}
-	
-	"AutoCommon ALWAYS"
+
+	"Mode"
 	{
-		"en"			"Mode: ALWAYS"
+		"en"			"Mode"
 	}
 	
-	"AutoCommon PANIC"
+	"ALWAYS"
 	{
-		"en"			"Mode: PANIC"
+		"en"			"ALWAYS"
 	}
 	
-	"AutoCommon OFF"
+	"OFF"
 	{
-		"en"			"Mode: OFF"
+		"en"			"OFF"
 	}
 	
-	"AutoCommon Max"
+	"Max"
 	{
 		"#format"		"{1:d}"
 		"en"			"Max: {1}"

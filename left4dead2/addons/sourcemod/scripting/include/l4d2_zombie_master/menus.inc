@@ -241,28 +241,26 @@ void create_common_menu()
     else buffer = "-";
     menu_common.AddItem("item_4",buffer);
     
-    if (ZM_finale_announced || g_iPanicCost<0 || L4D_IsSurvivalMode()) buffer = "-";
-    else Format(buffer,sizeof(buffer),"%T %d", "PANIC", zm_language, g_iPanicCost);
+    if (ZM_finale_announced || g_iPanicCost<0 || L4D_IsSurvivalMode()) Format(buffer,sizeof(buffer),"-\n%t", "AutoCommon", zm_language);
+    else Format(buffer,sizeof(buffer),"%t %d\n%t", "PANIC", g_iPanicCost, "AutoCommon", zm_language);
     menu_common.AddItem("item_5",buffer);
 
     switch (autocommon_setting)
     {
-        case AUTOCOMMON_ALWAYS: Format(buffer, sizeof(buffer), "%T", "AutoCommon ALWAYS", zm_language);
-        case AUTOCOMMON_PANIC: Format(buffer, sizeof(buffer), "%T", "AutoCommon PANIC", zm_language);
-        default: Format(buffer, sizeof(buffer), "%T", "AutoCommon OFF", zm_language);
+        case AUTOCOMMON_ALWAYS: Format(buffer, sizeof(buffer), "%t: %t", "Mode", "ALWAYS", zm_language);
+        case AUTOCOMMON_PANIC: Format(buffer, sizeof(buffer), "%t: %t", "Mode", "PANIC", zm_language);
+        default: Format(buffer, sizeof(buffer), "%t: %t", "Mode", "OFF", zm_language);
     }
     menu_common.AddItem("item_6",buffer);
     
-    Format(buffer, sizeof(buffer), "%T", "AutoCommon Max", zm_language, autocommon_num);
+    Format(buffer, sizeof(buffer), "%T", "Max", zm_language, autocommon_num);
     menu_common.AddItem("item_7",buffer);
     
-    if (autocommon_uncommons) Format(buffer, sizeof(buffer), "%T", "Uncommon", zm_language);
-    else Format(buffer, sizeof(buffer), "%T", "Common", zm_language);
+    if (autocommon_uncommons) Format(buffer, sizeof(buffer), "%t: %t\n0. <-- (R)", "Mode", "Uncommon", zm_language);
+    else Format(buffer, sizeof(buffer), "%t: %t\n0. <-- (R)", "Mode", "Common", zm_language);
     menu_common.AddItem("item_8",buffer);
 
-    menu_common.AddItem("item_9","-");
-
-    menu_common.AddItem("item_10","<-- (R)");
+    //menu_common.AddItem("item_10","<-- (R)");
 	
 	if (zm_menu_state == ZM_MENU_COMMON && IsValidClientZM()) open_menu(zm_client,ZM_MENU_COMMON);
 }
@@ -327,7 +325,8 @@ void create_uncommon_menu()
 	Format(buffer, sizeof(buffer), "%T", "Uncommon", zm_language);
 	menu_uncommon.SetTitle(buffer);
     
-    Format(buffer,sizeof(buffer),"%s %d", "Random", g_iCostUncommon);
+    if (g_iCostUncommon>=0) Format(buffer,sizeof(buffer),"%s %d", "Random", g_iCostUncommon);
+    else buffer = "-";
     AddMenuItem(menu_uncommon, "item_1", buffer);
 
     if (valid_uncommon(g_sForceCommon) && strcmp(g_sForceCommon,"riot")!=0) buffer = "-";
@@ -361,12 +360,11 @@ void create_uncommon_menu()
         else Format(buffer,sizeof(buffer),"%T %d", "Angry", zm_language, 2*g_iCostUncommon);
     }
     else buffer = "-";
-    AddMenuItem(menu_uncommon, "item_6", buffer);
-
-    Format(buffer,sizeof(buffer),"x%d", uncommon_num);
     AddMenuItem(menu_uncommon, "item_7", buffer);
 
-    AddMenuItem(menu_uncommon, "item_8", "-");
+    Format(buffer,sizeof(buffer),"x%d", uncommon_num);
+    AddMenuItem(menu_uncommon, "item_8", buffer);
+
     AddMenuItem(menu_uncommon, "item_9", "-");
     
     AddMenuItem(menu_uncommon, "item_10", "<-- (R)");

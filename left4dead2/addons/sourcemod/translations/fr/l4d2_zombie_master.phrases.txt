@@ -1,3 +1,4 @@
+// Credit: Raykeno
 "Phrases"
 {
 	
@@ -517,23 +518,23 @@
 	{
 		"fr"			"AutoCommon"
 	}
-	
-	"AutoCommon ALWAYS"
+
+	"Mode"
 	{
-		"fr"			"Mode: ALWAYS"
+		"fr"			"Mode"
 	}
 	
-	"AutoCommon PANIC"
+	"ALWAYS"
 	{
-		"fr"			"Mode: PANIC"
+		"fr"			"ALWAYS"
 	}
 	
-	"AutoCommon OFF"
+	"OFF"
 	{
-		"fr"			"Mode: OFF"
+		"fr"			"OFF"
 	}
 	
-	"AutoCommon Max"
+	"Max"
 	{
 		"#format"		"{1:d}"
 		"fr"			"Max: {1}"

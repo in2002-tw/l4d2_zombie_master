@@ -517,22 +517,23 @@
 		"zho"			"自動生成小殭屍"
 	}
 	
-	"AutoCommon ALWAYS"
+	"Mode"
 	{
-		"zho"			"模式：總是開啟"
+		"zho"			"模式"
+	}
+
+
+	"ALWAYS"
+	{
+		"zho"			"總是開啟"
 	}
 	
-	"AutoCommon PANIC"
+	"OFF"
 	{
-		"zho"			"模式：僅限暴走"
+		"zho"			"關閉"
 	}
 	
-	"AutoCommon OFF"
-	{
-		"zho"			"模式：關閉"
-	}
-	
-	"AutoCommon Max"
+	"Max"
 	{
 		"#format"		"{1:d}"
 		"zho"			"最大數量：{1}"
