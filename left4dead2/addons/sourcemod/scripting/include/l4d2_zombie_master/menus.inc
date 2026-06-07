@@ -927,7 +927,7 @@ int quit_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
 void create_items_menu()
 {
     delete menu_items;
-    LogMessage("create_items_menu");
+    //LogMessage("create_items_menu");
     count_survivor_items();
     menu_items = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),items_menu_Handler);
     menu_items.SetTitle("Survivors: %d", g_iAliveSurvivors);
