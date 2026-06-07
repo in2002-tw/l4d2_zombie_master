@@ -51,7 +51,7 @@ public void __pl_l4d_path_to_goal_SetNTVOptional()
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
-#define DEBUG 2 // 1 for basic debug, 2 for details, 3 for EXTREME amount of detail
+#define DEBUG 0 // 1 for basic debug, 2 for details, 3 for EXTREME amount of detail
 
 #define NAV_COOLDOWN 3.1416 // GameTime cooldown after nav events fire before Guide_Prep can be requested
 
@@ -85,6 +85,7 @@ Handle timer_nav;
 
 DynamicDetour g_hRecomputeFlowDetour;
 Handle g_hRecomputeFlow;
+bool g_bFlowRecomputeHooked;
 
 bool finale_stitched; // finale guide was drawn
 bool finale_backwards; // rescue vehicle is not at max flow -> flow cannot be used for guiding
@@ -101,8 +102,10 @@ int color_forward[4] = {25,255,25,255};
 int color_backward[4] = {255,25,25,255};
 
 bool g_bHitLadder = false; // kill me
+#if DEBUG
 int g_iHitEntity, g_iHitSurfaceProps, g_iHitSurfaceFlags;
 char g_sHitSurfaceName[64];
+#endif
 
 bool is_prep_cooldown() // Prevent Guide_Prep() from firing if navmesh just changed
 {
@@ -1924,13 +1927,14 @@ int SortFlow(int index1, int index2, Handle array, Handle hndl)
 
 stock float get_navFlow(Address navArea)
 {
-    if (g_bL4D2) return L4D2Direct_GetTerrorNavAreaFlow(navArea);
-    else
-    {
-        static float pos[3];
-        L4D_GetNavAreaCenter(navArea,pos);
-        return L4D_GetFlowFromPoint(pos);
-    }
+    return L4D2Direct_GetTerrorNavAreaFlow(navArea);
+    //if (g_bL4D2) return L4D2Direct_GetTerrorNavAreaFlow(navArea);
+    //else
+    //{
+    //    static float pos[3];
+    //    L4D_GetNavAreaCenter(navArea,pos);
+    //    return L4D_GetFlowFromPoint(pos);
+    //}
 }
 
 // Test if it's possible to travel to cell position from given position
@@ -2151,16 +2155,23 @@ stock bool IsValidClient(int client, bool replaycheck = true)
 	return true;
 }
 
-void NavChanged()
+// Acknowledge navmesh change. Ptg must be recalculated after NAV_COOLDOWN. If recompute, recalculate without cooldown.
+stock void NavChanged(bool recompute = false)
 {
     Guide_Cleanup();
     t_nav = GetGameTime();
+    if (recompute) t_nav = t_nav - NAV_COOLDOWN + 0.1;
     if (!enable || !gamemode_guidable || !map_started || !nav_started || timer_nav != null) return;
-    timer_nav = CreateTimer(NAV_COOLDOWN,Timer_CheckRequests,_,TIMER_FLAG_NO_MAPCHANGE);
+    timer_nav = CreateTimer( (recompute) ? 0.1 : NAV_COOLDOWN , Timer_CheckRequests, _, TIMER_FLAG_NO_MAPCHANGE );
 }
+
+///////////// SDK
 
 void LoadSDK()
 {
+    g_bFlowRecomputeHooked = false;
+    g_hRecomputeFlow = null;
+    g_hRecomputeFlowDetour = null;
     Handle gd = LoadGameConfigFile(PLUGIN_NAME);
     if (gd == null)
     {
@@ -2170,8 +2181,15 @@ void LoadSDK()
     }
 
     StartPrepSDKCall(SDKCall_Raw);
-    PrepSDKCall_SetFromConf(gd, SDKConf_Signature, "TerrorNavMesh::RecomputeFlowDistances");
+    if (!PrepSDKCall_SetFromConf(gd, SDKConf_Signature, "TerrorNavMesh::RecomputeFlowDistances"))
+    {
+        LogMessage("RecomputeFlowDistances PrepSDKCall_SetFromConf failed");
+    }
     g_hRecomputeFlow = EndPrepSDKCall();
+    if (g_hRecomputeFlow == null)
+    {
+        LogMessage("RecomputeFlowDistances SDKCall setup failed");
+    }
 
     g_hRecomputeFlowDetour = DHookCreateDetour(Address_Null, CallConv_THISCALL, ReturnType_Void, ThisPointer_Ignore);
     if (g_hRecomputeFlowDetour == null)
@@ -2183,13 +2201,18 @@ void LoadSDK()
         LogMessage("RecomputeFlowDistances failed");
         g_hRecomputeFlowDetour = null;
     }
-    if (g_hRecomputeFlowDetour != null) g_hRecomputeFlowDetour.Enable(Hook_Post, Hook_RecomputeFlowPost);
+    if (g_hRecomputeFlowDetour != null)
+    {
+        g_bFlowRecomputeHooked = g_hRecomputeFlowDetour.Enable(Hook_Post, Hook_RecomputeFlowPost);
+    }
     delete gd;
 }
 
 public MRESReturn Hook_RecomputeFlowPost(Address pThis)
 {
+    #if DEBUG>1
     LogMessage("RecomputeFlowDistances");
-    NavChanged();
+    #endif
+    NavChanged(true);
     return MRES_Ignored;
 }

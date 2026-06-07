@@ -161,14 +161,12 @@ void evtNavBlocked(Event event, const char[] name, bool dontBroadcast)
 {
     if (!enable || !nav_started || !map_started) return;
     Address navArea = L4D_GetNavAreaByID(event.GetInt("area"));
-    if (navArea_escape(navArea))
-    {
-        #if DEBUG>1
-        bool blocked = event.GetBool("blocked");
-        LogMessage("nav_blocked %d %d", blocked, navArea);
-        #endif
-        //NavChanged();
-    }
+    if (navArea == Address_Null) return;
+    #if DEBUG>1
+    bool blocked = event.GetBool("blocked");
+    LogMessage("nav_blocked escape %d blocked %d area %d", navArea_escape(navArea), blocked, navArea);
+    #endif
+    if (!g_bFlowRecomputeHooked) NavChanged();
 }
 
 void evtNavGenerate(Event event, const char[] name, bool dontBroadcast)
@@ -276,6 +274,7 @@ Action CmdPrint(int client, int args)
     return Plugin_Continue;
 }
 
+#if DEBUG
 Action CmdValidate(int client, int args)
 {
     if (!guide_ready || g_GuideCells == null || g_GuideCells.Length<1) return Plugin_Continue;
@@ -326,10 +325,10 @@ Action CmdValidate(int client, int args)
     }
     return Plugin_Continue;
 }
+#endif
 
 Action CmdRescue(int client, int args)
 {
-    //LogMessage("CmdRescue");
     L4D2_SendInRescueVehicle();
     return Plugin_Continue;
 }
