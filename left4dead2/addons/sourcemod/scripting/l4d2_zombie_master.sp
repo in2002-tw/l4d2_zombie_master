@@ -560,7 +560,8 @@ void IsAllowed()
         
         if (!g_bNavReady)
     	{
-        	g_hStartAreaList = new ArrayList(sizeof(PreCalcNav));
+        	delete g_hStartAreaList;
+            g_hStartAreaList = new ArrayList(sizeof(PreCalcNav));
         	g_bNavReady = false;
         	CreateTimer(1.0, Timer_StartPrecomputeNav, _, TIMER_FLAG_NO_MAPCHANGE);
     	}
@@ -1804,7 +1805,8 @@ public void OnMapStart()
     	if (IsValidClientZM()) QuitZM_Force(zm_client);
     	if (!g_bNavReady)
     	{
-        	g_hStartAreaList = new ArrayList(sizeof(PreCalcNav));
+        	delete g_hStartAreaList;
+            g_hStartAreaList = new ArrayList(sizeof(PreCalcNav));
         	g_bNavReady = false;
         	CreateTimer(1.0, Timer_StartPrecomputeNav, _, TIMER_FLAG_NO_MAPCHANGE);
     	}

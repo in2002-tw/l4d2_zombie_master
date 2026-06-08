@@ -454,7 +454,7 @@ void tp_survivor_start(int client, bool notify = false)
    {
        int random = 0;
        if (g_hStartAreaList.Length>1) random = GetRandomInt(0,g_hStartAreaList.Length-1);
-       PreCalcNav cell;
+       static PreCalcNav cell;
        g_hStartAreaList.GetArray(random, cell);
        temp_navArea = cell.navArea;
        if (navArea_validStart(temp_navArea))
@@ -573,7 +573,6 @@ Action Timer_StartPrecomputeNav(Handle timer)
 {
 	if (DEBUG) LogMessage("[zm] Starting navmesh precomputation...");
 	float startTime = GetEngineTime(); // for profiling
-
 	// Get all nav areas
 	ArrayList allAreas = new ArrayList();
 	L4D_GetAllNavAreas(allAreas);
@@ -581,8 +580,12 @@ Action Timer_StartPrecomputeNav(Handle timer)
     g_bNavReady = false;
     
 	LogMessage("[zm] Found %d nav areas to process", totalAreas);
-    if (totalAreas<1) return Plugin_Stop;
-    
+    if (totalAreas<1)
+    {
+        delete allAreas;
+        return Plugin_Stop;
+    }
+
     Address temp_navArea;
     float vector_start[3];
     bool start_known = false;
@@ -608,64 +611,27 @@ Action Timer_StartPrecomputeNav(Handle timer)
     }
     
     
-    int navSpawnAttributes;
-    int total_stored_obscured = 0;
     int total_stored_start = 0;
-    bool valid_start = false;
-    bool valid_obscured = false;
     PreCalcNav cell;
-    float pos[3];
-    float vSize[3];
+    float pos[3], vSize[3];
 	for (int i = 0; i < totalAreas; i++)
 	{
 		Address navArea = allAreas.Get(i);
-		if (!navArea) continue;
-		L4D_GetNavAreaSize(navArea, vSize);
+		if (navArea == Address_Null) continue;
+		if (!navArea_validStart(navArea)) continue;
+        L4D_GetNavAreaSize(navArea, vSize);
         if (vSize[0]<=50.0 && vSize[1]<=50.0) continue;
 		L4D_FindRandomSpot(navArea,pos);
-		valid_start = false;
-		valid_obscured = true;
-		navSpawnAttributes = L4D_GetNavArea_SpawnAttributes(navArea);
-		
-		valid_start = navArea_validStart(navArea);
-		if (valid_start) valid_obscured = false;
-		
-		// asdf future: check back and forth distance from info survivor position, if negative this is not a valid position
-		
-		//valid_start = (navSpawnAttributes & NAV_SPAWN_PLAYER_START) || (navSpawnAttributes & NAV_SPAWN_CHECKPOINT && navSpawnAttributes & ~NAV_SPAWN_FINALE && navSpawnAttributes & ~NAV_SPAWN_OBSCURED);
-		if (valid_start)
-		{
-    	//	float flow = L4D_GetFlowFromPoint(pos);
-    	//	if (flow>0.0 || flow<(-9000.0)) valid_start = false;
-    		
-    		float distance = 0.0;
-    		if (valid_start && start_known) distance = L4D2_NavAreaTravelDistance(vector_start,pos,false);
-    		//bool isconnected = L4D_NavArea_IsConnected(navArea,temp_navArea,4);
-    		//bool isconnected = L4D2_IsReachable(1,pos);
-    		
-    		//if (valid_start) LogMessage("[zm] start nav size: %f %f %f, flow: %f, start dist: %f", vSize[0], vSize[1], vSize[2], flow, distance);
-    		if (distance>500.0 || distance<0.0) valid_start = false;
-    		
-		}
-		
-		if (!valid_start && valid_obscured) valid_obscured = ( (navSpawnAttributes & NAV_SPAWN_OBSCURED) || (navSpawnAttributes & NAV_SPAWN_IGNORE_VISIBILITY) );
-		
-		if (valid_start || valid_obscured)
-		{
-    		L4D_FindRandomSpot(navArea,pos);
-    		cell.position[0] = pos[0];
-			cell.position[1] = pos[1];
-			cell.position[2] = pos[2];
-			cell.navArea = navArea;
-		}
-		else continue;
-		
-		if (valid_start)
-		{
-    		g_hStartAreaList.PushArray(cell);
-    		total_stored_start += 1;
-		}
-		else if (valid_obscured) total_stored_obscured += 1;
+        float distance = 0.0;
+        if (start_known) distance = GetVectorDistance(vector_start,pos);
+        if (distance>500.0) continue;
+        L4D_GetNavAreaCenter(navArea,pos);
+        cell.position[0] = pos[0];
+        cell.position[1] = pos[1];
+        cell.position[2] = pos[2];
+        cell.navArea = navArea;
+        g_hStartAreaList.PushArray(cell);
+        total_stored_start += 1;
 	}
 
 	delete allAreas;
@@ -674,7 +640,6 @@ Action Timer_StartPrecomputeNav(Handle timer)
 
 	float duration = GetEngineTime() - startTime;
 	LogMessage("[zm] Navmesh precomputation took %f seconds", duration);
-	LogMessage("[zm] Total obscured navmeshes: %d", total_stored_obscured);
 	LogMessage("[zm] Total start area navmeshes: %d", total_stored_start);
 
 	return Plugin_Stop;
@@ -713,16 +678,14 @@ Action SwapSound(int clients[MAXPLAYERS], int &numClients, char sample[PLATFORM_
 // Check if navArea is a valid survivor starting area
 stock bool navArea_validStart(Address navArea)
 {
-    if (!navArea) return false;
-    float pos[3];
-    L4D_FindRandomSpot(navArea,pos);
-    if (L4D_IsPositionInFirstCheckpoint(pos)) return true;
+    if (navArea == Address_Null) return false;
+    static float pos[3];
     L4D_GetNavAreaCenter(navArea,pos);
     if (L4D_IsPositionInFirstCheckpoint(pos)) return true;
     
     int navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
     if ( (navSpawnAttrs & NAV_SPAWN_OBSCURED) || (navSpawnAttrs & NAV_SPAWN_FINALE) ) return false;
-    if (!((navSpawnAttrs & NAV_SPAWN_PLAYER_START) || (navSpawnAttrs & NAV_SPAWN_CHECKPOINT))) return false;
+    if ( !( (navSpawnAttrs & NAV_SPAWN_PLAYER_START) || (navSpawnAttrs & NAV_SPAWN_CHECKPOINT) ) ) return false;
     float flow = L4D_GetFlowFromPoint(pos);
     if (flow<=(-9000.0)) return false;
     float max_flow = L4D2Direct_GetMapMaxFlowDistance();

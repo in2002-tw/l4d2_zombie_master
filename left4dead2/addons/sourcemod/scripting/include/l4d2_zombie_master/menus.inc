@@ -362,12 +362,12 @@ void create_uncommon_menu()
     else buffer = "-";
     AddMenuItem(menu_uncommon, "item_7", buffer);
 
-    Format(buffer,sizeof(buffer),"x%d", uncommon_num);
+    Format(buffer,sizeof(buffer),"x%d\n0. <-- (R)", uncommon_num);
     AddMenuItem(menu_uncommon, "item_8", buffer);
 
-    AddMenuItem(menu_uncommon, "item_9", "-");
+    //AddMenuItem(menu_uncommon, "item_9", "-\n0. <-- (R)");
     
-    AddMenuItem(menu_uncommon, "item_10", "<-- (R)");
+    //AddMenuItem(menu_uncommon, "item_10", "<-- (R)");
 }
 int uncommon_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
 {
@@ -486,9 +486,9 @@ void create_special_menu()
     Format(buffer, sizeof(buffer), "%T", "Control (USE)", zm_language);
     AddMenuItem(menu_special, "item_8", buffer);
     
-    AddMenuItem(menu_special, "item_9", "-");
+    AddMenuItem(menu_special, "item_9", "-\n0. <-- (R)");
 
-    AddMenuItem(menu_special, "item_10", "<-- (R)");
+    //AddMenuItem(menu_special, "item_10", "<-- (R)");
 	
 	if (zm_menu_state == ZM_MENU_SPECIAL && IsValidClientZM()) open_menu(zm_client,ZM_MENU_SPECIAL);
 }
@@ -570,17 +570,17 @@ void create_boss_menu()
     else Format(buffer, sizeof(buffer), "%T %d", "Jimmy Gibbs Jr", zm_language,g_iCostUncommon);
     AddMenuItem(menu_boss, "item_4", buffer);
     
-    if (valid_uncommon(g_sForceCommon) && strcmp(g_sForceCommon,"fallen")!=0) buffer = "-";
-    else if (fallen_spawned || g_iCostUncommon<0 || max_zombie_arr[ZOMBIECLASS_COMMON]<=0) buffer = "-";
-    else Format(buffer, sizeof(buffer), "%T %d", "Fallen Survivor", zm_language,g_iCostUncommon);
+    if (valid_uncommon(g_sForceCommon) && strcmp(g_sForceCommon,"fallen")!=0) buffer = "-\n0. <-- (R)";
+    else if (fallen_spawned || g_iCostUncommon<0 || max_zombie_arr[ZOMBIECLASS_COMMON]<=0) buffer = "-\n0. <-- (R)";
+    else Format(buffer, sizeof(buffer), "%T %d\n0. <-- (R)", "Fallen Survivor", zm_language,g_iCostUncommon);
     AddMenuItem(menu_boss, "item_5", buffer);
     
-    AddMenuItem(menu_boss, "item_6", "-");
-    AddMenuItem(menu_boss, "item_7", "-");
-    AddMenuItem(menu_boss, "item_8", "-");
-    AddMenuItem(menu_boss, "item_9", "-");
+    //AddMenuItem(menu_boss, "item_6", "-");
+    //AddMenuItem(menu_boss, "item_7", "-");
+    //AddMenuItem(menu_boss, "item_8", "-");
+    //AddMenuItem(menu_boss, "item_9", "-");
 
-    AddMenuItem(menu_boss, "item_10", "<-- (R)");
+    //AddMenuItem(menu_boss, "item_10", "<-- (R)");
 	
 	if (zm_menu_state == ZM_MENU_BOSS && IsValidClientZM()) open_menu(zm_client,ZM_MENU_BOSS);
 }
@@ -645,18 +645,18 @@ void create_traps_menu()
 	AddMenuItem(menu_traps, "item_2", buffer);
 
 	if (g_iCostTrapTornado>=0 && g_iMaxTrapTornado>0)
-		Format(buffer, sizeof(buffer), "%T %d %d/%d", "Trap Tornado", zm_language, g_iCostTrapTornado, Trap_CountActive(ZM_TRAP_TYPE_TORNADO), g_iMaxTrapTornado);
-	else buffer = "-";
+		Format(buffer, sizeof(buffer), "%T %d %d/%d\n0. <-- (R)", "Trap Tornado", zm_language, g_iCostTrapTornado, Trap_CountActive(ZM_TRAP_TYPE_TORNADO), g_iMaxTrapTornado);
+	else buffer = "-\n0. <-- (R)";
 	AddMenuItem(menu_traps, "item_3", buffer);
 	
-    AddMenuItem(menu_traps, "item_4", "-");
-	AddMenuItem(menu_traps, "item_5", "-");
-	AddMenuItem(menu_traps, "item_6", "-");
-    AddMenuItem(menu_traps, "item_7", "-");
-    AddMenuItem(menu_traps, "item_8", "-");
-    AddMenuItem(menu_traps, "item_9", "-");
+    //AddMenuItem(menu_traps, "item_4", "-");
+	//AddMenuItem(menu_traps, "item_5", "-");
+	//AddMenuItem(menu_traps, "item_6", "-");
+    //AddMenuItem(menu_traps, "item_7", "-");
+    //AddMenuItem(menu_traps, "item_8", "-");
+    //AddMenuItem(menu_traps, "item_9", "-");
 	
-    AddMenuItem(menu_traps, "item_10", "<-- (R)");
+    //AddMenuItem(menu_traps, "item_10", "<-- (R)");
 
 	if (zm_menu_state == ZM_MENU_TRAPS && IsValidClientZM()) open_menu(zm_client,ZM_MENU_TRAPS);
 }
@@ -717,15 +717,15 @@ void create_cleanup_menu()
     Format(buffer, sizeof(buffer), "%T", "Delete Witches", zm_language);
     AddMenuItem(menu_cleanup, "item_4", buffer);
     
-    Format(buffer, sizeof(buffer), "%T", "Delete ALL", zm_language);
+    Format(buffer, sizeof(buffer), "%T\n0. <-- (R)", "Delete ALL", zm_language);
     AddMenuItem(menu_cleanup, "item_5", buffer);
     
-    AddMenuItem(menu_cleanup, "item_6", "-");
-    AddMenuItem(menu_cleanup, "item_7", "-");
-    AddMenuItem(menu_cleanup, "item_8", "-");
-    AddMenuItem(menu_cleanup, "item_9", "-");
+    //AddMenuItem(menu_cleanup, "item_6", "-");
+    //AddMenuItem(menu_cleanup, "item_7", "-");
+    //AddMenuItem(menu_cleanup, "item_8", "-");
+    //AddMenuItem(menu_cleanup, "item_9", "-");
     
-    AddMenuItem(menu_cleanup, "item_10", "<-- (R)");
+    //AddMenuItem(menu_cleanup, "item_10", "<-- (R)");
 }
 int cleanup_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
 {
@@ -805,15 +805,15 @@ void create_other_menu()
     else Format(buffer, sizeof(buffer), "-");
     AddMenuItem(menu_other, "item_4", buffer);
 
-    Format(buffer, sizeof(buffer), "%T", "Give Up", zm_language);
+    Format(buffer, sizeof(buffer), "%T\n0. <-- (R)", "Give Up", zm_language);
     AddMenuItem(menu_other, "item_5", buffer);
 
-    AddMenuItem(menu_other, "item_6", "-");
-    AddMenuItem(menu_other, "item_7", "-");
-    AddMenuItem(menu_other, "item_8", "-");
-    AddMenuItem(menu_other, "item_9", "-");
+    //AddMenuItem(menu_other, "item_6", "-");
+    //AddMenuItem(menu_other, "item_7", "-");
+    //AddMenuItem(menu_other, "item_8", "-");
+    //AddMenuItem(menu_other, "item_9", "-");
 
-    AddMenuItem(menu_other, "item_10", "<-- (R)");
+    //AddMenuItem(menu_other, "item_10", "<-- (R)");
 	
 	if (zm_menu_state == ZM_MENU_OTHER && IsValidClientZM()) open_menu(zm_client,ZM_MENU_OTHER);
 	
@@ -890,7 +890,7 @@ void create_quit_menu()
     Format(buffer,sizeof(buffer),"%T", "Yes", zm_client);
     AddMenuItem(menu_quit, "item_1", buffer);
 
-    Format(buffer,sizeof(buffer),"%T", "No", zm_client);
+    Format(buffer,sizeof(buffer),"%T\n0. <-- (R)", "No", zm_client);
     AddMenuItem(menu_quit, "item_2", buffer);
 }
 int quit_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
