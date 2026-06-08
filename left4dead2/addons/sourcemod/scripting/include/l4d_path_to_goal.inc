@@ -1960,8 +1960,8 @@ bool twopos_traversable(float pos1[3], float pos2[3], bool world_only = true, fl
     if (max_distance>0.0 && GetVectorDistance(pos1,pos2)>max_distance) return false;
     if (hull)
     {
-        if (world_only) TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,1.0},{2.0,2.0,20.0},MASK_PTG,TraceFilterStatic);
-        else            TR_TraceHullFilter(pos1,pos2,{-2.0,-2.0,1.0},{2.0,2.0,20.0},MASK_PTG,TraceFilterNoClients);
+        if (world_only) TR_TraceHullFilter(pos1,pos2,{-3.0,-3.0,1.0},{3.0,3.0,30.0},MASK_PTG,TraceFilterStatic);
+        else            TR_TraceHullFilter(pos1,pos2,{-3.0,-3.0,1.0},{3.0,3.0,30.0},MASK_PTG,TraceFilterNoClients);
     }
     else
     {
