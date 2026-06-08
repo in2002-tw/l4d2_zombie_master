@@ -17,7 +17,7 @@
 #include <dhooks>
 #include <l4d_path_to_goal>
 
-#define PLUGIN_VERSION 			"1.32 2026-06-04"
+#define PLUGIN_VERSION 			"1.33 2026-06-07"
 
 // Fix detour join not working with finale cvar set to 0
 
@@ -166,7 +166,7 @@ void evtNavBlocked(Event event, const char[] name, bool dontBroadcast)
     bool blocked = event.GetBool("blocked");
     LogMessage("nav_blocked escape %d blocked %d area %d", navArea_escape(navArea), blocked, navArea);
     #endif
-    if (!g_bFlowRecomputeHooked) NavChanged();
+    if (!g_bFlowRecomputeHooked || finale) NavChanged();
 }
 
 void evtNavGenerate(Event event, const char[] name, bool dontBroadcast)

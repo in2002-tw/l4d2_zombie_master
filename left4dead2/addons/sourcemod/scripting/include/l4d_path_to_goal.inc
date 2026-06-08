@@ -368,7 +368,7 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     // Try cell splitting technique first. If it fails try usual LOS adjustments
     static float pos_split[3];
     bool LOS = false;
-    bool found_split = try_guide_cellsplit(last_pos,pos_split,i_forward) && twopos_traversable(last_pos,pos_split,true,_,false);
+    bool found_split = try_guide_cellsplit(last_pos,pos_split,i_forward) && twopos_traversable(last_pos,pos_split);
     if (found_split)
     {
         if (i_forward>=g_GuideCells.Length) i_forward = g_GuideCells.Length-1;
@@ -581,6 +581,9 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
     LogMessage("detour_join %f", flow);
     #endif
 
+    bool flow_backwards = finale && finale_stitched && finale_backwards;
+    if (flow_backwards && flow>=g_fFlowRescueVehicle) return 0;
+
     static float pos_curr[3], pos_last[3];
     float flow_curr = flow;
     pos_curr = pos;
@@ -609,17 +612,18 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
             {
                 Address adjArea = NavAdj.Get(i);
                 if (adjArea == Address_Null) continue;
-                //if (!L4D_NavArea_IsConnected(navArea_curr,adjArea,dir)) continue;
+                if (!L4D_NavArea_IsConnected(navArea_curr,adjArea,dir)) continue;
                 L4D_GetNavAreaCenter(adjArea,pos_temp);
                 flow_temp = L4D_GetFlowFromPoint(pos_temp);
-                if (flow_temp<=flow_curr) continue;
+                if (flow_temp<flow_curr) continue;
+                //if (flow_backwards && flow_temp>=g_fFlowRescueVehicle) continue;
                 pos_temp[2] += 16.0;
-                if (found && g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
-                if (found && L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
-                if (found && L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
+                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
+                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
+                if (g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
                 bool steep = nav_too_steep(navArea_curr,adjArea);
                 if (found && steep) continue;
-                if ( flow_temp>flow_best || (best_steep && flow_temp>flow_curr) )
+                if ( flow_temp>=flow_best || (best_steep && flow_temp>=flow_curr) )
                 {
                     flow_best = flow_temp;
                     navArea_best = adjArea;
@@ -692,7 +696,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
                 if (!success)
                 {
                     int spawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea_curr);
-                    success = spawnAttrs & NAV_SPAWN_ESCAPE_ROUTE || (finale_stitched && spawnAttrs & NAV_SPAWN_RESCUE_VEHICLE);
+                    success = (!flow_backwards && spawnAttrs & NAV_SPAWN_ESCAPE_ROUTE) || (finale_stitched && spawnAttrs & NAV_SPAWN_RESCUE_VEHICLE);
                 }
             }
             if (success)
@@ -1122,23 +1126,23 @@ void OnFramePrep(bool new_frame = true)
                         {
                             Address adjArea = adjAreas.Get(i);
                             if (adjArea == Address_Null) continue;
-                            //if (!L4D_NavArea_IsConnected(navArea_curr,adjArea,dir)) continue;
+                            //if (!L4D_NavArea_IsConnected(adjArea,navArea_curr,dir)) continue;
                             //if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
                             //if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
                             flow_temp = get_navFlow(adjArea);
-                            if (finale_backwards && flow_temp<=flow_curr) continue; // from rescue zone -> go upwards in flow
-                            else if (!finale_backwards && flow_temp>=flow_curr) continue; // from rescue zone -> go downwards in flow
+                            if (finale_backwards && flow_temp<flow_curr) continue; // from rescue zone -> go upwards in flow
+                            else if (!finale_backwards && flow_temp>flow_curr) continue; // from rescue zone -> go downwards in flow
                             L4D_GetNavAreaCenter(adjArea,pos_temp);
                             pos_temp[2] += 16.0;
                             // If we already found a connection, only accept alternatives if path can be built
                             // Unless the path is blocked, which we have to ignore because it will probably be unblocked later when rescue vehicle arrives.
                             //if (found && g_bL4D2 && !L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true) && !L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false))
                             //{
-                            if (found && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
+                            //if (!L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,true)) continue;
                             //}
-                            bool steep = nav_too_steep(navArea_curr,adjArea);
+                            bool steep = nav_too_steep(adjArea,navArea_curr);
                             if (found && steep) continue;
-                            if ( flow_temp>flow_best || (steep_best && flow_temp>flow_curr) )
+                            if ( flow_temp>=flow_best || (steep_best && flow_temp>=flow_curr) )
                             {
                                 flow_best = flow_temp;
                                 navArea_best = adjArea;
@@ -1536,9 +1540,10 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
                 bool steep = false;
                 Address adjArea = adjAreas.Get(i);
                 if (adjArea == Address_Null) continue;
+                if (!L4D_NavArea_IsConnected(navArea_curr,adjArea,dir)) continue;
                 L4D_GetNavAreaCenter(adjArea,pos_temp);
                 flow_temp = L4D_GetFlowFromPoint(pos_temp);
-                if (flow_temp<=flow_curr) continue;
+                if (flow_temp<flow_curr) continue;
                 if ( !twopos_traversable(pos_curr,pos_temp) && !LOS_rescue_cheap(pos_curr,pos_temp,_) ) continue;
                 if (g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
                 //i_end = cells.FindValue(adjArea,1);
@@ -1552,13 +1557,13 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
                 if (found && steep) continue;
                 //}
                 //else success = true;
-                if ( flow_temp>flow_best || (steep_best && flow_temp>flow_curr) ) 
+                if ( flow_temp>=flow_best || (steep_best && flow_temp>=flow_curr) )
                 {
                     flow_best = flow_temp;
                     navArea_best = adjArea;
                     pos_best = pos_temp;
                     found = true;
-                    steep_best = steep;
+                    //steep_best = steep;
                     //if (success) break;
                 }
             }
