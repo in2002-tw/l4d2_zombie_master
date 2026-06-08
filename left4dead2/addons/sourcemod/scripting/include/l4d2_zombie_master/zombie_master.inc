@@ -2783,8 +2783,6 @@ Action JoinZM(int client, int args)
     
     remove_all_ZM_glows();
     
-    autocommon_uncommons = false;
-    uncommon_num = 1;
     ZMPrefs_Apply(client);
     g_iLastZombieClass = -1;
     

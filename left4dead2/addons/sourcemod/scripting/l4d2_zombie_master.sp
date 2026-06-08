@@ -34,7 +34,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.14 2026-06-06"
+#define PLUGIN_VERSION 			"0.9.15 2026-06-08"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -89,9 +89,9 @@ public Plugin myinfo =
 // 8. PTG
 // 9. Menu overhaul.
 // 10. Items menu.
+// 11. Clientprefs.
 
 // TO DO LIST:
-// 5. Gas station tornado (done by zyiks, not implemented)
 // 15. Performance bottlenecks.
 // 16. Is there a way to prevent observers from being able to see the ZM info? Try SendProxy?
 // 26. No fog for ZM
@@ -99,8 +99,6 @@ public Plugin myinfo =
 // 39. Rare spitter cooldown bug. Idk how to fix this.
 // 40. Context interact when looking at something with R
 // 41. Special context interact: delete, move, attack nearest
-// 42. Panic Trap
-// 47. Witches in survivor closets
 // 51. Find out why commons get auto culled on finale start. Can avoid culling if they are attacking other infected...
 // 52. Smoker, Charger stupid behavior after ability fail.
 // 57. Frozen tanks should be in stasis to prevent music // EFL_DORMANT Entity_Flags

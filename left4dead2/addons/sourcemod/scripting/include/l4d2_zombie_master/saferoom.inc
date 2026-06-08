@@ -621,14 +621,10 @@ Action Timer_StartPrecomputeNav(Handle timer)
 		if (!navArea_validStart(navArea)) continue;
         L4D_GetNavAreaSize(navArea, vSize);
         if (vSize[0]<=50.0 && vSize[1]<=50.0) continue;
-		L4D_FindRandomSpot(navArea,pos);
-        float distance = 0.0;
-        if (start_known) distance = GetVectorDistance(vector_start,pos);
-        if (distance>500.0) continue;
-        L4D_GetNavAreaCenter(navArea,pos);
-        cell.position[0] = pos[0];
-        cell.position[1] = pos[1];
-        cell.position[2] = pos[2];
+		L4D_GetNavAreaCenter(navArea,pos);
+        if (start_known && GetVectorDistance(vector_start,pos)>400.0) continue;
+        if (IsObstructed(pos)) continue;
+        cell.position = pos;
         cell.navArea = navArea;
         g_hStartAreaList.PushArray(cell);
         total_stored_start += 1;

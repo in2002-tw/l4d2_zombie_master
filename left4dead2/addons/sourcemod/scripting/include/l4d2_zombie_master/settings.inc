@@ -248,6 +248,7 @@ void next_autocommon_setting()
     autocommon_setting += 1;
     if (autocommon_setting>AUTOCOMMON_ALWAYS) autocommon_setting = 0;
     create_common_menu();
+    if (IsValidClientZM()) ZMPrefs_SaveAutoCommonMode(zm_client);
 }
 
 void next_uncommon_num()
@@ -255,6 +256,7 @@ void next_uncommon_num()
     uncommon_num += 1;
     if (uncommon_num>3) uncommon_num = 1;
     create_uncommon_menu();
+    if (IsValidClientZM()) ZMPrefs_SaveUncommonNum(zm_client);
 }
 
 void next_autocommon_num()
@@ -262,6 +264,7 @@ void next_autocommon_num()
     if (autocommon_num>10) autocommon_num -= 10;
     else autocommon_num = 30;
     create_common_menu();
+    if (IsValidClientZM()) ZMPrefs_SaveAutoCommonNum(zm_client);
 }
 
 Action zm_autocommon_mode(int client, int args)
@@ -284,6 +287,7 @@ Action zm_autocommon_mode(int client, int args)
         case AUTOCOMMON_PANIC: ReplyToCommand(client,"zm_autocommon_mode panic");
         default: ReplyToCommand(client,"zm_autocommon_mode off");
     }
+    ZMPrefs_SaveAutoCommonMode(zm_client);
     return Plugin_Continue;
 }
 
@@ -303,6 +307,7 @@ Action zm_autocommon_max(int client, int args)
    	}
    	else next_autocommon_num();
    	ReplyToCommand(client,"zm_autocommon_max %d", autocommon_num);
+    ZMPrefs_SaveAutoCommonNum(zm_client);
    	return Plugin_Continue;
 }
 

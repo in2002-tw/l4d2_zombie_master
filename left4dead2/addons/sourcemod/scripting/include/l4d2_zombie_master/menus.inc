@@ -289,6 +289,7 @@ int common_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
                 	else if (g_iCostCommon<0 || valid_uncommon(g_sForceCommon)) autocommon_uncommons=true;
                 	else autocommon_uncommons=!autocommon_uncommons;
                 	create_common_menu();
+                    ZMPrefs_SaveAutoCommonUncommon(zm_client);
                 	return 0;
             	}
                 default: zm_menu_state=ZM_MENU_MAIN;
