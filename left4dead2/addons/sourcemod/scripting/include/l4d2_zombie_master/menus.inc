@@ -119,15 +119,27 @@ void reopen_zm_menu(bool force = true)
     if (force || GetClientMenu(zm_client)==MenuSource_None) open_menu(zm_client,zm_menu_state);
 }
 
+// Apply menu settings homogenously to all ZM menus. Main menu gets no exit button.
+void apply_zm_menu_settings(Menu menu)
+{
+    SetMenuOptionFlags(menu,MENUFLAG_NO_SOUND);
+    //menu.ExitButton = false;
+    menu.Pagination = MENU_NO_PAGINATION;
+}
+
+// Add "fake" unselectable new line of gray text to menu.
+void buffer_add_rawline(char[] buffer, char[] add = "\nR. <--", int maxlen=64)
+{
+    Format(buffer,maxlen,"%s%s", buffer, add);
+}
+
 // MAIN MENU
 void create_main_menu()
 {		
 	if (DEBUG) LogMessage("[zm] create_main_menu");
 	delete menu_main;
 	menu_main = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),main_menu_Handler);
-    menu_main.ExitButton = false;
-    menu_main.Pagination = MENU_NO_PAGINATION;
-	SetMenuOptionFlags(menu_main,MENUFLAG_NO_SOUND);
+    apply_zm_menu_settings(menu_main);
 	
 	int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
@@ -155,11 +167,13 @@ void create_main_menu()
     menu_main.AddItem("item_5",buffer);
 
     Format(buffer, sizeof(buffer), "Items");
+    if (!g_hTraps.BoolValue) buffer_add_rawline(buffer);
     menu_main.AddItem("item_6",buffer);
 
     if (g_hTraps.BoolValue)
     {
         Format(buffer, sizeof(buffer), "%T", "Traps", zm_language);
+        buffer_add_rawline(buffer);
         menu_main.AddItem("item_7",buffer);
     }
 }
@@ -169,12 +183,12 @@ int main_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
     {
         case MenuAction_Select:
         {
-        	if (param1!=zm_client || zm_stage>=ZM_END) return 0;
+            if (param1!=zm_client || zm_stage>=ZM_END) return 0;
         	switch(param2)
         	{
             	case 0:
             	{
-                	if (max_zombie_arr[ZOMBIECLASS_COMMON]>0) zm_menu_state=ZM_MENU_COMMON;
+                	if (max_zombie_arr[ZOMBIECLASS_COMMON]>0 && (g_iCostCommon>=0 || g_iCostUncommon>=0)) zm_menu_state=ZM_MENU_COMMON;
             	}
             	case 1:
             	{
@@ -211,9 +225,7 @@ void create_common_menu()
 	if (DEBUG) LogMessage("[zm] create_common_menu");
 	delete menu_common;
 	menu_common = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),common_menu_Handler);
-    menu_common.ExitButton = false;
-    menu_common.Pagination = MENU_NO_PAGINATION;
-	SetMenuOptionFlags(menu_common,MENUFLAG_NO_SOUND);
+    apply_zm_menu_settings(menu_common);
 	
 	int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
@@ -256,11 +268,10 @@ void create_common_menu()
     Format(buffer, sizeof(buffer), "%T", "Max", zm_language, autocommon_num);
     menu_common.AddItem("item_7",buffer);
     
-    if (autocommon_uncommons) Format(buffer, sizeof(buffer), "%t: %t\n0. <-- (R)", "Mode", "Uncommon", zm_language);
-    else Format(buffer, sizeof(buffer), "%t: %t\n0. <-- (R)", "Mode", "Common", zm_language);
+    if (autocommon_uncommons) Format(buffer, sizeof(buffer), "%t: %t", "Mode", "Uncommon", zm_language);
+    else Format(buffer, sizeof(buffer), "%t: %t", "Mode", "Common", zm_language);
+    buffer_add_rawline(buffer);
     menu_common.AddItem("item_8",buffer);
-
-    //menu_common.AddItem("item_10","<-- (R)");
 	
 	if (zm_menu_state == ZM_MENU_COMMON && IsValidClientZM()) open_menu(zm_client,ZM_MENU_COMMON);
 }
@@ -270,7 +281,7 @@ int common_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
     {
         case MenuAction_Select:
         {
-        	if (param1!=zm_client || zm_stage>=ZM_END) return 0;
+            if (param1!=zm_client || zm_stage>=ZM_END) return 0;
         	switch(param2)
         	{
             	case 0: ZM_Horde(zm_client,5);
@@ -315,9 +326,7 @@ void create_uncommon_menu()
 	if (DEBUG) LogMessage("[zm] create_uncommon_menu");
 	delete menu_uncommon;
 	menu_uncommon = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),uncommon_menu_Handler);
-    menu_uncommon.Pagination = MENU_NO_PAGINATION;
-    menu_uncommon.ExitButton = false;
-	SetMenuOptionFlags(menu_uncommon,MENUFLAG_NO_SOUND);
+    apply_zm_menu_settings(menu_uncommon);
     
 	int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
@@ -363,12 +372,9 @@ void create_uncommon_menu()
     else buffer = "-";
     AddMenuItem(menu_uncommon, "item_7", buffer);
 
-    Format(buffer,sizeof(buffer),"x%d\n0. <-- (R)", uncommon_num);
+    Format(buffer,sizeof(buffer),"x%d", uncommon_num);
+    buffer_add_rawline(buffer);
     AddMenuItem(menu_uncommon, "item_8", buffer);
-
-    //AddMenuItem(menu_uncommon, "item_9", "-\n0. <-- (R)");
-    
-    //AddMenuItem(menu_uncommon, "item_10", "<-- (R)");
 }
 int uncommon_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
 {
@@ -410,9 +416,7 @@ void create_special_menu()
 	if (DEBUG) LogMessage("[zm] create_menu_special");
 	delete menu_special;
 	menu_special = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),special_menu_Handler);
-    menu_special.Pagination = MENU_NO_PAGINATION;
-    menu_special.ExitButton = false;
-	SetMenuOptionFlags(menu_special,MENUFLAG_NO_SOUND);
+    apply_zm_menu_settings(menu_special);
     
     int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
@@ -485,11 +489,8 @@ void create_special_menu()
     AddMenuItem(menu_special, "item_7", buffer);
 
     Format(buffer, sizeof(buffer), "%T", "Control (USE)", zm_language);
+    buffer_add_rawline(buffer);
     AddMenuItem(menu_special, "item_8", buffer);
-    
-    AddMenuItem(menu_special, "item_9", "-\n0. <-- (R)");
-
-    //AddMenuItem(menu_special, "item_10", "<-- (R)");
 	
 	if (zm_menu_state == ZM_MENU_SPECIAL && IsValidClientZM()) open_menu(zm_client,ZM_MENU_SPECIAL);
 }
@@ -538,9 +539,7 @@ void create_boss_menu()
 	if (DEBUG) LogMessage("[zm] create_menu_boss");
 	delete menu_boss;
 	menu_boss = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),boss_menu_Handler);
-    menu_boss.Pagination = MENU_NO_PAGINATION;
-    menu_boss.ExitButton = false;
-	SetMenuOptionFlags(menu_boss,MENUFLAG_NO_SOUND);
+    apply_zm_menu_settings(menu_boss);
 	
 	int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
@@ -571,17 +570,11 @@ void create_boss_menu()
     else Format(buffer, sizeof(buffer), "%T %d", "Jimmy Gibbs Jr", zm_language,g_iCostUncommon);
     AddMenuItem(menu_boss, "item_4", buffer);
     
-    if (valid_uncommon(g_sForceCommon) && strcmp(g_sForceCommon,"fallen")!=0) buffer = "-\n0. <-- (R)";
-    else if (fallen_spawned || g_iCostUncommon<0 || max_zombie_arr[ZOMBIECLASS_COMMON]<=0) buffer = "-\n0. <-- (R)";
-    else Format(buffer, sizeof(buffer), "%T %d\n0. <-- (R)", "Fallen Survivor", zm_language,g_iCostUncommon);
+    if (valid_uncommon(g_sForceCommon) && strcmp(g_sForceCommon,"fallen")!=0) buffer = "-";
+    else if (fallen_spawned || g_iCostUncommon<0 || max_zombie_arr[ZOMBIECLASS_COMMON]<=0) buffer = "-";
+    else Format(buffer, sizeof(buffer), "%T %d", "Fallen Survivor", zm_language,g_iCostUncommon);
+    buffer_add_rawline(buffer);
     AddMenuItem(menu_boss, "item_5", buffer);
-    
-    //AddMenuItem(menu_boss, "item_6", "-");
-    //AddMenuItem(menu_boss, "item_7", "-");
-    //AddMenuItem(menu_boss, "item_8", "-");
-    //AddMenuItem(menu_boss, "item_9", "-");
-
-    //AddMenuItem(menu_boss, "item_10", "<-- (R)");
 	
 	if (zm_menu_state == ZM_MENU_BOSS && IsValidClientZM()) open_menu(zm_client,ZM_MENU_BOSS);
 }
@@ -622,9 +615,7 @@ void create_traps_menu()
 	if (DEBUG) LogMessage("[zm] create_traps_menu");
 	delete menu_traps;
 	menu_traps = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),traps_menu_Handler);
-    menu_traps.Pagination = MENU_NO_PAGINATION;
-    menu_traps.ExitButton = false;
-	SetMenuOptionFlags(menu_traps,MENUFLAG_NO_SOUND);
+    apply_zm_menu_settings(menu_traps);
 
 	int zm_language = LANG_SERVER;
 	if (IsValidClientZM()) zm_language = zm_client;
@@ -646,18 +637,10 @@ void create_traps_menu()
 	AddMenuItem(menu_traps, "item_2", buffer);
 
 	if (g_iCostTrapTornado>=0 && g_iMaxTrapTornado>0)
-		Format(buffer, sizeof(buffer), "%T %d %d/%d\n0. <-- (R)", "Trap Tornado", zm_language, g_iCostTrapTornado, Trap_CountActive(ZM_TRAP_TYPE_TORNADO), g_iMaxTrapTornado);
-	else buffer = "-\n0. <-- (R)";
+		Format(buffer, sizeof(buffer), "%T %d %d/%d", "Trap Tornado", zm_language, g_iCostTrapTornado, Trap_CountActive(ZM_TRAP_TYPE_TORNADO), g_iMaxTrapTornado);
+	else buffer = "-";
+    buffer_add_rawline(buffer);
 	AddMenuItem(menu_traps, "item_3", buffer);
-	
-    //AddMenuItem(menu_traps, "item_4", "-");
-	//AddMenuItem(menu_traps, "item_5", "-");
-	//AddMenuItem(menu_traps, "item_6", "-");
-    //AddMenuItem(menu_traps, "item_7", "-");
-    //AddMenuItem(menu_traps, "item_8", "-");
-    //AddMenuItem(menu_traps, "item_9", "-");
-	
-    //AddMenuItem(menu_traps, "item_10", "<-- (R)");
 
 	if (zm_menu_state == ZM_MENU_TRAPS && IsValidClientZM()) open_menu(zm_client,ZM_MENU_TRAPS);
 }
@@ -695,9 +678,7 @@ void create_cleanup_menu()
 	if (DEBUG) LogMessage("[zm] create_menu_cleanup");
 	delete menu_cleanup;
 	menu_cleanup = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),cleanup_menu_Handler);
-    menu_cleanup.Pagination = MENU_NO_PAGINATION;
-    menu_cleanup.ExitButton = false;
-	SetMenuOptionFlags(menu_cleanup,MENUFLAG_NO_SOUND);
+    apply_zm_menu_settings(menu_cleanup);
 	
 	int zm_language = LANG_SERVER;
     if (IsValidClientZM()) zm_language = zm_client;
@@ -718,15 +699,9 @@ void create_cleanup_menu()
     Format(buffer, sizeof(buffer), "%T", "Delete Witches", zm_language);
     AddMenuItem(menu_cleanup, "item_4", buffer);
     
-    Format(buffer, sizeof(buffer), "%T\n0. <-- (R)", "Delete ALL", zm_language);
+    Format(buffer, sizeof(buffer), "%T", "Delete ALL", zm_language);
+    buffer_add_rawline(buffer);
     AddMenuItem(menu_cleanup, "item_5", buffer);
-    
-    //AddMenuItem(menu_cleanup, "item_6", "-");
-    //AddMenuItem(menu_cleanup, "item_7", "-");
-    //AddMenuItem(menu_cleanup, "item_8", "-");
-    //AddMenuItem(menu_cleanup, "item_9", "-");
-    
-    //AddMenuItem(menu_cleanup, "item_10", "<-- (R)");
 }
 int cleanup_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
 {
@@ -765,9 +740,7 @@ void create_other_menu()
 	if (DEBUG) LogMessage("[zm] create_menu_other");
 	delete menu_other;
 	menu_other = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),other_menu_Handler);
-    menu_other.Pagination = MENU_NO_PAGINATION;
-    menu_other.ExitButton = false;
-	SetMenuOptionFlags(menu_other,MENUFLAG_NO_SOUND);
+    apply_zm_menu_settings(menu_other);
 	
 	int zm_language = LANG_SERVER;
     if (IsValidClientZM()) zm_language = zm_client;
@@ -806,15 +779,9 @@ void create_other_menu()
     else Format(buffer, sizeof(buffer), "-");
     AddMenuItem(menu_other, "item_4", buffer);
 
-    Format(buffer, sizeof(buffer), "%T\n0. <-- (R)", "Give Up", zm_language);
+    Format(buffer, sizeof(buffer), "%T", "Give Up", zm_language);
+    buffer_add_rawline(buffer);
     AddMenuItem(menu_other, "item_5", buffer);
-
-    //AddMenuItem(menu_other, "item_6", "-");
-    //AddMenuItem(menu_other, "item_7", "-");
-    //AddMenuItem(menu_other, "item_8", "-");
-    //AddMenuItem(menu_other, "item_9", "-");
-
-    //AddMenuItem(menu_other, "item_10", "<-- (R)");
 	
 	if (zm_menu_state == ZM_MENU_OTHER && IsValidClientZM()) open_menu(zm_client,ZM_MENU_OTHER);
 	
@@ -880,9 +847,7 @@ void create_quit_menu()
     if (!IsValidClientZM()) return;
 	delete menu_quit;
 	menu_quit = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),quit_menu_Handler);
-    menu_quit.Pagination = MENU_NO_PAGINATION;
-    menu_quit.ExitButton = false;
-	SetMenuOptionFlags(menu_quit,MENUFLAG_NO_SOUND);
+    apply_zm_menu_settings(menu_quit);
 
     char buffer[64]; 
     Format(buffer, sizeof(buffer), "%t ?", "Give Up", zm_client);
@@ -891,7 +856,8 @@ void create_quit_menu()
     Format(buffer,sizeof(buffer),"%T", "Yes", zm_client);
     AddMenuItem(menu_quit, "item_1", buffer);
 
-    Format(buffer,sizeof(buffer),"%T\n0. <-- (R)", "No", zm_client);
+    Format(buffer,sizeof(buffer),"%T", "No", zm_client);
+    buffer_add_rawline(buffer);
     AddMenuItem(menu_quit, "item_2", buffer);
 }
 int quit_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
@@ -931,10 +897,9 @@ void create_items_menu()
     //LogMessage("create_items_menu");
     count_survivor_items();
     menu_items = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),items_menu_Handler);
+    apply_zm_menu_settings(menu_items);
+    
     menu_items.SetTitle("Survivors: %d", g_iAliveSurvivors);
-    menu_items.ExitButton = false;
-    menu_items.Pagination = MENU_NO_PAGINATION;
-    SetMenuOptionFlags(menu_items,MENUFLAG_NO_SOUND);
 
     char buffer[64]; 
     
@@ -972,9 +937,8 @@ void create_items_menu()
 
     if (g_iAdrenaline>0) Format(buffer, sizeof(buffer), "Adrenaline: %d", g_iAdrenaline);
     else buffer = "";
+    buffer_add_rawline(buffer);
     menu_items.AddItem("item_9",buffer);
-    
-    menu_items.AddItem("item_10", "<-- (R)");
 
     if (zm_menu_state == ZM_MENU_ITEMS && IsValidClientZM()) open_menu(zm_client,ZM_MENU_ITEMS);
 }
