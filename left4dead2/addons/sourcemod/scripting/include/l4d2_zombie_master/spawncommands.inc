@@ -282,6 +282,8 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
            if (type[0]!=0 || price_angry) DispatchKeyValue(zombie, "targetname", "zm_unit_uncommon");
            else DispatchKeyValue(zombie, "targetname", "zm_unit_common");
            Spawner_NotifySpawned(zombie);
+		   int eFlags = GetEdictFlags(zombie);
+	       SetEdictFlags(zombie, eFlags | FL_EDICT_ALWAYS);
         }
         if ((GetEngineTime()-t_start)*1000.0>t_budget_ms) break;
     }

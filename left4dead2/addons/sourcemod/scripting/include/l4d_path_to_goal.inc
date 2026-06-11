@@ -82,6 +82,7 @@ bool gamemode_guidable, guide_ready, guide_prep, map_started, nav_started, enabl
 int g_iLaser;
 float t_nav = -1.0; // nav event gametime
 Handle timer_nav;
+char mapName[PLATFORM_MAX_PATH];
 
 DynamicDetour g_hRecomputeFlowDetour;
 Handle g_hRecomputeFlow;
@@ -159,6 +160,7 @@ Action Timer_CheckRequests(Handle timer = null)
     LogMessage("Timer_CheckRequests");
     #endif
     if (!enable || !map_started || !nav_started || !gamemode_guidable || g_iLaser==0 || guide_prep) return Plugin_Stop;
+
     for (int i = 1; i <= MaxClients; i++) // Draw beams immediately for pending clients
     {
         if (g_CellRequests[i].duration <= 0.0) continue;
@@ -188,10 +190,16 @@ void Guide_All_Clients(float duration = 5.0, bool override = false)
     for (int i = 1; i <= MaxClients; i++)
     {
         if (g_CellRequests[i].duration>=0.1) continue; // already requested
-        if (!override && g_PlayerTime[i].t_cooldown>=0.1) g_CellRequests[i].duration = g_PlayerTime[i].t_cooldown*2.0;
+        if (!override && g_PlayerTime[i].t_cooldown>0.1) g_CellRequests[i].duration = g_PlayerTime[i].t_cooldown*2.0;
         else g_CellRequests[i].duration = duration;
     }
     Timer_CheckRequests(null);
+}
+
+Action Timer_Guide_All_Clients(Handle timer = null, float duration = 5.0)
+{
+    Guide_All_Clients(duration);
+    return Plugin_Continue;
 }
 
 // Use Gauntlet-type logic for stitching escape route with rescue vehicle.
@@ -604,7 +612,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
         bool found = false;
         flow_best = flow_curr;
         best_steep = false;
-        for (int dir = 0; dir < 4; dir++) // Enqueue adjacent nav areas (all 4 directions)
+        for (int dir = 0; dir < 5; dir++) // Enqueue adjacent nav areas (all 4 directions)
         {
             NavAdj.Clear();
             L4D_NavArea_GetAdjacentAreas(navArea_curr, dir, NavAdj);
@@ -619,7 +627,6 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
                 //if (flow_backwards && flow_temp>=g_fFlowRescueVehicle) continue;
                 pos_temp[2] += 16.0;
                 if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
-                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
                 if (g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
                 bool steep = nav_too_steep(navArea_curr,adjArea);
                 if (found && steep) continue;
@@ -779,12 +786,13 @@ void Check_Guidable()
 
 #define STAGE_NONE 0 // Prep not running
 #define STAGE_PREP 1 // First frame of Prep
-#define STAGE_COLLECT 2 // Get all ESCAPE_ROUTE, CHECKPOINT, PLAYER_START and RESCUE VEHICLE
-#define STAGE_SORT 3 // Sort by flow
-#define STAGE_BUILD 4 //
-#define STAGE_FINALE 5
-#define STAGE_VALIDATE 6
-#define STAGE_END 7 // Prep just ended. Guide should be ready.
+#define STAGE_COLLECT 2 // Get all ESCAPE_ROUTE, CHECKPOINT, PLAYER_START and RESCUE_VEHICLE navmeshes
+#define STAGE_SORT 3 // Sort ESCAPE_ROUTE by flow
+#define STAGE_FIX 4 // Clean up bad connections between navmeshes. Certified Valve Product Moment (TM)
+#define STAGE_BUILD 5 // Build static g_GuideCells with continuity and line-of-sight.
+#define STAGE_FINALE 6 // If there is RESCUE_VEHICLE
+#define STAGE_VALIDATE 7 // Tighten connections between cells, remove cells with mutual LOS.
+#define STAGE_END 8 // Guide ready.
 
 int g_iPrepStage, g_iLoop;
 float g_fFlowStart, g_fFlowCheckpoint, g_tFrameStart;
@@ -926,9 +934,8 @@ void OnFramePrep(bool new_frame = true)
                 navArea = allAreas.Get(g_iLoop);
                 g_iLoop += 1;
                 if (!navArea) continue;
-                L4D_GetNavAreaCenter(navArea,pos);
-                flow = L4D_GetFlowFromPoint(pos);
-                if (flow>g_fMaxFlow) continue;
+                flow = get_navFlow(navArea);
+                //if (flow>g_fMaxFlow) continue;
                 int navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
                 bool rescue = (navSpawnAttrs & NAV_SPAWN_RESCUE_VEHICLE) > 0;
                 if (rescue && flow <= 0.0)
@@ -937,7 +944,7 @@ void OnFramePrep(bool new_frame = true)
                     LogMessage("NAV_SPAWN_RESCUE_VEHICLE at <= 0.0 flow! BOOOOOO! THROW TOMATOES AT THE MAPPER!");
                 }
 
-                if (rescue && g_hCvarFinale.IntValue < FINALE_NEVER)
+                if (rescue && g_hCvarFinale.IntValue < FINALE_NEVER) // Rescue navareas might be blocked until rescue vehicle arrives.
                 {
                     if (flow>g_fFlowRescueVehicle)
                     {
@@ -947,9 +954,7 @@ void OnFramePrep(bool new_frame = true)
                     }
                 }
 
-                if (all_cells.FindValue(flow,0)>=0) continue; // if identical flow exists, ignore this cell
-
-                if (L4D_NavArea_IsBlocked(navArea,TEAM_SURVIVOR,true) || L4D_NavArea_IsBlocked(navArea,TEAM_SURVIVOR,false))
+                if (L4D_NavArea_IsBlocked(navArea,TEAM_SURVIVOR,true))
                 {
                     #if DEBUG
                     g_iNavBlocked += 1;
@@ -959,8 +964,19 @@ void OnFramePrep(bool new_frame = true)
 
                 bool checkpoint = navSpawnAttrs & NAV_SPAWN_PLAYER_START || navSpawnAttrs & NAV_SPAWN_CHECKPOINT;
 
-                if (flow > 0.0 && navSpawnAttrs & NAV_SPAWN_ESCAPE_ROUTE)
+                if (flow >= 0.0 && navSpawnAttrs & NAV_SPAWN_ESCAPE_ROUTE)
                 {
+                    
+                    int i_found = all_cells.FindValue(flow,0);
+                    if (i_found>=0)
+                    {
+                        #if DEBUG
+                        LogMessage("STAGE_COLLECT WARNING: %d flow %f identical to %d", g_iLoop, flow, i_found);
+                        #endif
+                        continue; // if identical flow exists, ignore this cell
+                    }
+                    
+                    L4D_GetNavAreaCenter(navArea,pos);
                     pos[2] += 16.0;
                     if (pos_underwater(pos))
                     {
@@ -1060,6 +1076,29 @@ void OnFramePrep(bool new_frame = true)
             g_GuideCells.PushArray(cell);
             g_iLoop = 1;
         }
+        case STAGE_FIX:
+        {
+            if (all_cells==null)
+            {
+                guide_prep = false;
+                return;
+            }
+            while (g_iLoop<all_cells.Length)
+            {
+                if (frame_budget_exceeded()) { budget_spent = true; break; }
+                all_cells.GetArray(g_iLoop,cell,sizeof(Cell));
+                all_cells.GetArray(g_iLoop-1,cell_before,sizeof(Cell));
+                if (!cell_connected(cell_before,cell) && !twopos_traversable(cell_before.center,cell.center))
+                {
+                    #if DEBUG
+                    LogMessage("STAGE_FIX: %d (%.1f) -> %d (%.1f) not connected", g_iLoop-1, cell_before.flow, g_iLoop, cell.flow);
+                    #endif
+                    explore_stitch(all_cells,g_iLoop);
+                }
+                g_iLoop += 1;
+            }
+            if (!budget_spent) g_iLoop = 1;
+        }
         case STAGE_BUILD:
         {
             if (all_cells==null || g_GuideCells==null)
@@ -1071,7 +1110,7 @@ void OnFramePrep(bool new_frame = true)
             {
                 if (frame_budget_exceeded()) { budget_spent = true; break; }
                 all_cells.GetArray(g_iLoop,cell,sizeof(Cell));
-                guide_add_cell(g_GuideCells,cell,all_cells,g_iLoop);
+                guide_add_cell(g_GuideCells,cell);
                 g_iLoop += 1;
             }
             if (!budget_spent) // Stage has ended, prep for next stage
@@ -1118,7 +1157,7 @@ void OnFramePrep(bool new_frame = true)
                     bool found = false;
                     flow_best = flow_curr;
                     bool steep_best = false;
-                    for (int dir = 0; dir < 4; dir++) // Enqueue adjacent nav areas (all 4 directions)
+                    for (int dir = 0; dir < 5; dir++) // Enqueue adjacent nav areas (all 4 directions)
                     {
                         adjAreas.Clear();
                         L4D_NavArea_GetAdjacentAreas(navArea_curr, dir, adjAreas);
@@ -1126,21 +1165,15 @@ void OnFramePrep(bool new_frame = true)
                         {
                             Address adjArea = adjAreas.Get(i);
                             if (adjArea == Address_Null) continue;
-                            //if (!L4D_NavArea_IsConnected(adjArea,navArea_curr,dir)) continue;
-                            //if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
-                            //if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
+                            if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
                             flow_temp = get_navFlow(adjArea);
                             if (finale_backwards && flow_temp<flow_curr) continue; // from rescue zone -> go upwards in flow
                             else if (!finale_backwards && flow_temp>flow_curr) continue; // from rescue zone -> go downwards in flow
                             L4D_GetNavAreaCenter(adjArea,pos_temp);
                             pos_temp[2] += 16.0;
-                            // If we already found a connection, only accept alternatives if path can be built
-                            // Unless the path is blocked, which we have to ignore because it will probably be unblocked later when rescue vehicle arrives.
-                            //if (found && g_bL4D2 && !L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true) && !L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false))
-                            //{
                             //if (!L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,true)) continue;
                             //}
-                            bool steep = nav_too_steep(adjArea,navArea_curr);
+                            bool steep = nav_too_steep(adjArea,navArea_curr) || !navArea_connected(adjArea,navArea_curr);
                             if (found && steep) continue;
                             if ( flow_temp>=flow_best || (steep_best && flow_temp>=flow_curr) )
                             {
@@ -1298,7 +1331,7 @@ void OnFramePrep(bool new_frame = true)
         g_iPrepStage = STAGE_NONE;
         timer_nav = null;
         if (finale_stitched && finale_rescue && g_hCvarFinaleAuto.BoolValue) Guide_All_Clients();
-        else Timer_CheckRequests(); // Draw beams immediately for pending clients
+        else Timer_CheckRequests(null); // Draw beams immediately for pending clients
     }
 
 }
@@ -1487,38 +1520,75 @@ void stitch_finale()
     finale_stitched = true;
 }
 
-// Flow-forward explore from i_start-1 until we hit any cell ahead. We give up if the only way forward is i_start.
-// If successful, replace cells from i_start to i_end with new cells and return true
+// i_start is where the disconnected navmesh is. i_start-1 should be a good navarea.
 ArrayList cells_explore;
+#define STITCH_GAP_OK 2 // how many cells ahead to check for further disjointed navAreas
 stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
 {
-    if (i_start<=0 || i_start>=(cells.Length-2)) return false;
     static Cell cell, cell2;
-    cells.GetArray(i_start-1,cell,sizeof(Cell)); // i_start-1 is the cell already explored. i_start does not have LOS.
 
-    // Check if we can connect to i_start+1. If so, change i_start to i_Start+1 and exit.
-    cells.GetArray(i_start+1,cell2,sizeof(Cell));
-    if (twopos_traversable(cell.center,cell2.center) && triple_valid_ground(cell.center,cell2.center))
-    {
-        i_start += 1;
-        return true;
-    }
-    else if (LOS_rescue_cheap(cell.center,cell2.center,_))
-    {
-        i_start += 1;
-        return true;
-    }
+    int stitch_gap = STITCH_GAP_OK;
+    if (strncmp(mapName,"c7m2",4,false)==0) stitch_gap = 20; // i just want to talk to the mapper
 
-    Address navArea_curr = cell.navArea;
-    if (navArea_curr == Address_Null) return false;
+    // Determine i_min>=i_start, where i_min is the furthest away cell index where disconnection was detected
+    int i_min = i_start;
+    int num_good = 0;
+    int i = i_start+1;
+    cells.GetArray(i_start,cell,sizeof(Cell)); // i_start-1 is the cell already explored. i_start does not have LOS.
+    while (num_good<=stitch_gap && i<(cells.Length))
+    {
+        cells.GetArray(i,cell2,sizeof(Cell));
+        if ( !cell_connected(cell,cell2) && !twopos_traversable(cell.center,cell2.center) )
+        {
+            num_good = 0;
+            i_min = i-1;
+        }
+        else num_good += 1;
+        cell = cell2;
+        i += 1;
+    }
+    
+    #if DEBUG
+    LogMessage("explore_stitch i_start %d i_min %d", i_start, i_min);
+    #endif
+
+    int num_delete;
+
+    if (i_min>i_start) // Delete chain of bad navmeshes
+    {
+        num_delete = i_min-i_start+1;
+        #if DEBUG
+        LogMessage("explore_stitch deleted %d cells", num_delete);
+        #endif
+        while (num_delete>0 && i_start<(cells.Length-1))
+        {
+            cells.Erase(i_start);
+            num_delete -= 1;
+        }
+    }
+    else if (i_start<(cells.Length-1)) // is i_start+1 connected to i_start-1?
+    {
+        cells.GetArray(i_start-1,cell,sizeof(Cell));
+        cells.GetArray(i_start+1,cell2,sizeof(Cell));
+        if (cell_connected(cell,cell2) && (twopos_traversable(cell.center,cell2.center) || LOS_rescue_cheap(cell.center,cell2.center,_) ))
+        {
+            cells.Erase(i_start);
+            #if DEBUG
+            LogMessage("explore_stitch %d deleted", i_start);
+            #endif
+            return true;
+        }
+    }
 
     if (cells_explore==null) cells_explore = new ArrayList(sizeof(Cell));
     cells_explore.Clear();
 
+    cells.GetArray(i_start-1,cell,sizeof(Cell));
     static float pos_curr[3], pos_temp[3], pos_best[3];
     pos_curr = cell.center;
     float flow_curr = cell.flow;
     bool success = false; // success when we hit a forward navArea in cells
+    Address navArea_curr = cell.navArea;
     Address navArea_best = navArea_curr;
     pos_best = pos_curr;
     float flow_temp;
@@ -1531,43 +1601,41 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
         bool found = false;
         bool steep_best = false;
         float flow_best = flow_curr;
-        for (int dir = 0; dir < 4; dir++)
+        for (int dir = 0; dir < 5; dir++)
         {
             adjAreas.Clear();
             L4D_NavArea_GetAdjacentAreas(navArea_curr, dir, adjAreas);
-            for (int i = 0; i < adjAreas.Length; i++)
+            for (i = 0; i < adjAreas.Length; i++)
             {
                 bool steep = false;
                 Address adjArea = adjAreas.Get(i);
                 if (adjArea == Address_Null) continue;
-                if (!L4D_NavArea_IsConnected(navArea_curr,adjArea,dir)) continue;
-                L4D_GetNavAreaCenter(adjArea,pos_temp);
-                flow_temp = L4D_GetFlowFromPoint(pos_temp);
-                if (flow_temp<flow_curr) continue;
-                if ( !twopos_traversable(pos_curr,pos_temp) && !LOS_rescue_cheap(pos_curr,pos_temp,_) ) continue;
-                if (g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
-                //i_end = cells.FindValue(adjArea,1);
-                //if (i_end<0)
-                //{
                 if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
-                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
+                if (!L4D_NavArea_IsConnected(navArea_curr,adjArea,dir)) continue;
+                flow_temp = get_navFlow(adjArea);
+                if (flow_temp<flow_curr) continue;
+                //if ( !twopos_traversable(pos_curr,pos_temp) && !LOS_rescue_cheap(pos_curr,pos_temp,_) ) continue;
+                //if ( !twopos_traversable(pos_curr,pos_temp) ) continue;
+                //if (g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
+                L4D_GetNavAreaCenter(adjArea,pos_temp);
                 pos_temp[2] += 16.0;
                 if (pos_underwater(pos_temp)) pos_temp[2] += 16.0;
-                steep = !g_bHitLadder && nav_too_steep(navArea_curr,adjArea);
-                if (found && steep) continue;
-                //}
-                //else success = true;
-                if ( flow_temp>=flow_best || (steep_best && flow_temp>=flow_curr) )
+                //LogMessage("explore_stitch step %d flow %f -> %f", steps, flow_curr, flow_temp);
+                i_end = cells.FindValue(adjArea,1);
+                if (i_end>=i_start) success = true;
+                else steep = !g_bHitLadder && nav_too_steep(navArea_curr,adjArea);
+                if (!success && found && steep) continue;
+                if ( success || flow_temp>=flow_best || (steep_best && flow_temp>=flow_curr) )
                 {
                     flow_best = flow_temp;
                     navArea_best = adjArea;
                     pos_best = pos_temp;
                     found = true;
-                    //steep_best = steep;
-                    //if (success) break;
+                    steep_best = steep;
+                    if (success) break;
                 }
             }
-            //if (success) break;
+            if (success) break;
         }
         if (found)
         {
@@ -1587,29 +1655,34 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
         if (!success) i_end = cells.FindValue(navArea_curr,1);
         if (i_end>=0)
         {
-            if (i_end<=i_start) break; // fail
-            success = i_end>i_start;
+            //if (i_end<i_start) break; // fail
+            success = i_end>=i_start;
             if (success) break;
         } 
         steps += 1;
     }
 
+    #if DEBUG
+    LogMessage("explore_stitch %d %d %d", i_start, success, cells_explore.Length);
+    #endif
+
     if (success)
     {
         cells_explore.GetArray(0,cell,sizeof(Cell));
         cells.SetArray(i_start,cell,sizeof(Cell));
-        int num_delete = i_end-i_start;
-        while (num_delete>0)
+        num_delete = i_end-i_start;
+        int num_deleted = num_delete;
+        while (num_delete>0 && i_start<(cells.Length-1))
         {
             cells.Erase(i_start+1);
             num_delete -= 1;
         }
         if (cells_explore.Length>1)
         {
-            for (int i = 1; i < cells_explore.Length; i++)
+            for (i = cells_explore.Length-1; i >= 1; i--)
             {
                 cells_explore.GetArray(i,cell,sizeof(Cell));
-                if ((i_start+1)<cells.Length)
+                if ( i_start<(cells.Length-1) )
                 {
                     cells.ShiftUp(i_start+1);
                     cells.SetArray(i_start+1,cell,sizeof(Cell));
@@ -1620,28 +1693,27 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
                 }
             }
         }
+        i_start += num_deleted;
     }
-
-    #if DEBUG
-    LogMessage("explore_stitch %d %d %d", i_start, success, cells_explore.Length);
-    #endif
 
     delete adjAreas;
     return success;
 }
 
 // Add cell to cells. If there is no LOS, attempt rescue.
-// Optional: ArrayList containing all candidate cells, and current index, to perform navmesh-exploration-stitching when LOS cannot be rescued.
-void guide_add_cell(ArrayList cells, Cell cell, ArrayList cells_all = null, int &i_current = -1)
+void guide_add_cell(ArrayList cells, Cell cell)
 {
-    if (cells.Length<=1) // no LOS shortcuts available
+    if (cells.Length<1) // no shortcuts available
     {
         cells.PushArray(cell);
         return;
     }
     static Cell cell_prev, cell_prev2;
     cells.GetArray(cells.Length-1,cell_prev,sizeof(Cell)); // last cell
-    cells.GetArray(cells.Length-2,cell_prev2,sizeof(Cell)); // cell before last cell
+    
+    bool prev2 = cells.Length>=2;
+    if (prev2) cells.GetArray(cells.Length-2,cell_prev2,sizeof(Cell));
+
     bool LOS = twopos_traversable(cell.center,cell_prev.center);
     if (!LOS) // Try lifting cells
     {
@@ -1652,7 +1724,7 @@ void guide_add_cell(ArrayList cells, Cell cell, ArrayList cells_all = null, int 
         else
         {
             cell_lifted = cell_prev; cell_lifted.center[2] += 16.0;
-            if (twopos_traversable(cell_lifted.center,cell.center) && twopos_traversable(cell_lifted.center,cell_prev2.center))
+            if (twopos_traversable(cell_lifted.center,cell.center) && ( !prev2 || twopos_traversable(cell_lifted.center,cell_prev2.center) ) )
             {
                 cell_prev = cell_lifted;
                 cells.SetArray(cells.Length-1,cell_prev,sizeof(Cell));
@@ -1660,34 +1732,22 @@ void guide_add_cell(ArrayList cells, Cell cell, ArrayList cells_all = null, int 
             }
         }
     }
+    
     if (LOS)
     {
-        if (triple_valid_ground(cell_prev2.center,cell.center) && twopos_traversable(cell.center,cell_prev2.center))
-        //if (!cell_step_too_steep(cell_prev2,cell) && twopos_traversable(cell.center,cell_prev2.center) && twopos_traversable(cell_prev2.center,cell_prev.center))
-        //if (twopos_traversable(cell.center,cell_prev2.center) && twopos_traversable(cell_prev2.center,cell_prev.center))
+        if (prev2 && triple_valid_ground(cell_prev2.center,cell.center) && twopos_traversable(cell.center,cell_prev2.center))
             cells.SetArray(cells.Length-1,cell,sizeof(Cell));
         else 
             cells.PushArray(cell);
     }
-    else
+    else if (!cell_rescue(cells,cell_prev,cell,cell_prev2,prev2))
     {
-        bool rescued = false;
-        if (!rescued) rescued = cell_rescue(cells,cell_prev,cell,cell_prev2);
-        if (!rescued && cells_all != null && i_current>0)
-        {
-            rescued = explore_stitch(cells_all,i_current);
-            if (rescued)
-            {
-                cells_all.GetArray(i_current,cell,sizeof(Cell)); // i_current may have changed due to explore_stitch
-                guide_add_cell(cells,cell);
-            }
-        }
-        if (!rescued) cells.PushArray(cell);
+        cells.PushArray(cell);
     }
 }
 
-// Two cells cannot see each other. Attempt to remedy this. return true on success
-bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2)
+// Two cells cannot see each other. Attempt to remedy this. prev2 if cell before previous cell exists. return true on success
+bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2, bool prev2 = true)
 {
     static Cell cell;
     static Address navAreas[2];
@@ -1774,10 +1834,8 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2)
         if (cell.flow>=cell_new.flow) cell.flow = (cell_old.flow + cell_new.flow)/2.0;
         cell.navArea = Address_Null;
         cell.center = pos_candidate;
-        if (triple_valid_ground(cell_prev2.center,cell.center) && twopos_traversable(cell.center,cell_prev2.center))
+        if (prev2 && triple_valid_ground(cell_prev2.center,cell.center) && twopos_traversable(cell.center,cell_prev2.center))
             cells.SetArray(cells.Length-1,cell,sizeof(Cell));
-        //if (!cell_step_too_steep(cell_prev2,cell) && twopos_traversable(cell.center,cell_prev2.center)) cells.SetArray(cells.Length-1,cell,sizeof(Cell));
-        //if (twopos_traversable(cell.center,cell_prev2.center)) cells.SetArray(cells.Length-1,cell,sizeof(Cell));
         else
             cells.PushArray(cell);
         success = true;
@@ -1797,7 +1855,7 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2)
     {
         Address navArea = navAreas[i_nav];
         if (navArea == Address_Null) continue;
-        for (int dir = 0; dir < 4; dir++) // Enqueue adjacent nav areas (all 4 directions)
+        for (int dir = 0; dir < 5; dir++) // Enqueue adjacent nav areas (all 4 directions)
         {
             adjAreas.Clear();
             L4D_NavArea_GetAdjacentAreas(navArea, dir, adjAreas);
@@ -1806,7 +1864,6 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2)
                 Address adjArea = adjAreas.Get(i);
                 if (adjArea == Address_Null) continue;
                 if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
-                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,false)) continue;
                 for (int i_try = 0; i_try < 2; i_try++)
                 {
                     if (i_try == 0) L4D_GetNavAreaCenter(adjArea,pos_candidate);
@@ -1953,21 +2010,25 @@ bool cell_traversable(int i, float pos[3], bool world_only = true, float max_dis
 //static int MASK_PTG = MASK_PLAYERSOLID | MASK_VISIBLE | CONTENTS_DETAIL;
 static int MASK_PTG = MASK_PLAYERSOLID;
 
-// Test if you can travel between two vector positions without an obstruction. world_only to hit only world and static props
-bool twopos_traversable(float pos1[3], float pos2[3], bool world_only = true, float max_distance = -1.0, bool hull = true)
+#define DX_HULL 8.0
+#define DZ_HULL 30.0
+
+// Test if you can travel between two vector positions without an obstruction. world_only to hit only world and static props. ladder to accept traversability if ladder was hit
+bool twopos_traversable(float pos1[3], float pos2[3], bool world_only = true, float max_distance = -1.0, bool hull = true, bool ladder = true)
 {
     g_bHitLadder = false;
     if (max_distance>0.0 && GetVectorDistance(pos1,pos2)>max_distance) return false;
     if (hull)
     {
-        if (world_only) TR_TraceHullFilter(pos1,pos2,{-3.0,-3.0,1.0},{3.0,3.0,30.0},MASK_PTG,TraceFilterStatic);
-        else            TR_TraceHullFilter(pos1,pos2,{-3.0,-3.0,1.0},{3.0,3.0,30.0},MASK_PTG,TraceFilterNoClients);
+        if (world_only) TR_TraceHullFilter(pos1,pos2,{-DX_HULL,-DX_HULL,1.0},{DX_HULL,DX_HULL,DZ_HULL},MASK_PTG,TraceFilterStatic);
+        else            TR_TraceHullFilter(pos1,pos2,{-DX_HULL,-DX_HULL,1.0},{DX_HULL,DX_HULL,DZ_HULL},MASK_PTG,TraceFilterNoClients);
     }
     else
     {
        if (world_only) TR_TraceRayFilter(pos1,pos2,MASK_PTG,RayType_EndPoint,TraceFilterStatic);
        else TR_TraceRayFilter(pos1,pos2,MASK_PTG,RayType_EndPoint,TraceFilterNoClients);
     }
+    if (ladder && g_bHitLadder) return true;
     if (!TR_DidHit(INVALID_HANDLE)) return true;
     #if DEBUG
     g_iHitEntity = TR_GetEntityIndex(INVALID_HANDLE);
@@ -2137,6 +2198,33 @@ stock bool entity_solid(int entity)
     return true;
 }
 
+// Check if connection from -> to can be made.
+stock bool cell_connected(Cell from, Cell to, bool check_ladder = true)
+{
+    if (from.navArea != Address_Null && to.navArea != Address_Null)
+    { 
+        for (int dir = 0; dir < 5; dir++)
+        {
+            if (L4D_NavArea_IsConnected(from.navArea,to.navArea,dir)) return true;
+        }
+    }
+    //if (twopos_traversable(from.center,to.center)) return true;
+    static Cell cell;
+    if (check_ladder && try_ladder(from.flow,from.center,cell) && cell_connected(cell,to,false)) return true;
+    return false;
+}
+
+// Check if connection from -> to can be made.
+stock bool navArea_connected(Address from, Address to)
+{
+    if (from == Address_Null || to == Address_Null) return false;
+    for (int dir = 0; dir < 5; dir++)
+    {
+        if (L4D_NavArea_IsConnected(from,to,dir)) return true;
+    }
+    return false;
+}
+
 // Check if nav area is relevant to survivor escape path.
 stock bool navArea_escape(Address navArea)
 {
@@ -2167,7 +2255,8 @@ stock void NavChanged(bool recompute = false)
     t_nav = GetGameTime();
     if (recompute) t_nav = t_nav - NAV_COOLDOWN + 0.1;
     if (!enable || !gamemode_guidable || !map_started || !nav_started || timer_nav != null) return;
-    timer_nav = CreateTimer( (recompute) ? 0.1 : NAV_COOLDOWN , Timer_CheckRequests, _, TIMER_FLAG_NO_MAPCHANGE );
+    if (finale && finale_rescue && finale_stitched && g_hCvarFinaleAuto.BoolValue) Guide_All_Clients();
+    else timer_nav = CreateTimer( (recompute) ? 0.1 : NAV_COOLDOWN , Timer_CheckRequests, _, TIMER_FLAG_NO_MAPCHANGE );
 }
 
 ///////////// SDK

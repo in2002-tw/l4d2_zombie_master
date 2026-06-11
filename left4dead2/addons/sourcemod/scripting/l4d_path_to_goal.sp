@@ -17,9 +17,7 @@
 #include <dhooks>
 #include <l4d_path_to_goal>
 
-#define PLUGIN_VERSION 			"1.33 2026-06-07"
-
-// Fix detour join not working with finale cvar set to 0
+#define PLUGIN_VERSION 			"1.35 2026-06-11"
 
 public Plugin myinfo =
 {
@@ -115,7 +113,7 @@ void evtFinaleVehicle(Event event, const char[] name, bool dontBroadcast)
     if (finale_rescue && g_hCvarFinale.IntValue < FINALE_NEVER)
     {
         if (guide_ready && !finale_stitched && should_stitch_finale()) stitch_finale();
-        if (g_hCvarFinaleAuto.BoolValue) Guide_All_Clients();
+        if (g_hCvarFinaleAuto.BoolValue) CreateTimer(2.0, Timer_Guide_All_Clients, _, TIMER_FLAG_NO_MAPCHANGE);
     }
 }
 
@@ -355,6 +353,7 @@ public void OnMapStart()
 {
 	g_iLaser = PrecacheModel(VMT_LASERBEAM, true);
     RequestFrame(MapStarted);
+    GetCurrentMap(mapName, sizeof(mapName));
 }
 
 void MapStarted()
