@@ -17,7 +17,7 @@
 #include <dhooks>
 #include <l4d_path_to_goal>
 
-#define PLUGIN_VERSION 			"1.35 2026-06-11"
+#define PLUGIN_VERSION 			"1.35 2026-06-12"
 
 public Plugin myinfo =
 {
@@ -353,7 +353,7 @@ public void OnMapStart()
 {
 	g_iLaser = PrecacheModel(VMT_LASERBEAM, true);
     RequestFrame(MapStarted);
-    GetCurrentMap(mapName, sizeof(mapName));
+    //GetCurrentMap(mapName, sizeof(mapName));
 }
 
 void MapStarted()

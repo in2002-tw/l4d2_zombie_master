@@ -82,7 +82,7 @@ bool gamemode_guidable, guide_ready, guide_prep, map_started, nav_started, enabl
 int g_iLaser;
 float t_nav = -1.0; // nav event gametime
 Handle timer_nav;
-char mapName[PLATFORM_MAX_PATH];
+//char mapName[PLATFORM_MAX_PATH];
 
 DynamicDetour g_hRecomputeFlowDetour;
 Handle g_hRecomputeFlow;
@@ -1528,7 +1528,7 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
     static Cell cell, cell2;
 
     int stitch_gap = STITCH_GAP_OK;
-    if (strncmp(mapName,"c7m2",4,false)==0) stitch_gap = 20; // i just want to talk to the mapper
+    //if (strncmp(mapName,"c7m2",4,false)==0) stitch_gap = 20; // i just want to talk to the mapper
 
     // Determine i_min>=i_start, where i_min is the furthest away cell index where disconnection was detected
     int i_min = i_start;
