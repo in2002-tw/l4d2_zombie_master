@@ -166,7 +166,7 @@ void create_main_menu()
     Format(buffer, sizeof(buffer), "%T", "Other", zm_language);
     menu_main.AddItem("item_5",buffer);
 
-    Format(buffer, sizeof(buffer), "Items");
+    Format(buffer, sizeof(buffer), "%T", "Inventory", zm_language);
     if (!g_hTraps.BoolValue) buffer_add_rawline(buffer);
     menu_main.AddItem("item_6",buffer);
 
@@ -898,44 +898,47 @@ void create_items_menu()
     count_survivor_items();
     menu_items = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),items_menu_Handler);
     apply_zm_menu_settings(menu_items);
+
+    int zm_language = LANG_SERVER;
+    if (IsValidClientZM()) zm_language = zm_client;
     
-    menu_items.SetTitle("Survivors: %d", g_iAliveSurvivors);
+    menu_items.SetTitle("%t: %d", "Survivors", g_iAliveSurvivors, zm_language);
 
     char buffer[64]; 
     
-    if (g_iMolotov>0) Format(buffer, sizeof(buffer), "Molotov: %d", g_iMolotov);
+    if (g_iMolotov>0) Format(buffer, sizeof(buffer), "%t: %d", "Molotov", g_iMolotov, zm_language);
     else buffer = "";
     menu_items.AddItem("item_1",buffer);
 
-    if (g_iPipeBomb>0) Format(buffer, sizeof(buffer), "Pipe Bomb: %d", g_iPipeBomb);
+    if (g_iPipeBomb>0) Format(buffer, sizeof(buffer), "%t: %d", "Pipe Bomb", g_iPipeBomb, zm_language);
     else buffer = "";
     menu_items.AddItem("item_2",buffer);
 
-    if (g_iBileJar>0) Format(buffer, sizeof(buffer), "Bile Jar: %d", g_iBileJar);
+    if (g_iBileJar>0) Format(buffer, sizeof(buffer), "%t: %d", "Bile Jar", g_iBileJar, zm_language);
     else buffer = "";
     menu_items.AddItem("item_3",buffer);
 
-    if (g_iMedkit>0) Format(buffer, sizeof(buffer), "Medkit: %d", g_iMedkit);
+    if (g_iMedkit>0) Format(buffer, sizeof(buffer), "%t: %d", "Medkit", g_iMedkit, zm_language);
     else buffer = "";
     menu_items.AddItem("item_4",buffer);
 
-    if (g_iDefib>0) Format(buffer, sizeof(buffer), "Defib: %d", g_iDefib);
+    if (g_iDefib>0) Format(buffer, sizeof(buffer), "%t: %d", "Defib", g_iDefib, zm_language);
     else buffer = "";
     menu_items.AddItem("item_5",buffer);
 
-    if (g_iIncendiary>0) Format(buffer, sizeof(buffer), "Incendiary: %d", g_iIncendiary);
+    if (g_iIncendiary>0) Format(buffer, sizeof(buffer), "%t: %d", "Incendiary", g_iIncendiary, zm_language);
     else buffer = "";
     menu_items.AddItem("item_6",buffer);
 
-    if (g_iExplosive>0) Format(buffer, sizeof(buffer), "Explosive: %d", g_iExplosive);
+    if (g_iExplosive>0) Format(buffer, sizeof(buffer), "%t: %d", "Explosive", g_iExplosive, zm_language);
     else buffer = "";
     menu_items.AddItem("item_7",buffer);
 
-    if (g_iPills>0) Format(buffer, sizeof(buffer), "Pills: %d", g_iPills);
+    if (g_iPills>0) Format(buffer, sizeof(buffer), "%t: %d", "Pills", g_iPills, zm_language);
     else buffer = "";
     menu_items.AddItem("item_8",buffer);
 
-    if (g_iAdrenaline>0) Format(buffer, sizeof(buffer), "Adrenaline: %d", g_iAdrenaline);
+    if (g_iAdrenaline>0) Format(buffer, sizeof(buffer), "%t: %d", "Adrenaline", g_iAdrenaline, zm_language);
     else buffer = "";
     buffer_add_rawline(buffer);
     menu_items.AddItem("item_9",buffer);

@@ -550,6 +550,61 @@
 		"en"			"Unfreeze"
 	}
 
+	"Inventory"
+	{
+		"en"			"Inventory"
+	}
+
+	"Survivors"
+	{
+		"en"			"Survivors"
+	}
+
+	"Molotov"
+	{
+		"en"			"Molotov"
+	}
+
+	"Pipe Bomb"
+	{
+		"en"			"Pipe Bomb"
+	}
+
+	"Bile Jar"
+	{
+		"en"			"Bile Jar"
+	}
+
+	"Medkit"
+	{
+		"en"			"Medkit"
+	}
+
+	"Defib"
+	{
+		"en"			"Defib"
+	}
+
+	"Incendiary"
+	{
+		"en"			"Incendiary"
+	}
+
+	"Explosive"
+	{
+		"en"			"Explosive"
+	}
+
+	"Pills"
+	{
+		"en"			"Pills"
+	}
+
+	"Adrenaline"
+	{
+		"en"			"Adrenaline"
+	}
+
 	"Traps"
 	{
 		"en"		"Traps"

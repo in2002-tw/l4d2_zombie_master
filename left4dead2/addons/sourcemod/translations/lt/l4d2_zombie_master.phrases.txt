@@ -551,6 +551,61 @@
 		"lt"			"Atšaldyti"
 	}
 
+        "Inventory"
+	{
+		"lt"			"Inventorius"
+	}
+
+	"Survivors"
+	{
+		"lt"			"Išgyventojai"
+	}
+
+	"Molotov"
+	{
+		"lt"			"Molotovas"
+	}
+
+	"Pipe Bomb"
+	{
+		"lt"			"Vamzdinė bomba"
+	}
+
+	"Bile Jar"
+	{
+		"lt"			"Vėmalai"
+	}
+
+	"Medkit"
+	{
+		"lt"			"Vaistinėlė"
+	}
+
+	"Defib"
+	{
+		"lt"			"Defibriliatorius"
+	}
+
+	"Incendiary"
+	{
+		"lt"			"Degančios kulkos"
+	}
+
+	"Explosive"
+	{
+		"lt"			"Sprogstančios kulkos"
+	}
+
+	"Pills"
+	{
+		"lt"			"Piliulės"
+	}
+
+	"Adrenaline"
+	{
+		"lt"			"Adrenalinas"
+	}
+
 		"Traps"
 	{
 		"lt"		"Traps"

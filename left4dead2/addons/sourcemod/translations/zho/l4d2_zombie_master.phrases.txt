@@ -550,6 +550,61 @@
 		"zho"			"解除凍結特感"
 	}
 
+	"Inventory"
+	{
+		"zho"			"Inventory"
+	}
+
+	"Survivors"
+	{
+		"zho"			"Survivors"
+	}
+
+	"Molotov"
+	{
+		"zho"			"Molotov"
+	}
+
+	"Pipe Bomb"
+	{
+		"zho"			"Pipe Bomb"
+	}
+
+	"Bile Jar"
+	{
+		"zho"			"Bile Jar"
+	}
+
+	"Medkit"
+	{
+		"zho"			"Medkit"
+	}
+
+	"Defib"
+	{
+		"zho"			"Defib"
+	}
+
+	"Incendiary"
+	{
+		"zho"			"Incendiary"
+	}
+
+	"Explosive"
+	{
+		"zho"			"Explosive"
+	}
+
+	"Pills"
+	{
+		"zho"			"Pills"
+	}
+
+	"Adrenaline"
+	{
+		"zho"			"Adrenaline"
+	}
+
 	"Traps"
 	{
 		"zho"		"Traps"

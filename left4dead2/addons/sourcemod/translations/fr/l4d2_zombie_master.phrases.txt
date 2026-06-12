@@ -551,7 +551,62 @@
 		"fr"			"Unfreeze SI"
 	}
 
-		"Traps"
+        "Inventory"
+	{
+		"fr"			"Inventory"
+	}
+
+	"Survivors"
+	{
+		"fr"			"Survivors"
+	}
+
+	"Molotov"
+	{
+		"fr"			"Molotov"
+	}
+
+	"Pipe Bomb"
+	{
+		"fr"			"Pipe Bomb"
+	}
+
+	"Bile Jar"
+	{
+		"fr"			"Bile Jar"
+	}
+
+	"Medkit"
+	{
+		"fr"			"Medkit"
+	}
+
+	"Defib"
+	{
+		"fr"			"Defib"
+	}
+
+	"Incendiary"
+	{
+		"fr"			"Incendiary"
+	}
+
+	"Explosive"
+	{
+		"fr"			"Explosive"
+	}
+
+	"Pills"
+	{
+		"fr"			"Pills"
+	}
+
+	"Adrenaline"
+	{
+		"fr"			"Adrenaline"
+	}
+
+	"Traps"
 	{
 		"fr"		"Traps"
 	}

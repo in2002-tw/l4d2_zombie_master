@@ -16,7 +16,7 @@
 // Snake22, Mark9013100, Sarahtonin, Rex Bosworth, g3intel, SomeENG, nativehenu
 // HUGE THANKS for scripting help: HarryPotter, xerox8521, Forgetest, little_froy, Lux, Marttt, Bacardi, Silvers, zyiks
 // HUGE THANKS TO Reagy and IronBar for hosting the Knockout Left 4 Dead 2 Server
-// Sentence-mixed survivor voice lines: Skerion. Ellis voice line by zyiks
+// Sentence-mixed survivor voice lines: Skerion (Ellis voice line by zyiks)
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -34,7 +34,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.15 2026-06-08"
+#define PLUGIN_VERSION 			"0.9.16 2026-06-12"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -73,7 +73,7 @@ public Plugin myinfo =
 {
 	name = "[L4D2] Zombie Master",
 	author = "gvazdas, zyiks, Skerion",
-	description = "[coop,survival] An infected player, the Zombie Master, controls all zombies instead of the AI Director.",
+	description = "[coop,survival] An infected player, the Zombie Master, must stop the Survivors instead of the AI Director.",
 	version = PLUGIN_VERSION,
 	url = "https://forums.alliedmods.net/showthread.php?t=352060, https://github.com/gvazdas/l4d2_zombie_master"
 }
@@ -82,14 +82,14 @@ public Plugin myinfo =
 // 1. Fixed Specials not refunding if deleted immediately on spawn due to ability cooldown checks
 // 2. Ambush system: Specials that are vomited on, fighting Survivors, or burning, are not included in Freeze/Unfreeze commands.
 // 3. Other -> Give Up now asks for confirmation to avoid accidents.
-// 4. Player data: remember grid mode, autocommon settings, PTG
-// 5. Traditional Chinese localization updated (thanks in2002)
-// 6. Start area fixes for better compatibility with custom maps.
-// 7. Common flow spawns fixed. Should fail less.
-// 8. PTG
-// 9. Menu overhaul.
-// 10. Items menu.
-// 11. Clientprefs.
+// 4. Traditional Chinese localization updated (thanks in2002)
+// 5. Start area fixes for better compatibility with custom maps.
+// 6. Common flow spawns fixed. Should fail less.
+// 7. PTG
+// 8. Menu overhaul.
+// 9. Items menu.
+// 10. Clientprefs.
+// 11. Spitter is more expensive and has 2x cooldown compared to other Specials.
 
 // TO DO LIST:
 // 15. Performance bottlenecks.
