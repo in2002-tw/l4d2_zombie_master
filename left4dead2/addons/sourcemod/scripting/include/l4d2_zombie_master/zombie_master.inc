@@ -411,7 +411,6 @@ Handle hGetClusterForOrigin = null;
 Handle hGetPVSForCluster = null;
 Handle hCheckOriginInPVS = null;
 Address g_pEngineServer = Address_Null;
-#define PVS_BUFFER_SIZE 8192
 #define PVS_VALID_TIME 0.09 // seconds (gametime)
 bool   g_bBatchPVSActive = false; // is PVS batch valid?
 bool   g_bBatchActive = false; // is survivor batch valid?
@@ -2454,7 +2453,7 @@ void ZM_FixCamera(bool freeze = true)
     SetEntPropFloat(zm_client, Prop_Send, "m_flFallVelocity", 0.0);
     SetEntPropVector(zm_client, Prop_Data, "m_angRotation", {0.0,0.0,0.0});
     
-    JoinZM(zm_client,0);
+    JoinZM(zm_client);
     
     TeleportEntity(zm_client, zm_deathPos, zm_deathAngles, NULL_VECTOR);
     recordpos = true;
@@ -2719,18 +2718,21 @@ Action JoinZM_command(int client, int args)
     if (!IsValidClient(client)) return Plugin_Continue;
     first_active = true;
     clients_active[client] = true;
-    if (!g_bCvarAllow) VoteZM(client,0);
+    if (!g_bCvarAllow)
+    {
+        VoteZM(client,0);
+        return Plugin_Continue;
+    }
     if (IsValidClientZM() && client==zm_client) zm_menu_state = ZM_MENU_CLOSED;
-    JoinZM(client,args);
+    JoinZM(client);
     return Plugin_Continue;
 }
 
 
-Action JoinZM(int client, int args)
+void JoinZM(int client)
 {
-	if (!g_bCvarAllow || !IsValidClient(client) || args>1) return Plugin_Continue;
-	if (zm_stage>=ZM_END) return Plugin_Continue;
-	if (client<0 || IsFakeClient(client)) return Plugin_Continue;
+	if (!g_bCvarAllow || zm_stage>=ZM_END || !IsValidClient(client) || IsFakeClient(client)) return;
+    static char name[MAX_NAME_LENGTH]; 
 	if (DEBUG) LogMessage("[zm] JoinZM");
 	if (IsValidClientZM())
 	{
@@ -2752,27 +2754,30 @@ Action JoinZM(int client, int args)
           }
           if (zm_menu_state==ZM_MENU_CLOSED) open_menu(zm_client);
        }
-       else PrintHintText(client,"%t", "ZM taken");
-       return Plugin_Continue;
+       else
+       {
+            GetClientName(zm_client,name,sizeof(name));
+            ReplyToCommand(client, "[zm] %t", "ZM joined", name);
+       }
+       return;
     }
     
     // Allow players who played less to skip ahead of offer line
     if (g_bFairQueue && zm_stage<ZM_STARTED && !fair_exhausted && client!=client_offer)
     {
   		zm_data cell;
-  		if (!get_zm_data(cell,client)) return Plugin_Continue;
+  		if (!get_zm_data(cell,client)) return;
   		int roundcount_client = cell.last_roundcount;
   		if (roundcount_client>=roundcount_offer)
   		{
       		if (IsValidClient(client_offer))
       		{
-          		char name[MAX_NAME_LENGTH]; 
                 GetClientName(client_offer,name,sizeof(name));
                 int timeleft = RoundFloat(g_fFairQueueWait - (GetGameTime() - t_offer));
                 if (timeleft<0) timeleft = 0;
            		PrintToChat(client, "[zm] %T", "Offered ZM Ticker", client, name, timeleft); 
       		}
-      		return Plugin_Continue;
+      		return;
   		}
     }
     
@@ -2803,7 +2808,6 @@ Action JoinZM(int client, int args)
    	//AcceptEntityInput(client, "RunScriptCode");
     
     spawner_last_valid = false;
-    char name[MAX_NAME_LENGTH]; 
     GetClientName(client,name,sizeof(name));
     int playcount = get_rounds(client);
     PrintToChatAll("[zm] %t (%d)", "ZM joined", name, playcount);
@@ -2818,7 +2822,7 @@ Action JoinZM(int client, int args)
     zm_fake_gamemode();
     ems_hud_timer = INVALID_HANDLE;
     update_hint("%T", "zm_menu_hint", zm_client);
-    if (playcount<=0) PrintToChat(client, "[zm] Enable Spectating Free Look in Options -> Multiplayer!!!");
+    if (playcount<=0) PrintToChat(client, "[zm] WARNING!!! Enable Spectating Free Look in Options -> Multiplayer!!!");
     if (strcmp(g_sZMGamemode,"zm_default")!=0) PrintToChat(client, "[zm] Gamemode: %s", g_sZMGamemode);
     if (panic_target==zm_client) panic_target = -1;
     update_t_zm_activity();
@@ -2853,8 +2857,6 @@ Action JoinZM(int client, int args)
     }
 
     set_zm_stage(ZM_PREP);
-
-    return Plugin_Continue;
 }
 
 void QuitZM_Force(int client)

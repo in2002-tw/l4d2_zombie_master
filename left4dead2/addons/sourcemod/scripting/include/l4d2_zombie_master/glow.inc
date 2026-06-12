@@ -200,7 +200,7 @@ void CreateZMGlow(int target, bool red = false, bool flow = false)
 	if (!IsEntitySafe(glow)) return;
 	
 	int eFlags = GetEdictFlags(target);
-	if ((eFlags & FL_EDICT_ALWAYS)<=0) SetEdictFlags(target, eFlags | FL_EDICT_ALWAYS); //
+	if ((eFlags & FL_EDICT_ALWAYS)<=0) SetEdictFlags(target, eFlags | FL_EDICT_ALWAYS);
 	
 	char sModelName[64];
 	GetEntPropString(target, Prop_Data, "m_ModelName", sModelName, sizeof(sModelName));
