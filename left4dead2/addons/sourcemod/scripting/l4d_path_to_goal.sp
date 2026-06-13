@@ -77,7 +77,7 @@ public void OnPluginStart()
     g_hCvarFinale = CreateConVar("l4d_path_to_goal_finale", "1",
     "On Finale maps, connect to rescue vehicle... 0: ALWAYS, 1: FINALE STARTED, 2: RESCUE ARRIVED, 3: NEVER",FCVAR_NOTIFY, true, 0.0, true, 3.0);
 
-    g_hCvarFinaleAuto = CreateConVar("l4d_path_to_goal_finale_auto", "1",
+    g_hCvarFinaleAuto = CreateConVar("l4d_path_to_goal_finale_auto", "0",
     "Draw beams to rescue vehicle when it arrives. l4d_path_to_goal_finale must be less than 3.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
   	g_hCvarMPGameMode = FindConVar("mp_gamemode");

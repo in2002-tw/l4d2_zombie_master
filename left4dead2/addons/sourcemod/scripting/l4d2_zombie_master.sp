@@ -34,7 +34,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.16 2026-06-12"
+#define PLUGIN_VERSION 			"0.9.16 2026-06-13"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -197,7 +197,7 @@ public void OnPluginStart()
     g_hUpdateRate = CreateConVar("zm_updaterate", "0.25", "Update rate for periodic ZM checks, in seconds.",FCVAR_PROTECTED , true, 0.1, true, 10.0);
     g_hUpdateRate.AddChangeHook(ConVarChanged_Cvars);
 
-    g_hHudPerElement = CreateConVar("zm_hud_per_element", "0", "EMS HUD network mode. 0=legacy padded string (higher bandwidth), 1=per-element writes (low bandwidth).",FCVAR_PROTECTED , true, 0.0, true, 1.0);
+    g_hHudPerElement = CreateConVar("zm_hud_per_element", "1", "EMS HUD network mode. 0=legacy padded string (higher bandwidth), 1=per-element writes (low bandwidth).",FCVAR_PROTECTED , true, 0.0, true, 1.0);
     g_hHudPerElement.AddChangeHook(ConVarChanged_Cvars);
 
     g_hMaxCommons = CreateConVar("zm_maxcommons", "75", "ZM max number of common zombies. Be careful.",FCVAR_PROTECTED , true, 0.0, true, 500.0);

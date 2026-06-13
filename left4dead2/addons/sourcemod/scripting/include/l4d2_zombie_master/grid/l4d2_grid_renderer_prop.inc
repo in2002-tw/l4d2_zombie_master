@@ -429,13 +429,16 @@ static void GridRendererProp_CreatePool(int client)
 		// Start hidden, no shadows, no interpolation
 		int effects = GetEntProp(ent, Prop_Send, "m_fEffects");
 		SetEntProp(ent, Prop_Send, "m_fEffects", effects | EF_NODRAW | EF_NOSHADOW | EF_NOINTERP);
-
+		
 		// Set up transmit hook for per-client visibility
 		g_Prop_OwnerClient[ent] = client;
 		SDKHook(ent, SDKHook_SetTransmit, GridRendererProp_OnSetTransmit);
 
 		g_PropPool[client].entities[i] = EntIndexToEntRef(ent);
 		created++;
+
+		SET_TRANSMIT_ALWAYS(ent); // see cells through the whole map.
+
 	}
 
 	g_PropPool[client].totalAllocated = created;
