@@ -196,7 +196,10 @@ public void OnPluginStart()
     
     g_hUpdateRate = CreateConVar("zm_updaterate", "0.25", "Update rate for periodic ZM checks, in seconds.",FCVAR_PROTECTED , true, 0.1, true, 10.0);
     g_hUpdateRate.AddChangeHook(ConVarChanged_Cvars);
-    
+
+    g_hHudPerElement = CreateConVar("zm_hud_per_element", "0", "EMS HUD network mode. 0=legacy padded string (higher bandwidth), 1=per-element writes (low bandwidth).",FCVAR_PROTECTED , true, 0.0, true, 1.0);
+    g_hHudPerElement.AddChangeHook(ConVarChanged_Cvars);
+
     g_hMaxCommons = CreateConVar("zm_maxcommons", "75", "ZM max number of common zombies. Be careful.",FCVAR_PROTECTED , true, 0.0, true, 500.0);
     g_hMaxCommons.AddChangeHook(ConVarChanged_Cvars_ZMenu);
     

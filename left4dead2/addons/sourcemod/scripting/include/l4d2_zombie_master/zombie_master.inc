@@ -599,6 +599,11 @@ ConVar g_hPrepTimeZM;
 float g_fPrepTimeZM;
 float t_zm_join = 0.0;
 
+// EMS HUD network mode: 0=legacy padded string (single element-0 overflow write),
+// 1=per-element writes (drops space padding, much lower network traffic).
+ConVar g_hHudPerElement;
+bool g_bHudPerElement;
+
 float saferoom_cooldown = 5.0;
 bool saferoom_locked = false;
 float t_last_join = 0.0;
@@ -789,7 +794,9 @@ void GetCvars()
     g_bLockSaferoom = g_hLockSaferoom.BoolValue;
     
     g_fPrepTimeZM = g_hPrepTimeZM.FloatValue;
-    
+
+    g_bHudPerElement = g_hHudPerElement.BoolValue;
+
     g_fSpecialCooldown = g_hSpecialCooldown.FloatValue;
     g_fTankCooldown = g_hTankCooldown.FloatValue;
     g_fSpitterCooldown = g_hSpitterCooldown.FloatValue;

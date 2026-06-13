@@ -52,7 +52,11 @@ Action perform_HUD_update(Handle timer = null)
         GameRules_SetProp("m_iScriptedHUDFlags", HUD_FLAG_NOTVISIBLE, _, HUD_ZM_HINT);
         return Plugin_Stop;
     }
-    
+
+    char pad[128];
+    if (g_bHudPerElement) pad[0] = '\0';
+    else strcopy(pad, sizeof(pad), g_sSpaces);
+
     int HUD_TIMER_flags = HUD_FLAG_ALIGN_CENTER|HUD_FLAG_TEXT;
     int HUD_ZM_flags = HUD_FLAG_TEAM_INFECTED|HUD_FLAG_ALIGN_LEFT|HUD_FLAG_TEXT;
     int HUD_ZM_HINT_flags = HUD_FLAG_TEAM_INFECTED|HUD_FLAG_ALIGN_LEFT|HUD_FLAG_TEXT|HUD_FLAG_NOBG;
@@ -115,7 +119,7 @@ Action perform_HUD_update(Handle timer = null)
         GameRules_SetPropFloat("m_fScriptedHUDWidth", 0.0099*cols, HUD_ZM);
         GameRules_SetPropFloat("m_fScriptedHUDHeight", 0.026*rows, HUD_ZM);
         g_sBuffer = "\0";
-        FormatEx(g_sBuffer, sizeof(g_sBuffer), "%s %s", g_sData_HUD_ZM_Text, g_sSpaces);
+        FormatEx(g_sBuffer, sizeof(g_sBuffer), "%s %s", g_sData_HUD_ZM_Text, pad);
         g_sHUD_TextArray[HUD_ZM] = g_sBuffer;
         
         // ZM HINT
@@ -125,7 +129,7 @@ Action perform_HUD_update(Handle timer = null)
         GameRules_SetPropFloat("m_fScriptedHUDHeight", 0.026, HUD_ZM_HINT);
         TrimString(ZM_hint);
         g_sBuffer = "\0";
-        FormatEx(g_sBuffer, sizeof(g_sBuffer), "\n%s\n %s", ZM_hint, g_sSpaces);
+        FormatEx(g_sBuffer, sizeof(g_sBuffer), "\n%s\n %s", ZM_hint, pad);
         g_sHUD_TextArray[HUD_ZM_HINT] = g_sBuffer;
         
     }
@@ -194,18 +198,30 @@ Action perform_HUD_update(Handle timer = null)
         GameRules_SetPropFloat("m_fScriptedHUDWidth", 0.0099*cols, HUD_TIMER);
         GameRules_SetPropFloat("m_fScriptedHUDHeight", 0.026, HUD_TIMER);
         g_sBuffer = "\0";
-        FormatEx(g_sBuffer, sizeof(g_sBuffer), "\n  %s\n %s", g_sData_HUD_TIMER_Text, g_sSpaces);
+        FormatEx(g_sBuffer, sizeof(g_sBuffer), "\n  %s\n %s", g_sData_HUD_TIMER_Text, pad);
         g_sHUD_TextArray[HUD_TIMER] = g_sBuffer;
     }
     
     // TICKER - PLACEHOLDER
     g_sBuffer = "\0";
-    FormatEx(g_sBuffer, sizeof(g_sBuffer), "%s%s", g_sSpaces, g_sSpaces);
+    FormatEx(g_sBuffer, sizeof(g_sBuffer), "%s%s", pad, pad);
     g_sHUD_TextArray[HUD_TICKER] = g_sBuffer;
-    
-    ImplodeStrings(g_sHUD_TextArray, sizeof(g_sHUD_TextArray), " ", g_sHUD_Text, sizeof(g_sHUD_Text));
-    GameRules_SetPropString("m_szScriptedHUDStringSet", g_sHUD_Text);
-    
+
+    if (g_bHudPerElement)
+    {
+        // Each slot to its own array element: no padding, no overflow, only the
+        // real (changed) text is networked.
+        for (int i = 0; i < sizeof(g_sHUD_TextArray); i++)
+            GameRules_SetPropString("m_szScriptedHUDStringSet", g_sHUD_TextArray[i], true, i);
+    }
+    else
+    {
+        // Legacy: one element-0 write of the padded blob, relying on overflow into
+        // the contiguous slot buffers.
+        ImplodeStrings(g_sHUD_TextArray, sizeof(g_sHUD_TextArray), " ", g_sHUD_Text, sizeof(g_sHUD_Text));
+        GameRules_SetPropString("m_szScriptedHUDStringSet", g_sHUD_Text);
+    }
+
     return Plugin_Stop;
     
 }
