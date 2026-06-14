@@ -1,0 +1,68 @@
+"Games"
+{
+	"left4dead2"
+	{
+		"Functions"
+		{
+			"SurvivorBot::EnforceProximityToHumans"
+			{
+				"signature"	"SurvivorBot::EnforceProximityToHumans"
+				"callconv"	"thiscall"
+				"return"	"void"
+				"this"		"entity"
+			}
+
+			"SurvivorBot::ResolveStuckSituation"
+			{
+				"signature"	"SurvivorBot::ResolveStuckSituation"
+				"callconv"	"thiscall"
+				"return"	"void"
+				"this"		"entity"
+			}
+		}
+
+		"Signatures"
+		{
+			"SurvivorBot::EnforceProximityToHumans"
+			{
+				"library"	"server"
+				"linux"		"@_ZN11SurvivorBot24EnforceProximityToHumansEv"
+				"windows"	"\x55\x8B\xEC\x83\xEC\x30\x57\x8B\xF9\xE8\x2A\x2A\x2A\x2A\x83\xF8\x04\x0F\x84\x2A\x2A\x2A\x2A\x8B\xCF\xE8\x2A\x2A\x2A\x2A\x84\xC0\x75\x2A\x8B\x87\x40\x40\x00\x00"
+			}
+
+			"SurvivorBot::ResolveStuckSituation"
+			{
+				"library"	"server"
+				"linux"		"@_ZN11SurvivorBot21ResolveStuckSituationEP4Path"
+				"windows"	"\x55\x8B\xEC\x83\xEC\x34\xA1\x2A\x2A\x2A\x2A\x33\xC5\x89\x45\xFC\xA1\x2A\x2A\x2A\x2A\x83\x78\x30\x00\x53\x56\x8B\x75\x08\x8B\xD9\x89\x75\xD8\x0F\x84\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A\x84\xC0"
+			}
+		}
+
+		"Offsets"
+		{
+			"Situation_FollowHuman"
+			{
+				"linux"		"35740"
+				"windows"	"35768"
+			}
+
+			"Situation_List"
+			{
+				"linux"		"35828"
+				"windows"	"35856"
+			}
+
+			"Situation_ListCount"
+			{
+				"linux"		"35888"
+				"windows"	"35916"
+			}
+
+			"Situation_FollowDistance"
+			{
+				"linux"		"35744"
+				"windows"	"35772"
+			}
+		}
+	}
+}
