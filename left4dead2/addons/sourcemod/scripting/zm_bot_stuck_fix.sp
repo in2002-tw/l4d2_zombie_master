@@ -11,6 +11,14 @@
  *       warping to a random tracked teammate. We prune that teammate list down to
  *       live survivors only, then let the routine run, so branch A still works and
  *       branch B can only ever pick a real, alive survivor.
+ *
+ *   ChasePath::RefreshPath                 - the way every survivor movement
+ *       Action (Regroup, CoverOrphan, ...) chooses its chase path through. These Actions
+ *       cache a target and never re-check its team, so a bot keeps chasing a teammate
+ *       who switched to the infected team (the ZM). When we catch a survivor bot
+ *       chasing a target that is no longer a live survivor, we redirect the chase
+ *       to the engine's own closest-reachable teammate
+ *       (or, if there is none, skip the refresh entirely).
  */
 
 #pragma semicolon 1
@@ -35,13 +43,20 @@
 
 ConVar g_cvEnable;
 ConVar g_cvLog;
+ConVar g_cvChase;
 
 int g_iOfsFollowHuman;     // GetTeamSituation()+0x30: single "follow human" EHANDLE
 int g_iOfsList;            // GetTeamSituation()+0x88: tracked-teammate EHANDLE array
 int g_iOfsListCount;       // GetTeamSituation()+0xc4: entries in that array
 int g_iOfsFollowDistance;  // GetTeamSituation()+0x34: distance vs sb_enforce_proximity_range (debug)
 
+int g_iOfsINextBot;        // CTerrorPlayer -> INextBot subobject
+int g_iOfsSituationBase;   // CTerrorPlayer -> SurvivorTeamSituation (GetTeamSituation()'s return)
+
+Handle g_hGetClosestReachableFriend;  // SurvivorTeamSituation::GetClosestReachableFriend()
+
 float g_fLastStuckLog[MAXPLAYERS + 1];
+float g_fLastChaseLog[MAXPLAYERS + 1];
 
 int g_iLastClearedFollow[MAXPLAYERS + 1];
 
@@ -57,11 +72,15 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
 	g_cvEnable = CreateConVar("zm_bot_stuck_fix_enable", "1",
-		"Enable the survivor-bot stale-teleport fix.",
+		"Enable the survivor-bot stale-teleport on the next tick only fix .",
 		FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
 	g_cvLog = CreateConVar("zm_bot_stuck_fix_log", "1",
 		"Log to the server log whenever a bad bot teleport is prevented.",
+		FCVAR_NOTIFY, true, 0.0, true, 1.0);
+
+	g_cvChase = CreateConVar("zm_bot_stuck_fix_chase", "1",
+		"Redirect survivor bots that are path-chasing a player who is no longer a live survivor.",
 		FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
 	GameData gd = new GameData("zm_bot_stuck_fix");
@@ -72,6 +91,10 @@ public void OnPluginStart()
 	g_iOfsList           = LoadEntityOffset(gd, "Situation_List");
 	g_iOfsListCount      = LoadEntityOffset(gd, "Situation_ListCount");
 	g_iOfsFollowDistance = LoadEntityOffset(gd, "Situation_FollowDistance");
+	g_iOfsINextBot       = LoadEntityOffset(gd, "INextBot_Subobject");
+	g_iOfsSituationBase  = LoadEntityOffset(gd, "Situation_Base");
+
+	g_hGetClosestReachableFriend = SetupClosestFriendCall(gd);
 
 	DynamicDetour ddProximity = DynamicDetour.FromConf(gd, "SurvivorBot::EnforceProximityToHumans");
 	if (ddProximity == null)
@@ -81,10 +104,15 @@ public void OnPluginStart()
 	if (ddStuck == null)
 		SetFailState("Failed to set up detour: SurvivorBot::ResolveStuckSituation");
 
+	DynamicDetour ddChase = DynamicDetour.FromConf(gd, "ChasePath::RefreshPath");
+	if (ddChase == null)
+		SetFailState("Failed to set up detour: ChasePath::RefreshPath");
+
 	delete gd;
 
 	ddProximity.Enable(Hook_Pre, Detour_EnforceProximity_Pre);
 	ddStuck.Enable(Hook_Pre, Detour_ResolveStuck_Pre);
+	ddChase.Enable(Hook_Pre, Detour_RefreshPath_Pre);
 
 	RegAdminCmd("sm_botstuck_debug", Cmd_Debug, ADMFLAG_ROOT,
 		"Dump each survivor bot's follow-human, proximity gate, and team-situation list.");
@@ -99,6 +127,19 @@ static int LoadEntityOffset(GameData gd, const char[] key)
 	if (offset == -1)
 		SetFailState("Missing offset in gamedata: %s", key);
 	return offset;
+}
+
+static Handle SetupClosestFriendCall(GameData gd)
+{
+	StartPrepSDKCall(SDKCall_Raw);
+	if (!PrepSDKCall_SetFromConf(gd, SDKConf_Signature, "SurvivorTeamSituation::GetClosestReachableFriend"))
+		SetFailState("Failed to find signature: SurvivorTeamSituation::GetClosestReachableFriend");
+	PrepSDKCall_SetReturnInfo(SDKType_CBaseEntity, SDKPass_Pointer);
+
+	Handle call = EndPrepSDKCall();
+	if (call == null)
+		SetFailState("Failed to prepare SDKCall: SurvivorTeamSituation::GetClosestReachableFriend");
+	return call;
 }
 
 /**
@@ -183,6 +224,70 @@ public MRESReturn Detour_ResolveStuck_Pre(int bot)
 	}
 
 	return MRES_Ignored;
+}
+
+/**
+ * Every chasing NextBot routes its path through ChasePath::RefreshPath each tick. When a
+ * survivor bot is found chasing a target that is no longer a live survivor (the player has
+ * switched to the infected team to become the ZM), redirect the chase to the engine's own
+ * closest reachable teammate. With no reachable teammate, skip the refresh so the bot never
+ * builds a path toward the departed player.
+ */
+public MRESReturn Detour_RefreshPath_Pre(Address pThis, DHookParam hParams)
+{
+	if (!g_cvEnable.BoolValue || !g_cvChase.BoolValue)
+		return MRES_Ignored;
+
+	int target = ClientFromEntityAddress(view_as<Address>(DHookGetParam(hParams, 2)));
+	if (target == -1)
+		return MRES_Ignored;
+
+	if (GetClientTeam(target) == TEAM_SURVIVOR && IsPlayerAlive(target))
+		return MRES_Ignored;
+
+	Address botBase = view_as<Address>(DHookGetParam(hParams, 1) - g_iOfsINextBot);
+	int bot = ClientFromEntityAddress(botBase);
+	if (bot == -1 || !IsFakeClient(bot) || GetClientTeam(bot) != TEAM_SURVIVOR)
+		return MRES_Ignored;
+
+	int friend = SDKCall(g_hGetClosestReachableFriend, EntityField(botBase, g_iOfsSituationBase));
+
+	if (friend >= 1 && friend <= MaxClients && friend != bot
+		&& IsClientInGame(friend) && GetClientTeam(friend) == TEAM_SURVIVOR && IsPlayerAlive(friend))
+	{
+		DHookSetParam(hParams, 2, view_as<int>(GetEntityAddress(friend)));
+		ChaseLog(bot, target, friend);
+		return MRES_ChangedOverride;
+	}
+
+	ChaseLog(bot, target, -1);
+	return MRES_Supercede;
+}
+
+static void ChaseLog(int bot, int badTarget, int redirect)
+{
+	float now = GetGameTime();
+	if (now - g_fLastChaseLog[bot] < LOG_THROTTLE_SECONDS)
+		return;
+	g_fLastChaseLog[bot] = now;
+
+	if (redirect == -1)
+		LogFix("stopped %N from chasing %N (no longer a live survivor); no reachable teammate to redirect to", bot, badTarget);
+	else
+		LogFix("redirected %N from chasing %N (no longer a live survivor) to %N", bot, badTarget, redirect);
+}
+
+static int ClientFromEntityAddress(Address base)
+{
+	if (base == Address_Null)
+		return -1;
+
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsClientInGame(i) && GetEntityAddress(i) == base)
+			return i;
+	}
+	return -1;
 }
 
 static bool IsLiveSurvivorHandle(int handle)
