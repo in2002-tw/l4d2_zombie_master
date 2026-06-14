@@ -77,7 +77,7 @@ enum struct Cell
 }
 
 ArrayList g_GuideCells;
-ConVar g_hCvarMPGameMode, g_hCvarEnable, g_hCvarMax, g_hCvarSurvivors, g_hCvarInfected, g_hCvarSpec, g_hCvarBudget, g_hCvarFinaleAuto;
+ConVar g_hCvarMPGameMode, g_hCvarEnable, g_hCvarMax, g_hCvarSurvivors, g_hCvarInfected, g_hCvarSpec, g_hCvarBudget, g_hCvarFinaleAuto, g_hCvarZM;
 bool gamemode_guidable, guide_ready, guide_prep, map_started, nav_started, enable, g_bL4D2, finale, finale_rescue, finale_gauntlet;
 int g_iLaser;
 float t_nav = -1.0; // nav event gametime
@@ -224,35 +224,51 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     #endif
     if (!enable || !map_started || !nav_started || !gamemode_guidable || duration<=0.0 || g_iLaser==0 || !IsValidClient(client) || IsFakeClient(client)) return false;
 
-    switch (GetClientTeam(client)) // Check if team is blocked
+    int team = GetClientTeam(client);
+    bool alive = IsPlayerAlive(client);
+
+    bool whitelist = false; // L4D2 Zombie Master whitelist
+    if (g_bL4D2 && g_hCvarZM!=null && g_hCvarZM.BoolValue && team!=TEAM_SURVIVOR)
     {
-        case TEAM_SPECTATOR:
+        whitelist = team==TEAM_INFECTED;
+        if (!whitelist)
         {
-            if (!g_hCvarSpec.BoolValue) return false;
-        }
-        case TEAM_SURVIVOR:
-        {
-            if (!g_hCvarSurvivors.BoolValue) return false;
-        }
-        case TEAM_INFECTED:
-        {
-            if (!g_hCvarInfected.BoolValue) return false;
+            static char targetName[16];
+            GetEntPropString(client, Prop_Data, "m_iName", targetName, sizeof(targetName));
+            whitelist = strncmp(targetName,"zm_client",9,false) == 0;
         }
     }
 
-    bool alive = IsPlayerAlive(client);
-
-    if (g_hCvarAlive.IntValue>0) // 0 -> all states allowed
+    if (!whitelist) // Check if player should be blocked from being able to draw beams
     {
-        switch (alive)
+        switch (team) // Check if team is blocked
         {
-            case true:
+            case TEAM_SPECTATOR:
             {
-                if (g_hCvarAlive.IntValue == ACCEPT_DEAD) return false; // alive state blocked by cvar
+                if (!g_hCvarSpec.BoolValue) return false;
             }
-            default:
+            case TEAM_SURVIVOR:
             {
-                if (g_hCvarAlive.IntValue == ACCEPT_ALIVE) return false; // alive state blocked by cvar
+                if (!g_hCvarSurvivors.BoolValue) return false;
+            }
+            case TEAM_INFECTED:
+            {
+                if (!g_hCvarInfected.BoolValue) return false;
+            }
+        }
+
+        if (g_hCvarAlive.IntValue>0) // 0 -> all states allowed
+        {
+            switch (alive)
+            {
+                case true:
+                {
+                    if (g_hCvarAlive.IntValue == ACCEPT_DEAD) return false; // alive state blocked by cvar
+                }
+                default:
+                {
+                    if (g_hCvarAlive.IntValue == ACCEPT_ALIVE) return false; // alive state blocked by cvar
+                }
             }
         }
     }
@@ -620,17 +636,17 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
             {
                 Address adjArea = NavAdj.Get(i);
                 if (adjArea == Address_Null) continue;
-                if (!L4D_NavArea_IsConnected(navArea_curr,adjArea,dir)) continue;
+                if (L4D_NavArea_IsBlocked(adjArea,GetClientTeam(client),true)) continue;
                 L4D_GetNavAreaCenter(adjArea,pos_temp);
                 flow_temp = L4D_GetFlowFromPoint(pos_temp);
-                if (flow_temp<flow_curr) continue;
+                if (flow_temp<=flow_curr) continue;
                 //if (flow_backwards && flow_temp>=g_fFlowRescueVehicle) continue;
                 pos_temp[2] += 16.0;
-                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
-                if (g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
+                if (!L4D_NavArea_IsConnected(navArea_curr,adjArea,dir) && !twopos_traversable(pos_temp,pos_curr)) continue;
+                //if (g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),GetClientTeam(client),false)) continue;
                 bool steep = nav_too_steep(navArea_curr,adjArea);
                 if (found && steep) continue;
-                if ( flow_temp>=flow_best || (best_steep && flow_temp>=flow_curr) )
+                if ( flow_temp>flow_best || (best_steep && flow_temp>flow_curr) )
                 {
                     flow_best = flow_temp;
                     navArea_best = adjArea;
@@ -1167,15 +1183,15 @@ void OnFramePrep(bool new_frame = true)
                             if (adjArea == Address_Null) continue;
                             if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
                             flow_temp = get_navFlow(adjArea);
-                            if (finale_backwards && flow_temp<flow_curr) continue; // from rescue zone -> go upwards in flow
-                            else if (!finale_backwards && flow_temp>flow_curr) continue; // from rescue zone -> go downwards in flow
+                            if (finale_backwards && flow_temp<=flow_curr) continue; // from rescue zone -> go upwards in flow
+                            else if (!finale_backwards && flow_temp>=flow_curr) continue; // from rescue zone -> go downwards in flow
                             L4D_GetNavAreaCenter(adjArea,pos_temp);
                             pos_temp[2] += 16.0;
                             //if (!L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,true)) continue;
                             //}
                             bool steep = nav_too_steep(adjArea,navArea_curr) || !navArea_connected(adjArea,navArea_curr);
                             if (found && steep) continue;
-                            if ( flow_temp>=flow_best || (steep_best && flow_temp>=flow_curr) )
+                            if ( flow_temp>flow_best || (steep_best && flow_temp>flow_curr) )
                             {
                                 flow_best = flow_temp;
                                 navArea_best = adjArea;
@@ -1613,7 +1629,7 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
                 if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
                 if (!L4D_NavArea_IsConnected(navArea_curr,adjArea,dir)) continue;
                 flow_temp = get_navFlow(adjArea);
-                if (flow_temp<flow_curr) continue;
+                if (flow_temp<=flow_curr) continue;
                 //if ( !twopos_traversable(pos_curr,pos_temp) && !LOS_rescue_cheap(pos_curr,pos_temp,_) ) continue;
                 //if ( !twopos_traversable(pos_curr,pos_temp) ) continue;
                 //if (g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
@@ -1625,7 +1641,7 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
                 if (i_end>=i_start) success = true;
                 else steep = !g_bHitLadder && nav_too_steep(navArea_curr,adjArea);
                 if (!success && found && steep) continue;
-                if ( success || flow_temp>=flow_best || (steep_best && flow_temp>=flow_curr) )
+                if ( success || flow_temp>flow_best || (steep_best && flow_temp>flow_curr) )
                 {
                     flow_best = flow_temp;
                     navArea_best = adjArea;

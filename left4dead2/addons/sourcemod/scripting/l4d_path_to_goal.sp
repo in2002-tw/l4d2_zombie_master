@@ -17,7 +17,7 @@
 #include <dhooks>
 #include <l4d_path_to_goal>
 
-#define PLUGIN_VERSION 			"1.35 2026-06-12"
+#define PLUGIN_VERSION 			"1.36 2026-06-14"
 
 public Plugin myinfo =
 {
@@ -99,6 +99,7 @@ public void OnPluginStart()
     {
     HookEvent("gauntlet_finale_start", 	  evtGauntletStart,  EventHookMode_PostNoCopy);
     HookEvent("finale_vehicle_incoming",  evtFinaleVehicle,  EventHookMode_PostNoCopy);
+    g_hCvarZM = FindConVar("zm_enable"); // check if zombie master is active
     }
 
 }

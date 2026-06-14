@@ -199,8 +199,7 @@ void CreateZMGlow(int target, bool red = false, bool flow = false)
 	int glow = CreateEntityByName("prop_dynamic_ornament");
 	if (!IsEntitySafe(glow)) return;
 	
-	int eFlags = GetEdictFlags(target);
-	if ((eFlags & FL_EDICT_ALWAYS)<=0) SetEdictFlags(target, eFlags | FL_EDICT_ALWAYS);
+	SET_TRANSMIT_ALWAYS(target);
 	
 	char sModelName[64];
 	GetEntPropString(target, Prop_Data, "m_ModelName", sModelName, sizeof(sModelName));
@@ -278,9 +277,10 @@ void update_glow(int i)
             {
                 L4D2_SetPlayerSurvivorGlowState(i,false);
                 L4D2_RemoveEntityGlow(i);
+                SetEntProp(i, Prop_Send, "m_iGlowType", 0);
+	            SetEntProp(i, Prop_Send, "m_glowColorOverride", 0);
             }
         }
-        
     }
     else
     {
@@ -301,6 +301,8 @@ void update_zm_glow(int parent)
            	health=0;
            	L4D2_RemoveEntityGlow(parent);
            	L4D2_SetPlayerSurvivorGlowState(parent,false);
+            SetEntProp(parent, Prop_Send, "m_iGlowType", 0);
+	        SetEntProp(parent, Prop_Send, "m_glowColorOverride", 0);
        	}
        	else if (L4D_IsPlayerIncapacitated(parent)) health=1;
    	}
@@ -312,8 +314,9 @@ void update_zm_glow(int parent)
 	{
     	if (parent>=0 && parent<MAXENTITIES) g_iGlowList[parent] = INVALID_ENT_REFERENCE;
        	AcceptEntityInput(entref_glow, "StopGlowing");
+        SetEntProp(entref_glow, Prop_Send, "m_iGlowType", 0);
+	    SetEntProp(entref_glow, Prop_Send, "m_glowColorOverride", 0);
         NextFrame_Remove(entref_glow);
-    	
 	}
 	else
 	{
@@ -394,7 +397,12 @@ void UpdateSurvivorGlow(int client)
                               999999,0,color,flashing);
            if (DEBUG) LogMessage("UpdateSurvivorGlow %d color %d %d %d", client, color[0],color[1],color[2]);
         }
-        else L4D2_RemoveEntityGlow(client);
+        else
+        {
+            L4D2_RemoveEntityGlow(client);
+            SetEntProp(client, Prop_Send, "m_iGlowType", 0);
+	        SetEntProp(client, Prop_Send, "m_glowColorOverride", 0);
+        }
 	}
 }
 
@@ -454,3 +462,95 @@ stock void GetSurvivorHealthColor(int hp,int color[3],bool rescue=false,bool cri
       color[1] = mins[1] + RoundFloat(frac*(maxs[1]-mins[1]));
       color[2] = mins[2] + RoundFloat(frac*(maxs[2]-mins[2]));
 }
+
+#endinput
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// NEW SYSTEM BELOW - NOT FINISHED
+
+Action OnTransmitZM_Simple(int entity, int client)
+{
+    if (client==zm_client) return Plugin_Continue;
+    return Plugin_Handled;
+}
+
+// Update blue survivor glow for the client targeted for flow spawns.
+// Model may change with new client.
+stock void update_target_survivor(int client)
+{
+    if (g_iTargetSurvivor<0 && client<0) return;
+    if (g_entref_SurvivorGlow==INVALID_ENT_REFERENCE)
+    {
+        int glow = create_glow_entity(client);
+        if (glow==INVALID_ENT_REFERENCE) return;
+        SDKHook(glow, SDKHook_SetTransmit, OnTransmitZM_Simple);
+        g_entref_SurvivorGlow = EntIndexToEntRef(glow);
+        if (g_entref_SurvivorGlow==INVALID_ENT_REFERENCE) return;
+    }
+    bool valid_client = zm_menu_state!=ZM_MENU_CLOSED && IsValidClient(client) && IsPlayerAlive(client) && GetClientTeam(client)==TEAM_SURVIVOR;
+    bool flashing = false;
+    if (valid_client && g_iTargetSurvivor != client)
+    {
+        static char sModelName[PLATFORM_MAX_PATH];
+        GetEntPropString(client, Prop_Data, "m_ModelName", sModelName, sizeof(sModelName));
+        SetEntityModel(g_entref_SurvivorGlow, sModelName);
+        flashing = L4D_IsPlayerOnThirdStrike(client);
+    }
+    else client = -1;
+    update_glow_entity(g_entref_SurvivorGlow,client,_,RGB_FLOW,flashing);
+    g_iTargetSurvivor = client;
+    LogMessage("update_target_survivor %d", client);
+}
+
+// Update glow parent, glow type and color.
+stock void update_glow_entity(int glow, int parent = -1, int glowtype = 3, int color = 0, bool flashing = false)
+{
+    if (parent != INVALID_ENT_REFERENCE && IsValidEntity(parent) && GetEntPropEnt(glow,Prop_Data,"m_pParent") != parent)
+    {
+        SetVariantString("!activator");
+        AcceptEntityInput(glow, "SetParent", parent);
+        SetVariantString("!activator");
+        AcceptEntityInput(glow, "SetAttached", parent);
+        AcceptEntityInput(glow, "StartGlowing");
+    }
+    else
+    {
+        glowtype = 0;
+        color = 0;
+        flashing = false;
+        AcceptEntityInput(glow, "StopGlowing");
+    }
+    SetEntProp(glow, Prop_Send, "m_iGlowType", glowtype);
+	SetEntProp(glow, Prop_Send, "m_glowColorOverride", color);
+    SetEntProp(glow, Prop_Send, "m_bFlashing", flashing);
+}
+
+stock int create_glow_entity(int target, bool ornament = true)
+{
+    if (!IsValidEntity(target) || target==zm_client) return -1;
+    int glow = CreateEntityByName( ornament ? "prop_dynamic_ornament" : "prop_dynamic");
+	if (!IsEntitySafe(glow)) return -1;
+    SET_TRANSMIT_ALWAYS(target);
+    SET_TRANSMIT_ALWAYS(glow);
+    static char sModelName[PLATFORM_MAX_PATH];
+	GetEntPropString(target, Prop_Data, "m_ModelName", sModelName, sizeof(sModelName));
+	SetEntityModel(glow, sModelName);
+	DispatchSpawn(glow);
+	SetEntProp(glow, Prop_Send, "m_CollisionGroup", 0);
+	SetEntProp(glow, Prop_Send, "m_nSolidType", 0);
+	SetEntProp(glow, Prop_Send, "m_nGlowRangeMin", 0);
+	SetEntProp(glow, Prop_Send, "m_nGlowRange", 999999);
+	SetEntProp(glow, Prop_Send, "m_iGlowType", 0);
+	SetEntProp(glow, Prop_Send, "m_glowColorOverride", 0);
+	AcceptEntityInput(glow, "StartGlowing");
+	SetEntityRenderMode(glow, RENDER_TRANSCOLOR);
+	SetEntityRenderColor(glow, 0, 0, 0, 0);
+	SetVariantString("!activator");
+	AcceptEntityInput(glow, "SetParent", target);
+	SetVariantString("!activator");
+	AcceptEntityInput(glow, "SetAttached", target);
+    return glow;
+}
+
+

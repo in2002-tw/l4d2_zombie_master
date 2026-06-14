@@ -34,7 +34,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.16 2026-06-13"
+#define PLUGIN_VERSION 			"0.9.17 2026-06-14"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -90,6 +90,7 @@ public Plugin myinfo =
 // 9. Items menu.
 // 10. Clientprefs.
 // 11. Spitter is more expensive and has 2x cooldown compared to other Specials.
+// 12. zm_hud_per_element
 
 // TO DO LIST:
 // 15. Performance bottlenecks.
@@ -215,13 +216,11 @@ public void OnPluginStart()
     g_hGridCooldown = CreateConVar("zm_grid_cooldown", "0.0", "Invalid cell cooldown time. This is an optimization. Do not change unless you know what you are doing.",FCVAR_PROTECTED, true, 0.0, true, 10000.0);
     g_hGridCooldown.AddChangeHook(ConVarChanged_Cvars);
 
-
     g_hLosCellCache = CreateConVar("zm_los_cellcache", "1", "If 1, use a shared hash-based (survivor_grid_cell, target_grid_cell) LOS cache to skip redundant traces. 0 = always trace.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
     g_hLosCellCache.AddChangeHook(ConVarChanged_Cvars);
 
     g_hLosCellCacheTTL = CreateConVar("zm_los_cellcache_ttl", "1.0", "Cell-pair LOS cache entry lifetime in seconds.",FCVAR_PROTECTED, true, 0.1, true, 60.0);
     g_hLosCellCacheTTL.AddChangeHook(ConVarChanged_Cvars);
-
 
     g_hSpawnerMode = CreateConVar("zm_spawner_mode", "1", "Default spawner mode. 0 = analog(3 rings), 1 = analog+grid, 2 = grid.",FCVAR_PROTECTED, true, 0.0, true, 2.0);
     g_hSpawnerMode.AddChangeHook(ConVarChanged_Cvars_ZMenu);
@@ -350,7 +349,7 @@ public void OnPluginStart()
 	g_hDiscountTank = CreateConVar("zm_discount_tank", "1.0", "Dynamic first tank pricing on maps where tanks are allowed: 50% off when survivors reach 66.6% progress.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 	g_hDiscountTank.AddChangeHook(ConVarChanged_Cvars);
 	
-	g_hMemes = CreateConVar("zm_memes", "1.0", "Enable funny Louis and Ellis voice lines. sv_allowdownload must be 1. If sv_downloadurl is empty the project github will be linked automatically.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
+	g_hMemes = CreateConVar("zm_memes", "1.0", "Enable Survivor voice lines. sv_allowdownload must be 1. If sv_downloadurl is empty the project github will be linked automatically.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 	g_hMemes.AddChangeHook(ConVarChanged_Cvars);
 	
 	g_hClownGlow = CreateConVar("zm_clown_glow", "1.0", "Clowns spawned by ZM will glow red.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
@@ -407,8 +406,8 @@ public void OnPluginStart()
     if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != null))
         OnAdminMenuReady(topmenu);
 
-    for (int i = 1; i <= MaxClients; i++)
-        if (IsClientInGame(i)) SDKHook(i, SDKHook_OnTakeDamage, TrapTornado_OnTakeDamage);
+    //for (int i = 1; i <= MaxClients; i++)
+    //    if (IsClientInGame(i)) SDKHook(i, SDKHook_OnTakeDamage, TrapTornado_OnTakeDamage);
 }
 
 public void OnAdminMenuReady(Handle aTopMenu)
@@ -540,13 +539,13 @@ void IsAllowed()
 		//if (g_hDTR_InputKillHierarchy && !bypass_windows) g_hDTR_InputKillHierarchy.Enable(Hook_Pre, DTR_CBaseEntity_InputKillHierarchy);
 	    
 		enable_challenge_mode();
-		clients_in_server = true;
 		
 		for( int i = 1; i <= MaxClients; i++ )
     	{
     		if(IsValidClient(i) && !IsFakeClient(i))
     		{
-        		create_client_data(i);
+        		clients_in_server = true;
+                create_client_data(i);
         		clients_active[i] = true;
         	}
     	}
@@ -643,7 +642,7 @@ void IsAllowed()
 // Draw Path To Goal for Zombie Master
 void zm_ptg()
 {
-    L4D_Path_To_Goal(zm_client,g_fUpdateRate*1.9,true,false);
+    L4D_Path_To_Goal(zm_client,g_fUpdateRate*5.0,true,false);
 }
 
 Action zm_update(Handle timer = null)
@@ -1167,6 +1166,7 @@ Action CountClients(Handle timer = null)
         //    if (i!=zm_client) FindConVar("mp_gamemode").ReplicateToClient(i,g_sCvarMPGameMode);
         //}
         if (!IsClientInGame(i)) continue;
+        CLIENT_GLOW_TRANSMIT_ALWAYS(i);
         if (IsFakeClient(i) && GetClientTeam(i)==TEAM_INFECTED) new_SI_cap += 1;
 		
 		if (!IsPlayerAlive(i))
@@ -1555,7 +1555,6 @@ public Action evtPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     
     if (clients_timer==INVALID_HANDLE) clients_timer = CreateTimer(0.1,CountClients);
     
-    //L4D2_RemoveEntityGlow(victim);
     request_update_glow(victim,true,0.0); // Force update glow to reduce glow glitches.
     request_update_glow(victim,true); 
     
@@ -2059,9 +2058,9 @@ Action EvtBotReplacePlayer(Event event, const char[] name, bool dontBroadcast)
     int bot = GetClientOfUserId(event.GetInt("bot"));
     int client = GetClientOfUserId(event.GetInt("player"));
     if (DEBUG) LogMessage("[zm] EvtBotReplacePlayer %d replaced %d", bot, client);
-    request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
+    //request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
     request_update_glow(client,true); 
-    request_update_glow(bot,true,0.0); // Force update glow to reduce glow glitches.
+    //request_update_glow(bot,true,0.0); // Force update glow to reduce glow glitches.
     request_update_glow(bot,true); 
     if (GetEntityFlags(client) & FL_DUCKING)
     {
@@ -2077,9 +2076,9 @@ Action EvtPlayerReplaceBot(Event event, const char[] name, bool dontBroadcast)
     int bot = GetClientOfUserId(event.GetInt("bot"));
     int client = GetClientOfUserId(event.GetInt("player"));
     if (DEBUG) LogMessage("[zm] EvtPlayerReplaceBot %d replaced %d", client, bot);
-    request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
+    //request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
     request_update_glow(client,true); 
-    request_update_glow(bot,true,0.0); // Force update glow to reduce glow glitches.
+    //request_update_glow(bot,true,0.0); // Force update glow to reduce glow glitches.
     request_update_glow(bot,true); 
     if (GetEntityFlags(bot) & FL_DUCKING)
     {
@@ -2276,7 +2275,7 @@ void evtPlayerTeam(Event event, const char[] name, bool dontBroadcast)
     int client = GetClientOfUserId(event.GetInt("userid"));
     if (!IsValidClient(client)) return;
     if (DEBUG) LogMessage("[zm] evtPlayerTeam %d", client);
-    request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
+    //request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
     request_update_glow(client,true); 
     if (zm_timer==INVALID_HANDLE) zm_update();
     if (zm_client==client) RequestFrame(check_zm_team);
@@ -2316,12 +2315,12 @@ void evt_ZM_start_imminent(Event event, const char[] name, bool dontBroadcast)
 
 public void OnClientPutInServer(int client)
 {
-    SDKHook(client, SDKHook_OnTakeDamage, TrapTornado_OnTakeDamage);
+    //SDKHook(client, SDKHook_OnTakeDamage, TrapTornado_OnTakeDamage);
 	if(!g_bCvarAllow) return;
 	if (!IsValidClient(client)) return;
 	if (DEBUG) LogMessage("[zm] OnClientPutInServer %d", client);
 	hp_timers[client] = null;
-    request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
+    //request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
     request_update_glow(client,true); 
 	clients_active[client] = false;
 	clients_offered[client] = false;

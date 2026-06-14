@@ -2863,6 +2863,12 @@ void JoinZM(int client)
         else lastdoor = -1;
     }
 
+    for (int i=1;i<=MaxClients;i++)
+    {
+        if (!IsClientInGame(i)) continue;
+        CLIENT_GLOW_TRANSMIT_ALWAYS(i);
+    }
+
     set_zm_stage(ZM_PREP);
 }
 
