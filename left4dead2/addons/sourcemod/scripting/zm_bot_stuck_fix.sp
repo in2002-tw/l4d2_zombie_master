@@ -7,10 +7,6 @@
  *   - walk the bot's behavior-action tree and null any Action's cached chase target that
  *     equals the departed player. The engine self-heals next tick (Regroup falls back to
  *     its closest reachable teammate, the Cover/Approach actions end "target gone").
- *
- * SurvivorBot::ResolveStuckSituation stays detoured for fun: it only runs
- * when a bot actually fires OnStuck, and we prune its teammate list to live survivors so
- * its fallback warp can never pick a non-survivor.
  */
 
 #pragma semicolon 1
@@ -18,7 +14,6 @@
 
 #include <sourcemod>
 #include <sdktools>
-#include <dhooks>
 
 #define PLUGIN_VERSION "2.0"
 
@@ -26,8 +21,6 @@
 
 #define EHANDLE_INDEX_MASK 0xFFF
 #define EHANDLE_INVALID    -1
-
-#define LOG_THROTTLE_SECONDS 5.0
 
 // The team-situation teammate list is a fixed-size array; the engine only ever copies up
 // to this many entries out of it.
@@ -54,7 +47,6 @@ Handle g_hNextResponder;   // INextBotEventResponder::NextContainedResponder(pre
 Handle g_hGetRefEHandle;   // CBaseEntity::GetRefEHandle()
 Handle g_hGetName;         // Action::GetName() - diagnostic walk-dump labelling only
 
-float g_fLastStuckLog[MAXPLAYERS + 1];
 int g_iLastClearedFollow[MAXPLAYERS + 1];
 
 public Plugin myinfo =
@@ -95,13 +87,7 @@ public void OnPluginStart()
 	g_hGetRefEHandle  = SetupVirtual(gd, "VT_GetRefEHandle",           SDKCall_Entity, false);
 	g_hGetName        = SetupVirtual(gd, "VT_GetName",                 SDKCall_Raw,    false);
 
-	DynamicDetour ddStuck = DynamicDetour.FromConf(gd, "SurvivorBot::ResolveStuckSituation");
-	if (ddStuck == null)
-		SetFailState("Failed to set up detour: SurvivorBot::ResolveStuckSituation");
-
 	delete gd;
-
-	ddStuck.Enable(Hook_Pre, Detour_ResolveStuck_Pre);
 
 	HookEvent("player_team", Event_PlayerTeam, EventHookMode_Post);
 
@@ -325,55 +311,6 @@ static int GenuineHandleClient(int handle)
 static bool IsLiveSurvivor(int client)
 {
 	return GetClientTeam(client) == TEAM_SURVIVOR && IsPlayerAlive(client);
-}
-
-/**
- * ResolveStuckSituation branch B warps the bot to a random tracked teammate. Compact that
- * list in place so it holds only live survivors before the routine reads it; branch A
- * (path-forward recovery) is left to run normally.
- */
-public MRESReturn Detour_ResolveStuck_Pre(int bot)
-{
-	if (!g_cvEnable.BoolValue)
-		return MRES_Ignored;
-
-	Address base = GetEntityAddress(bot);
-	if (base == Address_Null)
-		return MRES_Ignored;
-
-	Address countField = EntityField(base, g_iOfsListCount);
-	int rawCount = LoadFromAddress(countField, NumberType_Int32);
-	if (rawCount <= 0)
-		return MRES_Ignored;
-
-	int count = (rawCount > SITUATION_LIST_CAPACITY) ? SITUATION_LIST_CAPACITY : rawCount;
-
-	int kept = 0;
-	for (int i = 0; i < count; i++)
-	{
-		int handle = LoadFromAddress(EntityField(base, g_iOfsList + i * 4), NumberType_Int32);
-		if (!IsLiveSurvivorHandle(handle))
-			continue;
-
-		if (kept != i)
-			StoreToAddress(EntityField(base, g_iOfsList + kept * 4), handle, NumberType_Int32);
-		kept++;
-	}
-
-	if (kept != rawCount)
-		StoreToAddress(countField, kept, NumberType_Int32);
-
-	if (kept != count)
-	{
-		float now = GetGameTime();
-		if (now - g_fLastStuckLog[bot] >= LOG_THROTTLE_SECONDS)
-		{
-			g_fLastStuckLog[bot] = now;
-			LogFix("pruned %d stale teammate handle(s) from %N's stuck-resolve list", count - kept, bot);
-		}
-	}
-
-	return MRES_Ignored;
 }
 
 static bool IsLiveSurvivorHandle(int handle)
