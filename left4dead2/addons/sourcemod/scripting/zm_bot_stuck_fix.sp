@@ -1,12 +1,21 @@
 /**
  * ZM Survivor Bot Stuck Fix
  *
- * The moment a survivor leaves the team, we reach into every survivor bot and:
- *   - null the team-situation follow-human handle if it points at them (the one-tick
- *     EnforceProximityToHumans relocate), and
- *   - walk the bot's behavior-action tree and null any Action's cached chase target that
- *     equals the departed player. The engine self-heals next tick (Regroup falls back to
- *     its closest reachable teammate, the Cover/Approach actions end "target gone").
+ * When a survivor leaves the team they keep a valid edict, so the chase legs (Regroup,
+ * CoverOrphan, ...) that cached them as a target never notice and keep pathing toward
+ * their ex-survivor origin; the stranded bot then hits ResolveStuckSituation, whose
+ * clearance-only TestPosition can teleport to the infected/spectator players origin.
+ *
+ * On every player_team switch out of the survivor team we sweep each survivor bot and:
+ *   - null the team-situation follow-human and leader handles if they point at a
+ *     non-live-survivor (the one-tick EnforceProximityToHumans / elevator relocate), and
+ *   - walk the bot's behavior-action tree (active chain plus the suspended buried/covering
+ *     stack) and null any Action's cached chase target that is no longer a live survivor.
+ *
+ * The sweep runs on the switch tick and the next three frames: a bot already mid-stuck can
+ * fire OnStuck within a frame of the switch, so a single deferred pass can lose the race.
+ * The engine self-heals once the target is cleared (Regroup falls back to its closest
+ * reachable teammate, the Cover/Approach/Vantage actions end "target gone").
  */
 
 #pragma semicolon 1
@@ -15,7 +24,7 @@
 #include <sourcemod>
 #include <sdktools>
 
-#define PLUGIN_VERSION "2.0"
+#define PLUGIN_VERSION "2.1"
 
 #define TEAM_SURVIVOR 2
 
@@ -26,12 +35,15 @@
 // to this many entries out of it.
 #define SITUATION_LIST_CAPACITY 4
 
-#define WALK_MAX_NODES 64
+#define WALK_MAX_NODES 128
+
+#define CLEAR_SWEEP_PASSES 4
 
 ConVar g_cvEnable;
 ConVar g_cvLog;
 
 int g_iOfsFollowHuman;     // GetTeamSituation()+0x30: single "follow human" EHANDLE
+int g_iOfsLeader;          // GetTeamSituation()+0x50: leader EHANDLE (ApproachElevator/MoveUp subject)
 int g_iOfsList;            // GetTeamSituation()+0x88: tracked-teammate EHANDLE array
 int g_iOfsListCount;       // GetTeamSituation()+0xc4: entries in that array
 int g_iOfsFollowDistance;  // GetTeamSituation()+0x34: distance vs sb_enforce_proximity_range (debug)
@@ -48,6 +60,10 @@ Handle g_hGetRefEHandle;   // CBaseEntity::GetRefEHandle()
 Handle g_hGetName;         // Action::GetName() - diagnostic walk-dump labelling only
 
 int g_iLastClearedFollow[MAXPLAYERS + 1];
+
+// Set when a tree walk hits WALK_MAX_NODES so the truncation is logged instead of a stale
+// target being silently left behind.
+bool g_bWalkTruncated;
 
 public Plugin myinfo =
 {
@@ -73,6 +89,7 @@ public void OnPluginStart()
 		SetFailState("Missing gamedata: zm_bot_stuck_fix.txt");
 
 	g_iOfsFollowHuman    = LoadOffset(gd, "Situation_FollowHuman");
+	g_iOfsLeader         = LoadOffset(gd, "Situation_Leader");
 	g_iOfsList           = LoadOffset(gd, "Situation_List");
 	g_iOfsListCount      = LoadOffset(gd, "Situation_ListCount");
 	g_iOfsFollowDistance = LoadOffset(gd, "Situation_FollowDistance");
@@ -97,7 +114,8 @@ public void OnPluginStart()
 	for (int i = 1; i <= MaxClients; i++)
 		g_iLastClearedFollow[i] = EHANDLE_INVALID;
 
-	LogMessage("[zm-bot-stuck-fix] loaded; hooked player_team (one-shot mode)");
+	LogMessage("[zm-bot-stuck-fix] loaded; hooked player_team (sweep on switch tick + %d frames)",
+		CLEAR_SWEEP_PASSES - 1);
 }
 
 static int LoadOffset(GameData gd, const char[] key)
@@ -127,9 +145,10 @@ static Handle SetupVirtual(GameData gd, const char[] key, SDKCallType callType, 
 }
 
 /**
- * A survivor left the survivor team. Defer the cleanup to the NEXT frame
- * The walk reaches the whole action stack (active plus suspended),
- * a single pass clears every stale target.
+ * A survivor left the survivor team. Sweep immediately (pass 0) so a bot that is already
+ * mid-stuck cannot fire OnStuck and teleport before its stale target is cleared, then again
+ * over the next few frames to catch a bot that only enters the chase/stuck state once the
+ * team change has settled.
  */
 public void Event_PlayerTeam(Event event, const char[] name, bool dontBroadcast)
 {
@@ -141,10 +160,20 @@ public void Event_PlayerTeam(Event event, const char[] name, bool dontBroadcast)
 	if (event.GetInt("oldteam") != TEAM_SURVIVOR || event.GetInt("team") == TEAM_SURVIVOR)
 		return;
 
-	RequestFrame(Frame_ClearStaleTargets);
+	RunClearSweep();
+	RequestFrame(Frame_ClearStaleTargets, 1);
 }
 
-public void Frame_ClearStaleTargets()
+public void Frame_ClearStaleTargets(any data)
+{
+	int pass = data;
+	RunClearSweep();
+
+	if (pass < CLEAR_SWEEP_PASSES - 1)
+		RequestFrame(Frame_ClearStaleTargets, pass + 1);
+}
+
+static void RunClearSweep()
 {
 	if (!g_cvEnable.BoolValue)
 		return;
@@ -172,20 +201,27 @@ static int RefEHandle(int client)
 }
 
 /**
- * EnforceProximityToHumans warps a too-far bot to the team-situation follow-human handle.
- * If that handle still points at the player who just left, null it so the routine takes
- * its own "no follow target" early-out next time it runs.
+ * The team situation caches two single-teammate handles that drive a relocate/chase toward
+ * one player: the follow-human (+0x30, EnforceProximityToHumans) and the leader (+0x50,
+ * ApproachElevator/MoveUp). If either still points at a player who is no longer a live
+ * survivor, null it so the consuming routine takes its own "no target" early-out next time.
  */
 static void CleanStaleFollow(int bot, Address base)
 {
-	Address field = EntityField(base, g_iOfsFollowHuman);
+	ClearStaleSituationHandle(bot, base, g_iOfsFollowHuman, "follow");
+	ClearStaleSituationHandle(bot, base, g_iOfsLeader, "leader");
+}
+
+static void ClearStaleSituationHandle(int bot, Address base, int offset, const char[] label)
+{
+	Address field = EntityField(base, offset);
 	int handle = LoadFromAddress(field, NumberType_Int32);
 
 	if (handle == EHANDLE_INVALID || IsLiveSurvivorHandle(handle))
 		return;
 
 	StoreToAddress(field, EHANDLE_INVALID, NumberType_Int32);
-	LogFix("cleared %N's stale follow target (no longer a live survivor)", bot);
+	LogFix("cleared %N's stale %s target (no longer a live survivor)", bot, label);
 }
 
 /**
@@ -197,6 +233,8 @@ static void ClearChaseTargets(int bot, Address base)
 	Address intention = view_as<Address>(SDKCall(g_hGetIntention, EntityField(base, g_iOfsINextBot)));
 	if (intention == Address_Null)
 		return;
+
+	g_bWalkTruncated = false;
 
 	Address nodes[WALK_MAX_NODES];
 	int depths[WALK_MAX_NODES];
@@ -250,6 +288,10 @@ static void ClearChaseTargets(int bot, Address base)
 		}
 	}
 
+	if (g_bWalkTruncated)
+		LogError("[zm-bot-stuck-fix] %N action tree exceeded WALK_MAX_NODES (%d); walk truncated, a stale target may remain uncleared",
+			bot, WALK_MAX_NODES);
+
 	if (g_cvLog.BoolValue && walk[0] != '\0')
 		LogMessage("[zm-bot-stuck-fix]   [walk-dump] %N tree: %s", bot, walk);
 }
@@ -265,7 +307,10 @@ static int PushNode(Address[] nodes, int[] depths, int top, Address[] seen, int 
 			return top;
 
 	if (seenCount >= WALK_MAX_NODES || top >= WALK_MAX_NODES)
+	{
+		g_bWalkTruncated = true;
 		return top;
+	}
 
 	seen[seenCount++] = node;
 	nodes[top] = node;

@@ -28,6 +28,12 @@
 				"windows"	"35772"
 			}
 
+			"Situation_Leader"
+			{
+				"linux"		"35772"
+				"windows"	"35800"
+			}
+
 			"INextBot_Subobject"
 			{
 				"linux"		"16424"
