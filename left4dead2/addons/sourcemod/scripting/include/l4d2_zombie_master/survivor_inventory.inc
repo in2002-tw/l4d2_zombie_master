@@ -5,21 +5,17 @@
 #define _zm_inventory_included
 ///////////////////////////////////////
 
-// Inventory
-int g_iMolotov, g_iPipeBomb, g_iBileJar, g_iMedkit, g_iDefib, g_iIncendiary, g_iExplosive, g_iPills, g_iAdrenaline;
-
-// Weapons
-int g_iPistol, g_iMagnum, g_iMelee, g_iSMG, g_iShotgunT1, g_iRifle, g_iShotgunT2, g_iChainsaw, g_iGnome;
-
 void survivor_items_changed(bool inventory = true, bool weapons = true)
 {
-	if (weapons)
+	if (weapons && !g_bWeapons)
 	{
-		survivor_weapons_changed();
+		g_bWeapons = true;
+		RequestFrame(survivor_weapons_changed);
 	}
-	if (inventory)
+	if (inventory && !g_bInventory)
 	{
-		survivor_inventory_changed();
+		g_bInventory = true;
+		RequestFrame(survivor_inventory_changed);
 	}
 }
 
@@ -27,12 +23,14 @@ void survivor_inventory_changed()
 {
 	delete menu_items;
     if (zm_menu_state == ZM_MENU_ITEMS && IsValidClientZM()) open_menu(zm_client,ZM_MENU_ITEMS);
+	g_bWeapons = false;
 }
 
 void survivor_weapons_changed()
 {
 	delete menu_weapons;
 	if (zm_menu_state == ZM_MENU_WEAPONS && IsValidClientZM()) open_menu(zm_client,ZM_MENU_WEAPONS);
+	g_bInventory = false;
 }
 
 void count_survivor_items()
@@ -107,7 +105,6 @@ void count_survivor_weapons()
 			entity = GetPlayerWeaponSlot(i,slot);
 			if (!IsValidEntity(entity)) continue;
 			GetEntityClassname(entity,class, sizeof(class));
-			//LogMessage("%d %d %d %s", i, slot, entity, class);
 			if (class[0]!='w') continue;
 			switch (class[7])
 			{

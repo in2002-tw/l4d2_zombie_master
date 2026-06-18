@@ -33,11 +33,11 @@ void remove_ZM_glow(int entity)
     }
     int entref_glow = g_iGlowList[entity];
     hp_timers[entity] = INVALID_HANDLE;
-    if ( IsValidEntRef(entref_glow) && HasEntProp(entref_glow, Prop_Send, "m_CollisionGroup") )
+    if (IsValidEntRef(entref_glow))
     {
-       char class[32];
+       static char class[32];
        GetEntityClassname(entref_glow, class, sizeof(class));
-       if (strcmp(class,"prop_dynamic_ornament")==0)
+       if (strncmp(class,"prop_dynamic_ornament",21,false)==0)
        {
    	       AcceptEntityInput(entref_glow, "StopGlowing");
    	       NextFrame_Remove(entref_glow);

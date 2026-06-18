@@ -1562,7 +1562,7 @@ public Action evtPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     
     if (clients_timer==INVALID_HANDLE) clients_timer = CreateTimer(0.1,CountClients);
     
-    request_update_glow(victim,true,0.0); // Force update glow to reduce glow glitches.
+    //request_update_glow(victim,true,0.0); // Force update glow to reduce glow glitches.
     request_update_glow(victim,true); 
     
     if(GetClientTeam(victim)!=TEAM_INFECTED)

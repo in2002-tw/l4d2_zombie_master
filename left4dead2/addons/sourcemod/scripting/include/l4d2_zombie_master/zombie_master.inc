@@ -141,8 +141,6 @@ static float HULL_MAXS_LOOK[3] = {HULL_DX,HULL_DX,HULL_DZ};
 #define MODEL_FALLEN2 "models/infected/common_male_parachutist.mdl"
 #define MODEL_FALLEN3 "models/infected/common_male_fallen_survivor_l4d1.mdl" // this one has 2 bodygroups as well
 
-
-
 stock bool valid_uncommon(char arg[32])
 {
     if (arg[0]==0) return false;
@@ -234,6 +232,7 @@ stock void get_uncommon_model(char label[16], char model[64])
         default: model = ""; 
     }
 }
+
 
 #define SOUND_READY "ui/critical_event_1.wav"
 #define SOUND_OFFER "ui/pickup_misc42.wav"
@@ -337,6 +336,15 @@ stock void get_uncommon_model(char label[16], char model[64])
 #define ZM_CANSTART 2 // Prep has ended but survivors haven't left the safezone yet // NOT IN USE
 #define ZM_STARTED 3 // Round has started
 #define ZM_END 4 // Round has ended - do not allow new ZM or spawning of zombies
+
+// Inventory
+int g_iMolotov, g_iPipeBomb, g_iBileJar, g_iMedkit, g_iDefib, g_iIncendiary, g_iExplosive, g_iPills, g_iAdrenaline;
+
+// Weapons
+int g_iPistol, g_iMagnum, g_iMelee, g_iSMG, g_iShotgunT1, g_iRifle, g_iShotgunT2, g_iChainsaw, g_iGnome;
+
+// Reduce inventory and weapons update spam
+bool g_bInventory,g_bWeapons;
 
 bool l4dhooks_updated = false; // check if native L4D_FindEntityByClassnameWithin is available
 ConVar g_hCvarDebug, g_hCvarAllow, z_max_player_zombies, infectedbots_enable, jukebox_horde, shoot_alert_enable, clown_world_enable;
@@ -2798,6 +2806,9 @@ void JoinZM(int client)
     }
     
     remove_all_ZM_glows();
+
+    g_bWeapons = false; // reset survivor weapons tracking
+    g_bInventory = false; // reset survivor inventory tracking
     
     ZMPrefs_Apply(client);
     g_iLastZombieClass = -1;

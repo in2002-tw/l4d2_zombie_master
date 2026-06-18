@@ -442,9 +442,10 @@ Action kill_entity(Handle timer, int entref)
  * Dissolve an entity with a visual effect, then schedule a hard kill 2 seconds later
  * as a failsafe since L4D_Dissolve doesn't always remove the entity.
  */
-void dissolve_forcekill(int entity)
+void dissolve_forcekill(int entity, bool remove_glow = true)
 {
-    L4D_Dissolve(entity); // doesn't always kill them
+    if (remove_glow) remove_ZM_glow(entity);
+	L4D_Dissolve(entity); // doesn't always kill them
     CreateTimer(2.0,kill_entity,EntIndexToEntRef(entity),TIMER_FLAG_NO_MAPCHANGE);
 }
 
@@ -497,8 +498,6 @@ bool any_infected_vomited()
 }
 
 // Check if deletion of common units is blocked due to pipe bombs or vomit jars.
-// Supply entity index to check if this common is vomited on
-// skip_global: optimization, skip global pipe bomb, vomit jar and vomited units checks
 bool delete_common_blocked()
 {
 	if (g_bVomitJar) return true;
