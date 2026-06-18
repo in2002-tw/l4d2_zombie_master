@@ -1,0 +1,10 @@
+1. Pistol xx
+2. Magnum xx
+3. Melee xx
+4. SMG xx
+5. T1 Shotgun xx
+6. Rifle xx
+7. T2 Shotgun xx
+8. Chainsaw xx
+9. Gnome xx
+R. <--

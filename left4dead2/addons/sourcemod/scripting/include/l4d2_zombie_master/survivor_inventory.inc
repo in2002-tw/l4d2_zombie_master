@@ -5,23 +5,45 @@
 #define _zm_inventory_included
 ///////////////////////////////////////
 
+// Inventory
 int g_iMolotov, g_iPipeBomb, g_iBileJar, g_iMedkit, g_iDefib, g_iIncendiary, g_iExplosive, g_iPills, g_iAdrenaline;
 
-void survivor_items_changed()
+// Weapons
+int g_iPistol, g_iMagnum, g_iMelee, g_iSMG, g_iShotgunT1, g_iRifle, g_iShotgunT2, g_iChainsaw, g_iGnome;
+
+void survivor_items_changed(bool inventory = true, bool weapons = true)
+{
+	if (weapons)
+	{
+		survivor_weapons_changed();
+	}
+	if (inventory)
+	{
+		survivor_inventory_changed();
+	}
+}
+
+void survivor_inventory_changed()
 {
 	delete menu_items;
     if (zm_menu_state == ZM_MENU_ITEMS && IsValidClientZM()) open_menu(zm_client,ZM_MENU_ITEMS);
 }
 
+void survivor_weapons_changed()
+{
+	delete menu_weapons;
+	if (zm_menu_state == ZM_MENU_WEAPONS && IsValidClientZM()) open_menu(zm_client,ZM_MENU_WEAPONS);
+}
+
 void count_survivor_items()
 {
 	g_iMolotov=0;g_iPipeBomb=0;g_iBileJar=0;g_iMedkit=0;g_iDefib=0;g_iIncendiary=0;g_iExplosive=0;g_iPills=0;g_iAdrenaline=0;
+	g_iPistol=0;g_iMagnum=0;g_iMelee=0;g_iSMG=0;g_iShotgunT1=0;g_iRifle=0;g_iShotgunT2=0;g_iChainsaw=0;g_iGnome=0;
 	int entity;
 	static char class[32];
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (!IsClientInGame(i) || !IsPlayerAlive(i)) continue;
-		if (GetClientTeam(i)!=TEAM_SURVIVOR) continue;
+		if (!IsClientInGame(i) || !IsPlayerAlive(i) || GetClientTeam(i)!=TEAM_SURVIVOR) continue;
 		for (int slot = 2; slot <= 5; slot++)
 		{
 			entity = GetPlayerWeaponSlot(i,slot);
@@ -60,6 +82,71 @@ void count_survivor_items()
 				case 'a':
 				{
 					if (strncmp(class,"weapon_adrenaline",17,false)==0) g_iAdrenaline += 1;
+				}
+			}
+		}
+	}
+}
+
+void count_survivor_weapons()
+{
+	g_iPistol=0;g_iMagnum=0;g_iMelee=0;g_iSMG=0;g_iShotgunT1=0;g_iRifle=0;g_iShotgunT2=0;g_iChainsaw=0;g_iGnome=0;
+	int entity;
+	static char class[32];
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsClientInGame(i) || !IsPlayerAlive(i) || GetClientTeam(i)!=TEAM_SURVIVOR) continue;
+
+		// Active Weapon
+		GetClientWeapon(i,class,sizeof(class));
+		if (strncmp(class,"weapon_gnome",12,false)==0) g_iGnome += 1;
+		
+		// Inventory
+		for (int slot = 0; slot <= 1; slot++)
+		{
+			entity = GetPlayerWeaponSlot(i,slot);
+			if (!IsValidEntity(entity)) continue;
+			GetEntityClassname(entity,class, sizeof(class));
+			//LogMessage("%d %d %d %s", i, slot, entity, class);
+			if (class[0]!='w') continue;
+			switch (class[7])
+			{
+				case 'm':
+				{
+					if (strncmp(class,"weapon_melee",12,false)==0) g_iMelee += 1;
+				}
+				case 'p':
+				{
+					if (strncmp(class,"weapon_pistol_magnum",20,false)==0) g_iMagnum += 1;
+					else if (strncmp(class,"weapon_pistol",13,false)==0) g_iPistol += 1;
+					else if (strncmp(class,"weapon_pumpshotgun",18,false)==0) g_iShotgunT1 += 1;
+				}
+				case 's':
+				{
+					if (strncmp(class,"weapon_sniper",13,false)==0) g_iRifle += 1;
+					else if (strncmp(class,"weapon_smg",10,false)==0) g_iSMG += 1;
+					else if (strncmp(class,"weapon_shotgun_chrome",21,false)==0) g_iShotgunT1 += 1;
+					else if (strncmp(class,"weapon_shotgun_spas",19,false)==0) g_iShotgunT2 += 1;
+				}
+				case 'h':
+				{
+					if (strncmp(class,"weapon_hunting_rifle",20,false)==0) g_iRifle += 1;
+				}
+				case 'r':
+				{
+					if (strncmp(class,"weapon_rifle",12,false)==0) g_iRifle += 1;
+				}
+				case 'g':
+				{
+					if (strncmp(class,"weapon_grenade_launcher",23,false)==0) g_iRifle += 1;
+				}
+				case 'a':
+				{
+					if (strncmp(class,"weapon_autoshotgun",18,false)==0) g_iShotgunT2 += 1;
+				}
+				case 'c':
+				{
+					if (strncmp(class,"weapon_chainsaw",15,false)==0) g_iChainsaw += 1;
 				}
 			}
 		}

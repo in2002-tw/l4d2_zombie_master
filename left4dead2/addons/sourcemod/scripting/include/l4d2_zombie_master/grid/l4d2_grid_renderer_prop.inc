@@ -424,7 +424,7 @@ static void GridRendererProp_CreatePool(int client)
 
 		// Set render mode for color/alpha support
 		SetEntityRenderMode(ent, view_as<RenderMode>(RENDER_TRANSCOLOR));
-		SetEntityRenderColor(ent, 0, 255, 0, 150);
+		SetEntityRenderColor(ent, 0, 0, 0, 0);
 
 		// Start hidden, no shadows, no interpolation
 		int effects = GetEntProp(ent, Prop_Send, "m_fEffects");
@@ -437,7 +437,8 @@ static void GridRendererProp_CreatePool(int client)
 		g_PropPool[client].entities[i] = EntIndexToEntRef(ent);
 		created++;
 
-		SET_TRANSMIT_ALWAYS(ent); // see cells through the whole map.
+		//SET_TRANSMIT_ALWAYS(ent); // see cells through the whole map.
+		RequestFrame(SET_TRANSMIT_ALWAYS,EntIndexToEntRef(ent));
 
 	}
 

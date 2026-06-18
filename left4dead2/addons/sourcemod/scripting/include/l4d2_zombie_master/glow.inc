@@ -296,7 +296,7 @@ void update_zm_glow(int parent)
    	int health = GetEntProp(parent,Prop_Data,"m_iHealth");
    	if (IsValidClient(parent))
    	{
-       	if (!IsPlayerAlive(parent) || L4D_IsPlayerGhost(parent))
+       	if (!IsPlayerAlive(parent) || L4D_IsPlayerGhost(parent) || parent==zm_client)
        	{
            	health=0;
            	L4D2_RemoveEntityGlow(parent);
@@ -305,6 +305,7 @@ void update_zm_glow(int parent)
 	        SetEntProp(parent, Prop_Send, "m_glowColorOverride", 0);
        	}
        	else if (L4D_IsPlayerIncapacitated(parent)) health=1;
+        if (parent==zm_client) return;
    	}
    	
     int entref_glow = g_iGlowList[parent];
@@ -394,7 +395,7 @@ void UpdateSurvivorGlow(int client)
            GetSurvivorHealthColor_pre(hp,color,rescue,critical);
        	   L4D2_SetEntityGlow(client,
                               L4D2Glow_Constant,
-                              999999,0,color,flashing);
+                              0,0,color,flashing);
            if (DEBUG) LogMessage("UpdateSurvivorGlow %d color %d %d %d", client, color[0],color[1],color[2]);
         }
         else
@@ -404,6 +405,10 @@ void UpdateSurvivorGlow(int client)
 	        SetEntProp(client, Prop_Send, "m_glowColorOverride", 0);
         }
 	}
+
+    //CLIENT_GLOW_TRANSMIT_ALWAYS(client);
+    //RequestFrame(CLIENT_GLOW_TRANSMIT_ALWAYS,EntIndexToEntRef(client));
+
 }
 
 // Survivor health interpolator

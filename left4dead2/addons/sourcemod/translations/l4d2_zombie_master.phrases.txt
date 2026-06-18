@@ -658,4 +658,56 @@
 		"en"		"Aim at solid ground to place a tornado."
 	}
 
+
+
+	"Weapons"
+	{
+		"en"			"Weapons"
+	}
+
+	"Pistol"
+	{
+		"en"			"Pistol"
+	}
+
+	"Magnum"
+	{
+		"en"			"Magnum"
+	}
+
+	"Melee"
+	{
+		"en"			"Melee"
+	}
+
+	"SMG"
+	{
+		"en"			"SMG"
+	}
+
+	"T1 Shotgun"
+	{
+		"en"			"T1 Shotgun"
+	}
+
+	"Rifle"
+	{
+		"en"			"Rifle"
+	}
+
+	"T2 Shotgun"
+	{
+		"en"			"T2 Shotgun"
+	}
+
+	"Chainsaw"
+	{
+		"en"			"Chainsaw"
+	}
+
+	"Gnome"
+	{
+		"en"			"Gnome"
+	}
+
 }

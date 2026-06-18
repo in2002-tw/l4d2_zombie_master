@@ -29,9 +29,10 @@
 #define ZM_MENU_CLEANUP 6
 #define ZM_MENU_OTHER 7
 #define ZM_MENU_ITEMS 8
-#define ZM_MENU_TRAPS 9
-#define ZM_MENU_CONTEXT 10
-#define ZM_MENU_MAX 11
+#define ZM_MENU_WEAPONS 9
+#define ZM_MENU_TRAPS 10
+#define ZM_MENU_CONTEXT 11
+#define ZM_MENU_MAX 12
 
 // --- Trap system ---
 #define ZM_TRAP_MAX 16
@@ -666,7 +667,7 @@ TopMenu hAdminMenu = null;
 TopMenuObject obj_zmcommands, zm_enable, zm_gamemode_menu, zm_kick_topmenu, zm_randomizer, zm_sayhorde, zm_help, zm_random;
 
 int zm_menu_state = ZM_MENU_CLOSED;
-Menu menu_main,menu_common,menu_uncommon,menu_special,menu_boss,menu_cleanup,menu_other,menu_quit,menu_items,menu_traps;
+Menu menu_main,menu_common,menu_uncommon,menu_special,menu_boss,menu_cleanup,menu_other,menu_quit,menu_items,menu_weapons,menu_traps;
 
 // Define groups with different spawn rules.
 // Commons cannot spawn in areas marked by IsBlocked
@@ -2326,6 +2327,9 @@ Action ZMControlSI(int client, int args)
             TeleportEntity(zm_client, vEye, vAngles, NULL_VECTOR);
             RequestFrame(ZM_FixCamera,false);
             update_zm_flashlight();
+            L4D2_RemoveEntityGlow(zm_client);
+            SetEntProp(zm_client, Prop_Send, "m_iGlowType", 0);
+	        SetEntProp(zm_client, Prop_Send, "m_glowColorOverride", 0);
         }
         else update_hint("%T", "Cannot control", zm_client);
         
@@ -2824,8 +2828,10 @@ void JoinZM(int client)
     SetEntProp(client, Prop_Send, "m_zombieClass", 0);
     SetEntProp(client, Prop_Data, "m_iObserverMode", 6);
     PrintHintText(client, "%t", "ZM join hint");
-    L4D2_RemoveEntityGlow(zm_client);
     L4D2_SetPlayerSurvivorGlowState(zm_client,false);
+    L4D2_RemoveEntityGlow(zm_client);
+    SetEntProp(zm_client, Prop_Send, "m_iGlowType", 0);
+	SetEntProp(zm_client, Prop_Send, "m_glowColorOverride", 0);
     zm_fake_gamemode();
     ems_hud_timer = INVALID_HANDLE;
     update_hint("%T", "zm_menu_hint", zm_client);
@@ -2865,7 +2871,7 @@ void JoinZM(int client)
 
     for (int i=1;i<=MaxClients;i++)
     {
-        if (!IsClientInGame(i)) continue;
+        if (!IsClientInGame(i) || i==zm_client) continue;
         CLIENT_GLOW_TRANSMIT_ALWAYS(i);
     }
 

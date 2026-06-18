@@ -99,6 +99,11 @@ void open_menu(int client, int MENU=ZM_MENU_MAIN, int time=MENU_TIME_FOREVER)
             if (menu_items==null) create_items_menu();
             menu_items.Display(zm_client,time);
         }
+        case ZM_MENU_WEAPONS:
+        {
+            if (menu_weapons==null) create_weapons_menu();
+            menu_weapons.Display(zm_client,time);
+        }
         case ZM_MENU_TRAPS: menu_traps.Display(zm_client,time);
         case ZM_MENU_QUIT:
         {
@@ -167,14 +172,17 @@ void create_main_menu()
     menu_main.AddItem("item_5",buffer);
 
     Format(buffer, sizeof(buffer), "%T", "Inventory", zm_language);
-    if (!g_hTraps.BoolValue) buffer_add_rawline(buffer);
     menu_main.AddItem("item_6",buffer);
+
+    Format(buffer, sizeof(buffer), "Weapons");
+    if (!g_hTraps.BoolValue) buffer_add_rawline(buffer);
+    menu_main.AddItem("item_7",buffer);
 
     if (g_hTraps.BoolValue)
     {
         Format(buffer, sizeof(buffer), "%T", "Traps", zm_language);
         buffer_add_rawline(buffer);
-        menu_main.AddItem("item_7",buffer);
+        menu_main.AddItem("item_8",buffer);
     }
 }
 int main_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
@@ -198,7 +206,8 @@ int main_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
             	case 3: zm_menu_state=ZM_MENU_CLEANUP;
             	case 4: zm_menu_state=ZM_MENU_OTHER;
             	case 5: zm_menu_state=ZM_MENU_ITEMS;
-            	case 6:
+                case 6: zm_menu_state=ZM_MENU_WEAPONS;
+            	case 7:
                 {
                     if (g_hTraps.BoolValue) zm_menu_state=ZM_MENU_TRAPS;
                 }
@@ -967,6 +976,83 @@ int items_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
 	return 0;
 }
 
+// WEAPONS MENU
+void create_weapons_menu()
+{
+    delete menu_weapons;
+    //LogMessage("create_weapons_menu");
+    count_survivor_weapons();
+    menu_weapons = CreateMenuEx(GetMenuStyleHandle(MenuStyle_Radio),weapons_menu_Handler);
+    apply_zm_menu_settings(menu_weapons);
+
+    int zm_language = LANG_SERVER;
+    if (IsValidClientZM()) zm_language = zm_client;
+    
+    menu_weapons.SetTitle("%t: %d", "Survivors", g_iAliveSurvivors, zm_language);
+
+    char buffer[64];
+
+    if (g_iPistol>0) Format(buffer, sizeof(buffer), "%t: %d", "Pistol", g_iPistol, zm_language);
+    else buffer = "";
+    menu_weapons.AddItem("item_1",buffer);
+
+    if (g_iMagnum>0) Format(buffer, sizeof(buffer), "%t: %d", "Magnum", g_iMagnum, zm_language);
+    else buffer = "";
+    menu_weapons.AddItem("item_2",buffer);
+
+    if (g_iMelee>0) Format(buffer, sizeof(buffer), "%t: %d", "Melee", g_iMelee, zm_language);
+    else buffer = "";
+    menu_weapons.AddItem("item_3",buffer);
+
+    if (g_iSMG>0) Format(buffer, sizeof(buffer), "%t: %d", "SMG", g_iSMG, zm_language);
+    else buffer = "";
+    menu_weapons.AddItem("item_4",buffer);
+
+    if (g_iShotgunT1>0) Format(buffer, sizeof(buffer), "%t: %d", "T1 Shotgun", g_iShotgunT1, zm_language);
+    else buffer = "";
+    menu_weapons.AddItem("item_5",buffer);
+
+    if (g_iRifle>0) Format(buffer, sizeof(buffer), "%t: %d", "Rifle", g_iRifle, zm_language);
+    else buffer = "";
+    menu_weapons.AddItem("item_6",buffer);
+
+    if (g_iShotgunT2>0) Format(buffer, sizeof(buffer), "%t: %d", "T2 Shotgun", g_iShotgunT2, zm_language);
+    else buffer = "";
+    menu_weapons.AddItem("item_7",buffer);
+
+    if (g_iChainsaw>0) Format(buffer, sizeof(buffer), "%t: %d", "Chainsaw", g_iChainsaw, zm_language);
+    else buffer = "";
+    menu_weapons.AddItem("item_8",buffer);
+
+    if (g_iGnome>0) Format(buffer, sizeof(buffer), "%t: %d", "Gnome", g_iGnome, zm_language);
+    else buffer = "";
+    buffer_add_rawline(buffer);
+    menu_weapons.AddItem("item_9",buffer);
+
+    if (zm_menu_state == ZM_MENU_WEAPONS && IsValidClientZM()) open_menu(zm_client,ZM_MENU_WEAPONS);
+}
+int weapons_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
+{
+    switch(action) 
+    {
+        case MenuAction_Select:
+        {
+        	if (param1!=zm_client || zm_stage>=ZM_END) return 0;
+            zm_menu_state=ZM_MENU_MAIN;
+        	RequestFrame(reopen_zm_menu,true);
+        }
+        case MenuAction_Cancel:
+        {
+           if (param1==zm_client)
+           {
+               if (param2==MenuCancel_Exit) zm_menu_state=ZM_MENU_CLOSED;
+               else RequestFrame(reopen_zm_menu,false);
+           }
+        }
+    }
+	return 0;
+}
+
 void update_menus()
 {
     if (DEBUG) LogMessage("[zm] update_menus");
@@ -1037,6 +1123,7 @@ Action ZM_Menu(int client, int args)
 	else if (strcmp(type,"cleanup")==0) MENU = ZM_MENU_CLEANUP;
 	else if (strcmp(type,"other")==0) MENU = ZM_MENU_OTHER;
     else if (strcmp(type,"items")==0) MENU = ZM_MENU_ITEMS;
+    else if (strcmp(type,"weapons")==0) MENU = ZM_MENU_WEAPONS;
     else if (strcmp(type,"traps")==0) MENU = ZM_MENU_TRAPS;
 	else if (strcmp(type,"close")==0) MENU = ZM_MENU_CLOSED;
 	else MENU = ZM_MENU_MAIN;

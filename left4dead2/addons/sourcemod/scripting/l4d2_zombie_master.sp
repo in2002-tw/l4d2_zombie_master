@@ -34,7 +34,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.17 2026-06-14"
+#define PLUGIN_VERSION 			"0.9.19 2026-06-17"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -87,7 +87,7 @@ public Plugin myinfo =
 // 6. Common flow spawns fixed. Should fail less.
 // 7. PTG
 // 8. Menu overhaul.
-// 9. Items menu.
+// 9. Items, weapons menus.
 // 10. Clientprefs.
 // 11. Spitter is more expensive and has 2x cooldown compared to other Specials.
 // 12. zm_hud_per_element
@@ -525,11 +525,18 @@ void IsAllowed()
 		HookEvent("player_bot_replace", EvtBotReplacePlayer, EventHookMode_Post);
         HookEvent("bot_player_replace", EvtPlayerReplaceBot, EventHookMode_Post);
         HookEvent("player_shoved", Event_PlayerShoved, EventHookMode_Post);
-        HookEvent("item_pickup", EvtSurvivorItem, EventHookMode_Post);
-        HookEvent("spawner_give_item", EvtSurvivorItem, EventHookMode_Post);
-        HookEvent("upgrade_pack_used", EvtSurvivorItem, EventHookMode_Post);
-        HookEvent("defibrillator_used", EvtSurvivorItem, EventHookMode_Post);
-        HookEvent("adrenaline_used", EvtSurvivorItem, EventHookMode_Post);
+        
+        HookEvent("upgrade_pack_used", EvtSurvivorInv, EventHookMode_Post);
+        HookEvent("defibrillator_used", EvtSurvivorInv, EventHookMode_Post);
+        HookEvent("adrenaline_used", EvtSurvivorInv, EventHookMode_Post);
+        
+        HookEvent("weapon_given", EvtSurvivorWep, EventHookMode_Post);
+        HookEvent("weapon_drop", EvtSurvivorWep, EventHookMode_Post);
+        HookEvent("weapon_drop_to_prop", EvtSurvivorWep, EventHookMode_Post);
+        HookEvent("weapon_pickup", EvtSurvivorWepNoCopy, EventHookMode_PostNoCopy);
+
+        HookEvent("spawner_give_item", EvtSurvivorInvOrWep, EventHookMode_Post);
+        HookEvent("item_pickup", EvtSurvivorInvOrWep, EventHookMode_Post);
 		
 		load_zm_gamemode();
 		GetCvars();
@@ -1166,7 +1173,7 @@ Action CountClients(Handle timer = null)
         //    if (i!=zm_client) FindConVar("mp_gamemode").ReplicateToClient(i,g_sCvarMPGameMode);
         //}
         if (!IsClientInGame(i)) continue;
-        CLIENT_GLOW_TRANSMIT_ALWAYS(i);
+        if (i!=zm_client) CLIENT_GLOW_TRANSMIT_ALWAYS(i);
         if (IsFakeClient(i) && GetClientTeam(i)==TEAM_INFECTED) new_SI_cap += 1;
 		
 		if (!IsPlayerAlive(i))
@@ -2219,12 +2226,34 @@ void evtPlayerSpawned(Event event, const char[] name, bool dontBroadcast)
       }
 }
 
-void EvtSurvivorItem(Event event, const char[] name, bool dontBroadcast)
+void EvtSurvivorInvOrWep(Event event, const char[] name, bool dontBroadcast)
 {
     if (!g_bCvarAllow) return;
     int client = GetClientOfUserId(event.GetInt("userid"));
     if (!IsValidClient(client) || GetClientTeam(client)!=TEAM_SURVIVOR) return;
     survivor_items_changed();
+}
+
+void EvtSurvivorInv(Event event, const char[] name, bool dontBroadcast)
+{
+    if (!g_bCvarAllow) return;
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (!IsValidClient(client) || GetClientTeam(client)!=TEAM_SURVIVOR) return;
+    survivor_items_changed(true,false);
+}
+
+void EvtSurvivorWep(Event event, const char[] name, bool dontBroadcast)
+{
+    if (!g_bCvarAllow) return;
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (!IsValidClient(client) || GetClientTeam(client)!=TEAM_SURVIVOR) return;
+    survivor_items_changed(false,true);
+}
+
+void EvtSurvivorWepNoCopy(Event event, const char[] name, bool dontBroadcast)
+{
+    if (!g_bCvarAllow) return;
+    survivor_items_changed(false,true);
 }
 
 void Event_PlayerShoved(Event event, const char[] name, bool dontBroadcast)
@@ -2266,7 +2295,7 @@ void EvtPlayerHeal(Event event, const char[] name, bool dontBroadcast)
 	if (!g_bCvarAllow) return;
 	int client = GetClientOfUserId(event.GetInt("subject"));
 	request_update_glow(client);
-    survivor_items_changed();
+    survivor_items_changed(true,false);
 }
 
 void evtPlayerTeam(Event event, const char[] name, bool dontBroadcast)
