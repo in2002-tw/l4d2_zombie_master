@@ -659,5 +659,55 @@
 		"lt"		"Aim at solid ground to place a tornado."
 	}
 
+	"Weapons"
+	{
+		"lt"			"Ginklai"
+	}
+
+	"Pistol"
+	{
+		"lt"			"Pistoletas"
+	}
+
+	"Magnum"
+	{
+		"lt"			"Magnumas"
+	}
+
+	"Melee"
+	{
+		"lt"			"Rankinis"
+	}
+
+	"SMG"
+	{
+		"lt"			"T1 Automatas"
+	}
+
+	"T1 Shotgun"
+	{
+		"lt"			"T1 Pompa"
+	}
+
+	"Rifle"
+	{
+		"lt"			"T2 Automatas"
+	}
+
+	"T2 Shotgun"
+	{
+		"lt"			"T2 Pompa"
+	}
+
+	"Chainsaw"
+	{
+		"lt"			"Pjūklas"
+	}
+
+	"Gnome"
+	{
+		"lt"			"Gnomas"
+	}
+
 	
 }

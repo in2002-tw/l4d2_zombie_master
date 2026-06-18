@@ -657,6 +657,56 @@
 	{
 		"zho"		"Aim at solid ground to place a tornado."
 	}
+
+	"Weapons"
+	{
+		"zho"			"Weapons"
+	}
+
+	"Pistol"
+	{
+		"zho"			"Pistol"
+	}
+
+	"Magnum"
+	{
+		"zho"			"Magnum"
+	}
+
+	"Melee"
+	{
+		"zho"			"Melee"
+	}
+
+	"SMG"
+	{
+		"zho"			"SMG"
+	}
+
+	"T1 Shotgun"
+	{
+		"zho"			"T1 Shotgun"
+	}
+
+	"Rifle"
+	{
+		"zho"			"Rifle"
+	}
+
+	"T2 Shotgun"
+	{
+		"zho"			"T2 Shotgun"
+	}
+
+	"Chainsaw"
+	{
+		"zho"			"Chainsaw"
+	}
+
+	"Gnome"
+	{
+		"zho"			"Gnome"
+	}
 	
 
 }
