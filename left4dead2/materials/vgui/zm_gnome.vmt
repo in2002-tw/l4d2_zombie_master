@@ -1,0 +1,9 @@
+"UnlitGeneric"
+{
+	"$basetexture" "vgui/zm_gnome"
+	"$translucent" 1
+	"$ignorez" 1
+	"$nofog" 1
+	"$vertexcolor" 1
+	"$vertexalpha" 1
+}
