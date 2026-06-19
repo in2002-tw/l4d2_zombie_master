@@ -233,6 +233,17 @@ stock void get_uncommon_model(char label[16], char model[64])
     }
 }
 
+// C:\Steam\steamapps\common\Left 4 Dead 2\left4dead2\sound\ambient\alarms\perimeter_alarm.wav
+
+#define NUM_JUMPSCARES 6
+#define SOUND_JUMPSCARE1 "ambient/animal/crow_1.wav"
+#define SOUND_JUMPSCARE2 "ambient/animal/crow_2.wav"
+#define SOUND_JUMPSCARE3 "ambient/creatures/town_moan1.wav"
+#define SOUND_JUMPSCARE4 "ambient/random_animals/frog_groups/small_frog_04a.wav"
+#define SOUND_JUMPSCARE5 "zm/stalker1.mp3"
+#define SOUND_JUMPSCARE6 "zm/stalker2.mp3"
+
+#define SOUND_TORNADO_ALARM "ambient/alarms/perimeter_alarm.wav"
 
 #define SOUND_READY "ui/critical_event_1.wav"
 #define SOUND_OFFER "ui/pickup_misc42.wav"
@@ -553,7 +564,7 @@ ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer,
        g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hSpitterCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait, g_hPanicRateMultiplier,
        g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons, g_hAllowFreeze,
        //g_hGridSearchRadius,
-       g_hGrid, g_hSpawnerMode, g_hPanicRefill, g_hCursed, g_hGridCooldown, g_hTraps;
+       g_hGrid, g_hSpawnerMode, g_hPanicRefill, g_hCursed, g_hGridCooldown, g_hTraps, g_hJumpscare;
 ConVar g_hCostTrapDoor, g_hCostTrapCar, g_hMaxTrapDoor, g_hMaxTrapCar, g_hTrapCooldown, g_hTrapDoorBurst;
 ConVar g_hCostTrapTornado, g_hMaxTrapTornado, g_hTornadoDuration, g_hTornadoRadius, g_hTornadoHeight, g_hTornadoGrace;
 
@@ -2700,6 +2711,13 @@ void update_director_script_scopes(bool warn = true)
         //t_scope_change = GetGameTime();
     }
      
+}
+
+Action ZM_Jumpscare(int client, int args)
+{
+    if (!g_bCvarAllow || !IsValidClientZM() || zm_client!=client) return Plugin_Continue;
+    zm_jumpscare();
+    return Plugin_Continue;
 }
 
 Action zm_freeze(int client, int args)

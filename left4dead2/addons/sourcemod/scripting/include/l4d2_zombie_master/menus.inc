@@ -762,6 +762,10 @@ void create_other_menu()
     {
         Format(buffer, sizeof(buffer), "%T", "Start Round", zm_language);
     }
+    else if (g_hJumpscare.BoolValue)
+    {
+        Format(buffer, sizeof(buffer), "Jumpscare");
+    }
     else buffer = "-";
     AddMenuItem(menu_other, "item_1", buffer);
     
@@ -789,8 +793,15 @@ void create_other_menu()
     AddMenuItem(menu_other, "item_4", buffer);
 
     Format(buffer, sizeof(buffer), "%T", "Give Up", zm_language);
-    buffer_add_rawline(buffer);
+    if (!g_hJumpscare.BoolValue) buffer_add_rawline(buffer);
     AddMenuItem(menu_other, "item_5", buffer);
+
+    if (g_hJumpscare.BoolValue)
+    {
+        Format(buffer, sizeof(buffer), "Jumpscare");
+        buffer_add_rawline(buffer);
+        AddMenuItem(menu_other, "item_6", buffer);
+    }
 	
 	if (zm_menu_state == ZM_MENU_OTHER && IsValidClientZM()) open_menu(zm_client,ZM_MENU_OTHER);
 	
@@ -807,6 +818,7 @@ int other_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
             	case 0: 
             	{
                 	if (!L4D_IsSurvivalMode() && zm_stage<ZM_STARTED) zm_start(zm_client,0);
+                    else zm_jumpscare();
             	}
             	case 1:
             	{
@@ -833,6 +845,7 @@ int other_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
                         create_other_menu();
                 }
                 case 4: {open_menu(zm_client, ZM_MENU_QUIT); return 0;}
+                case 5: zm_jumpscare();
                 default: zm_menu_state=ZM_MENU_MAIN;
         	}
         	RequestFrame(reopen_zm_menu,true);     	
@@ -847,6 +860,22 @@ int other_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
         }
     }
 	return 0;
+}
+
+void zm_jumpscare()
+{
+    if (!IsValidClientZM() || !g_hJumpscare.BoolValue) return;
+    static char sound[PLATFORM_MAX_PATH];
+    switch (GetRandomInt(1,NUM_JUMPSCARES))
+    {
+        case 1: sound = SOUND_JUMPSCARE1;
+        case 2: sound = SOUND_JUMPSCARE2;
+        case 3: sound = SOUND_JUMPSCARE3;
+        case 4: sound = SOUND_JUMPSCARE4;
+        case 5: sound = SOUND_JUMPSCARE5;
+        default: sound = SOUND_JUMPSCARE6;
+    }
+    EmitSoundToAll(sound,zm_client,_,SNDLEVEL_GUNFIRE,_,SNDVOL_NORMAL);
 }
 
 // QUIT MENU

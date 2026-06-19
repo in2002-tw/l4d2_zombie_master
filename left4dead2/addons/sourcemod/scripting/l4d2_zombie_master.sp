@@ -34,7 +34,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.19 2026-06-17"
+#define PLUGIN_VERSION 			"0.9.2 2026-06-19"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -160,6 +160,7 @@ public void OnPluginStart()
 	RegConsoleCmd("zm_autocommon_max", zm_autocommon_max, "n");
 	RegConsoleCmd("zm_freeze", zm_freeze, "Freeze/unfreeze all specials.");
 	RegConsoleCmd("zm_gamemode_menu", ZM_Gamemode_Command, "Admins: select gamemode. Clients: vote for gamemode.");
+    RegConsoleCmd("zm_jumpscare", ZM_Jumpscare, "ZM jumpscare Revolver Ocelot");
     
 	// Commands -- admins only
 	RegAdminCmd("zm_addbank", zm_addbank, ADMFLAG_ROOT,"Add zombux to zombie master bank. Admins only.");
@@ -385,6 +386,7 @@ public void OnPluginStart()
 	g_hNoZMWarn = CreateConVar("zm_nozm_warning", "1.0", "Warn players when there is no ZM.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 	
 	g_hCursed = CreateConVar("zm_cursed", "0", "Enable dumb stuff.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
+    g_hJumpscare = CreateConVar("zm_enable_jumpscare", "0", "Enable jumpscare.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 	
 	GetCvars();
 	Traps_Init();
@@ -1695,6 +1697,15 @@ public void OnMapStart()
 	PrecacheSound(SOUND_DOORSLAM3);
     PrecacheSound(SOUND_START);
     PrecacheSound(SOUND_VISION);
+
+    PrecacheSound(SOUND_JUMPSCARE1);
+    PrecacheSound(SOUND_JUMPSCARE2);
+    PrecacheSound(SOUND_JUMPSCARE3);
+    PrecacheSound(SOUND_JUMPSCARE4);
+    PrecacheSound(SOUND_JUMPSCARE5);
+    PrecacheSound(SOUND_JUMPSCARE6);
+    
+    PrecacheSound(SOUND_TORNADO_ALARM);
     
     PrecacheSound(EXPLOSION1);
     PrecacheSound(EXPLOSION2);
@@ -1763,7 +1774,10 @@ public void OnMapStart()
             Format(buffer, sizeof(buffer), "sound/%s", SOUND_NICK_ZM_MP3);
             AddFileToDownloadsTable(buffer); 
             
-            Format(buffer, sizeof(buffer), "sound/%s", SOUND_COACH_ZM_MP3);
+            Format(buffer, sizeof(buffer), "sound/%s", SOUND_JUMPSCARE5);
+            AddFileToDownloadsTable(buffer); 
+
+            Format(buffer, sizeof(buffer), "sound/%s", SOUND_JUMPSCARE6);
             AddFileToDownloadsTable(buffer); 
         
             //if (lipsync_available)
