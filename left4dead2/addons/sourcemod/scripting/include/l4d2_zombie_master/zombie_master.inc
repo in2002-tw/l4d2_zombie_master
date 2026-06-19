@@ -243,6 +243,8 @@ stock void get_uncommon_model(char label[16], char model[64])
 #define SOUND_JUMPSCARE5 "zm/stalker1.mp3"
 #define SOUND_JUMPSCARE6 "zm/stalker2.mp3"
 
+#define VMT_GNOME "materials/vgui/zm_gnome.vmt"
+#define VTF_GNOME "materials/vgui/zm_gnome.vtf"
 #define SOUND_GNOMED "zm/gnomed.mp3"
 #define GNOME_OVERLAY "vgui/zm_gnome"
 #define GNOME_COOLDOWN 30.0

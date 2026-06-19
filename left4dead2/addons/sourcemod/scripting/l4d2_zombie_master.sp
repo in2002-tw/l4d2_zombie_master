@@ -1719,6 +1719,8 @@ public void OnMapStart()
     PrecacheSound(EXPLOSION1);
     PrecacheSound(EXPLOSION2);
     PrecacheSound(EXPLOSION3);
+
+    PrecacheGeneric(VMT_GNOME, true);
     
     if (g_bMemes)
     {
@@ -1792,8 +1794,8 @@ public void OnMapStart()
             Format(buffer, sizeof(buffer), "sound/%s", SOUND_GNOMED);
             AddFileToDownloadsTable(buffer);
 
-            AddFileToDownloadsTable("materials/vgui/zm_gnome.vmt");
-            AddFileToDownloadsTable("materials/vgui/zm_gnome.vtf");
+            AddFileToDownloadsTable(VMT_GNOME);
+            AddFileToDownloadsTable(VTF_GNOME);
 
             //if (lipsync_available)
             //{
