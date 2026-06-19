@@ -4,7 +4,7 @@
 #include <left4dhooks>
 
 #define PLUGIN_NAME			    "l4d_common_lagfix"
-#define PLUGIN_VERSION 			"1.03"
+#define PLUGIN_VERSION 			"1.04"
 #define CONFIG_FILENAME         PLUGIN_NAME
 #define DEBUG 0
 
@@ -24,6 +24,8 @@ int g_iCycle[MAXPLAYERS+1] = {-1,...}; // track cycle for client. -1 indicates t
 int g_iInfectedRef[MAXPLAYERS+1]; // track infected entity assigned to client
 ConVar g_hCvarCycles, g_hCvarGibs, g_hCvarNotify;
 
+bool PVS_available; // PVS natives in l4dhooks
+
 public void OnPluginStart()
 {
 	AutoExecConfig(true, CONFIG_FILENAME);
@@ -31,6 +33,19 @@ public void OnPluginStart()
 	g_hCvarCycles = CreateConVar("l4d_common_lagfix","5","How many times to repeat cycle. 0 to disable plugin.",FCVAR_NOTIFY,true,0.0,true,100.0);
 	g_hCvarGibs = CreateConVar("l4d_common_lagfix_gibs","0","Include gib models in cycle. Probably not needed.",FCVAR_NOTIFY,true,0.0,true,1.0);
 	g_hCvarNotify = CreateConVar("l4d_common_lagfix_notify","1","Print info to clients.",FCVAR_NOTIFY,true,0.0,true,1.0);
+    RegAdminCmd("l4d_common_lagfix_reload", CmdReload, ADMFLAG_ROOT,"Reload modelprecache and force cycle on all clients. For debugging.");
+}
+
+public void OnAllPluginsLoaded()
+{
+    PVS_available = GetFeatureStatus(FeatureType_Native,"L4D_GetClusterForOrigin")==FeatureStatus_Available;
+    if (!PVS_available) LogMessage("Please update l4dhooks to improve performance.");
+}
+
+Action CmdReload(int client, int args)
+{
+    OnMapStart();
+    return Plugin_Continue;
 }
 
 public void OnMapEnd()
@@ -66,8 +81,12 @@ void LoadModels()
 	#endif
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsClientInGame(i) && IsFakeClient(i)) g_bClientsCached[i] = true;
-		else g_bClientsCached[i] = false;
+		if (!IsValidClient(i) || IsFakeClient(i)) g_bClientsCached[i] = true;
+		else
+        {
+            g_bClientsCached[i] = false;
+            CreateTimer(0.1,Timer_CycleModels,GetClientUserId(i),TIMER_FLAG_NO_MAPCHANGE); // in game - start cycle immediately
+        }
 	}
 }
 
@@ -95,11 +114,11 @@ void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 	if (g_hCvarCycles.IntValue<=0) return;
 	int client = GetClientOfUserId(event.GetInt("userid"));
 	if (!IsValidClient(client)) return;
-	if(IsFakeClient(client)) return;
-	#if DEBUG
+	if (IsFakeClient(client)) g_bClientsCached[client] = true;
+	if(g_bClientsCached[client] || g_iCycle[client]>=0) return; // skip if already cached or busy cycling
+    #if DEBUG
 	LogMessage("Event_PlayerSpawn %d %f", client, GetEngineTime());
 	#endif
-	if(g_bClientsCached[client] || g_iCycle[client]>=0) return; // skip if already cached or busy cycling
 	CreateTimer(0.1,Timer_CycleModels,GetClientUserId(client),TIMER_FLAG_NO_MAPCHANGE); // in game - start cycle immediately
 }
 
@@ -109,6 +128,7 @@ Action Timer_CycleModels(Handle timer, int userid)
     if (g_hCvarCycles.IntValue<=0) return Plugin_Stop;
     int client = GetClientOfUserId(userid);
     if (!IsValidClient(client)) return Plugin_Stop;
+    if (IsFakeClient(client)) g_bClientsCached[client] = true;
     if(g_bClientsCached[client] || g_iCycle[client]>=0) return Plugin_Stop;
     g_iModel[client] = 0;
     g_iCycle[client] = 0;
@@ -121,8 +141,9 @@ Action Timer_CycleModels(Handle timer, int userid)
 void CycleModels(int userid)
 {
     int client = GetClientOfUserId(userid);
-    if (!IsValidClient(client))
+    if (!IsValidClient(client) || IsFakeClient(client))
     {
+        //g_bClientsCached[client] = true;
         cleanup_infected(); // client disappeared suddenly, find and delete loose infected entities.
         return;
     }
@@ -192,7 +213,7 @@ void CycleModels(int userid)
         entref_infected = EntIndexToEntRef(infected);
         g_iInfectedRef[client] = entref_infected; 
         #if DEBUG
-        LogMessage("%d new infected %d %d", client, infected, entref_infected);
+        LogMessage("%d new infected %d %d (%.1f %.1f %.1f)", client, infected, entref_infected, vPos[0], vPos[1], vPos[2]);
         #endif
     }
     static char model[128];
@@ -222,7 +243,8 @@ void cleanup_infected()
 {
     for (int i = 1; i <= MaxClients; i++)
     {
-        if ( (g_iCycle[i]<0 || !IsValidClient(i)) && IsValidEntRef(g_iInfectedRef[i]) )
+        if (!IsValidEntRef(g_iInfectedRef[i])) continue;
+        if ( g_iCycle[i]<0 || !IsValidClient(i) || IsFakeClient(i) )
         {
             #if DEBUG
             LogMessage("cleanup_infected %d %d", i, g_iInfectedRef[i]);
@@ -238,6 +260,7 @@ void cleanup_infected()
 // on success, fills vecPos and returns true
 stock bool L4D_GetRandomPZSpawnPosition_PVS(int client, int zombieClass, int attempts = TRY_RANDOM, float vecPos[3] = {0.0,0.0,0.0})
 {
+    if (!PVS_available) return false;
     static float pos[3];
     GetClientEyePosition(client,pos);
     int cluster = L4D_GetClusterForOrigin(pos);
