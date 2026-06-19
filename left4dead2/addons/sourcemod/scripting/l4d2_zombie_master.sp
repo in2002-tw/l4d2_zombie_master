@@ -1457,9 +1457,9 @@ public void L4D2_OnDominatedBySpecialInfected(int victim, int dominator)
 {
     if (!g_bCvarAllow || !IsValidClient(victim) || dominated[victim]) return;
     if (DEBUG) LogMessage("[zm] Dominated start %d", victim);
-    dominated[victim] = true;
-    request_update_glow(victim); // delayed by 0.1 sec
-    CreateTimer(g_fUpdateRate,Check_Dominated,victim,TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+    request_update_glow(victim,true,0.0);
+    //request_update_glow(victim,true); // delayed by 0.1 sec
+    //request_update_glow(victim,false,1.0);
 }
 
 public void L4D_OnLedgeGrabbed_Post(int client)

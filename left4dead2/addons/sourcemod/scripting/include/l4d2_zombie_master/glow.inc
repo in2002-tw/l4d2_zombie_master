@@ -78,13 +78,18 @@ void GetSurvivorHealthColor_pre(int hp, int color[3], bool rescue=false, bool cr
 
 bool survivor_dominated(int client)
 {
-    return L4D_IsPlayerPinned(client) || L4D2_GetQueuedPummelAttacker(client)>0;//L4D2_GetSpecialInfectedDominatingMe(client)>0;
+    return L4D_IsPlayerPinned(client) || L4D2_GetQueuedPummelAttacker(client)>0 || L4D2_GetSpecialInfectedDominatingMe(client)>0;
 }
 
 Action Check_Dominated(Handle timer, int victim)
 {
     if (!dominated[victim]) return Plugin_Stop;
-    if (!IsValidClient(victim) || !IsPlayerAlive(victim) || !survivor_dominated(victim))
+    if (!IsValidClient(victim))
+    {
+        dominated[victim] = false;
+        return Plugin_Stop;
+    }
+    if (!IsPlayerAlive(victim) || !survivor_dominated(victim))
     {
         if (DEBUG) LogMessage("[zm] Dominated end %d", victim);
         request_update_glow(victim,true,0.0); // updates dominated[victim]
@@ -381,6 +386,10 @@ void UpdateSurvivorGlow(int client)
         if (alive)
         {
             rescue = survivor_dominated(client);
+            if (dominated[client] != rescue)
+            {
+                CreateTimer(g_fUpdateRate,Check_Dominated,client,TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+            }
             dominated[client] = rescue;
         }
         else dominated[client] = false;
