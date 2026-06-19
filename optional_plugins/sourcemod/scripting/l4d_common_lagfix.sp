@@ -1,9 +1,10 @@
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
+#include <left4dhooks>
 
 #define PLUGIN_NAME			    "l4d_common_lagfix"
-#define PLUGIN_VERSION 			"1.01"
+#define PLUGIN_VERSION 			"1.03"
 #define CONFIG_FILENAME         PLUGIN_NAME
 #define DEBUG 0
 
@@ -21,13 +22,15 @@ bool g_bClientsCached[MAXPLAYERS+1] = {true,...}; // check if already cached for
 int g_iModel[MAXPLAYERS+1]; // track model in cycle for client
 int g_iCycle[MAXPLAYERS+1] = {-1,...}; // track cycle for client. -1 indicates they are not in cycle
 int g_iInfectedRef[MAXPLAYERS+1]; // track infected entity assigned to client
-ConVar g_hCvarCycles, g_hCvarGibs;
+ConVar g_hCvarCycles, g_hCvarGibs, g_hCvarNotify;
 
 public void OnPluginStart()
 {
+	AutoExecConfig(true, CONFIG_FILENAME);
 	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_PostNoCopy);
 	g_hCvarCycles = CreateConVar("l4d_common_lagfix","5","How many times to repeat cycle. 0 to disable plugin.",FCVAR_NOTIFY,true,0.0,true,100.0);
 	g_hCvarGibs = CreateConVar("l4d_common_lagfix_gibs","0","Include gib models in cycle. Probably not needed.",FCVAR_NOTIFY,true,0.0,true,1.0);
+	g_hCvarNotify = CreateConVar("l4d_common_lagfix_notify","1","Print info to clients.",FCVAR_NOTIFY,true,0.0,true,1.0);
 }
 
 public void OnMapEnd()
@@ -84,6 +87,7 @@ public void OnClientPutInServer(int client) // player_spawn doesn't always happe
     g_iModel[client] = 0;
     if (g_hCvarCycles.IntValue<=0) return;
     CreateTimer(6.0,Timer_CycleModels,GetClientUserId(client),TIMER_FLAG_NO_MAPCHANGE); // takes about 6 seconds to actually be put in game
+    // actually this is non-sense, gives inconsistent results. sometimes servers hang for 30-40 seconds between campaigns. somebody with more brain cells should fix this
 }
 
 void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
@@ -112,6 +116,8 @@ Action Timer_CycleModels(Handle timer, int userid)
     return Plugin_Stop;
 }
 
+#define TRY_RANDOM 20 // how many L4D_GetRandomPZSpawnPosition_PVS attempts
+
 void CycleModels(int userid)
 {
     int client = GetClientOfUserId(userid);
@@ -121,25 +127,47 @@ void CycleModels(int userid)
         return;
     }
     int entref_infected = g_iInfectedRef[client];
-    if (g_iModel[client]==0 && IsValidEntRef(entref_infected)) // new zombie for new cycle
+    if (g_iModel[client]==0) // new zombie for new cycle
     {
-        RemoveEntity(entref_infected);
-        g_iInfectedRef[client] = INVALID_ENT_REFERENCE;
-        entref_infected = INVALID_ENT_REFERENCE;
+        int cycle = g_iCycle[client];
+        if (g_hCvarNotify.BoolValue && cycle<g_hCvarCycles.IntValue)
+            PrintToChat(client, "[l4d_common_lagfix] Common Infected textures loading: %d/%d ...",
+                        g_iCycle[client], g_hCvarCycles.IntValue);
+        
+        if (IsValidEntRef(entref_infected))
+        {
+            RemoveEntity(entref_infected);
+            g_iInfectedRef[client] = INVALID_ENT_REFERENCE;
+            entref_infected = INVALID_ENT_REFERENCE;
+        }
     }
     if (g_iCycle[client]>=g_hCvarCycles.IntValue) // end of cycle
     {
         g_iCycle[client] = -1;
         g_bClientsCached[client] = true;
+        if (g_hCvarNotify.BoolValue)
+        {
+            PrintHintText(client, "Common Infected textures loaded.");
+            PrintToChat(client,"[l4d_common_lagfix] Common Infected textures loaded.");
+        }
         return;
     }
     if (!IsValidEntRef(entref_infected))
     {
-        static float vPos[3];
-        GetClientAbsOrigin(client,vPos);
-        vPos[2] += 120.0;
+        static float vPos[3]; // zombie pos
+        if (!L4D_GetRandomPZSpawnPosition_PVS(client,0,TRY_RANDOM,vPos))
+        {
+            #if DEBUG
+            LogMessage("CycleModels %d failed random PVS location", client);
+            #endif
+            GetClientAbsOrigin(client,vPos);
+            vPos[2] += 120.0;
+        }
         if (vPos[0]==0.0 && vPos[1]==0.0 && vPos[2]==0.0) // avoid server crashing exploit
         {
+            #if DEBUG
+            LogMessage("pos 0.0 0.0 0.0, skipping cycle to avoid server crash.");
+            #endif
             g_iCycle[client] = -1;
             return;
         }
@@ -160,9 +188,9 @@ void CycleModels(int userid)
         SetEntProp(infected,Prop_Data,"m_iMaxHealth",99999);
         SetEntProp(infected,Prop_Data,"m_nNextThinkTick",-1);
         SetEntProp(infected, Prop_Data, "m_nSolidType", 0);
-        SetEntProp(infected, Prop_Data, "m_CollisionGroup", 1);
+        //SetEntProp(infected, Prop_Data, "m_CollisionGroup", 1);
         entref_infected = EntIndexToEntRef(infected);
-        g_iInfectedRef[client] = entref_infected;
+        g_iInfectedRef[client] = entref_infected; 
         #if DEBUG
         LogMessage("%d new infected %d %d", client, infected, entref_infected);
         #endif
@@ -204,6 +232,34 @@ void cleanup_infected()
             g_iCycle[i] = -1;
         }
     }
+}
+
+// wrapper for L4D_GetRandomPZSpawnPosition, with Potentially Visible Set (PVS) checks.
+// on success, fills vecPos and returns true
+stock bool L4D_GetRandomPZSpawnPosition_PVS(int client, int zombieClass, int attempts = TRY_RANDOM, float vecPos[3] = {0.0,0.0,0.0})
+{
+    static float pos[3];
+    GetClientEyePosition(client,pos);
+    int cluster = L4D_GetClusterForOrigin(pos);
+    if (cluster<0) return false;
+    static int PVS[PVS_BUFFER_SIZE];
+    L4D_GetPVSForCluster(cluster,PVS);
+    if (!L4D_CheckOriginInPVS(pos,PVS)) // Self-consistency check.
+    {
+        #if DEBUG
+        LogMessage("client %d failed its own PVS check, cluster %d!!! CONSULT FIFTH PLANE OF REALITY ELDRITCH BEING JOHN CARMACK FOR FURTHER INSTRUCTIONS", client, cluster);
+        #endif
+        return false;
+    }
+    int i = 0; // number of tries
+    while (i<attempts)
+    {
+        i += 1;
+        if (!L4D_GetRandomPZSpawnPosition(client,zombieClass,1,vecPos)) continue;
+        if (!L4D_CheckOriginInPVS(vecPos,PVS)) continue;
+        return true;
+    }
+    return false;
 }
 
 stock bool IsValidEntRef(int entity)
