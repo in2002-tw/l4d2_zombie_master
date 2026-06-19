@@ -1060,13 +1060,61 @@ void create_weapons_menu()
 
     if (zm_menu_state == ZM_MENU_WEAPONS && IsValidClientZM()) open_menu(zm_client,ZM_MENU_WEAPONS);
 }
+bool client_holds_gnome(int client)
+{
+    static char weapon[32];
+    GetClientWeapon(client, weapon, sizeof(weapon));
+    return strncmp(weapon, "weapon_gnome", 12, false) == 0;
+}
+
+void gnome_client(int client)
+{
+    ClientCommand(client, "r_screenoverlay \"%s\"", GNOME_OVERLAY);
+    EmitSoundToClient(client, SOUND_GNOMED);
+}
+
+void zm_gnome_effect()
+{
+    float now = GetGameTime();
+    float elapsed = now - g_fGnomeLastUsed;
+    if (g_fGnomeLastUsed > 0.0 && elapsed >= 0.0 && elapsed < GNOME_COOLDOWN)
+    {
+        if (IsValidClientZM())
+            PrintToChat(zm_client, "[zm] Gnome on cooldown (%.0fs left)", GNOME_COOLDOWN - elapsed);
+        return;
+    }
+    g_fGnomeLastUsed = now;
+
+    bool holdersOnly = g_hGnome.IntValue == 2;
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || !IsPlayerAlive(i) || GetClientTeam(i) != TEAM_SURVIVOR) continue;
+        if (holdersOnly && !client_holds_gnome(i)) continue;
+        gnome_client(i);
+    }
+    if (IsValidClientZM()) gnome_client(zm_client);
+
+    CreateTimer(GNOME_DURATION, Timer_ClearGnomeOverlay);
+}
+
+Action Timer_ClearGnomeOverlay(Handle timer)
+{
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i)) continue;
+        ClientCommand(i, "r_screenoverlay \"\"");
+    }
+    return Plugin_Stop;
+}
+
 int weapons_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
 {
-    switch(action) 
+    switch(action)
     {
         case MenuAction_Select:
         {
         	if (param1!=zm_client || zm_stage>=ZM_END) return 0;
+            if (param2==8 && g_hGnome.BoolValue) zm_gnome_effect();
             zm_menu_state=ZM_MENU_MAIN;
         	RequestFrame(reopen_zm_menu,true);
         }

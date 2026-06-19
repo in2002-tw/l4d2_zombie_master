@@ -243,6 +243,11 @@ stock void get_uncommon_model(char label[16], char model[64])
 #define SOUND_JUMPSCARE5 "zm/stalker1.mp3"
 #define SOUND_JUMPSCARE6 "zm/stalker2.mp3"
 
+#define SOUND_GNOMED "zm/gnomed.mp3"
+#define GNOME_OVERLAY "vgui/zm_gnome"
+#define GNOME_COOLDOWN 30.0
+#define GNOME_DURATION 0.25
+
 #define SOUND_TORNADO_ALARM "ambient/alarms/perimeter_alarm.wav"
 
 #define SOUND_READY "ui/critical_event_1.wav"
@@ -564,14 +569,14 @@ ConVar g_hBankRateBase, g_hBankRatePlayer, g_hBankInitial, g_hBankInitialPlayer,
        g_hCommonRate, g_hWitchCooldown, g_hTankCooldown, g_hSpitterCooldown, g_hMinFinaleStage, g_hPanicDuration, g_hFairQueue, g_hFairQueueWait, g_hPanicRateMultiplier,
        g_hMenuTimeout, g_hDiscountTank, g_hMemes, g_hClownGlow, g_hForceCommon, g_hHoldFinale, g_hZMGamemode, g_hVomitCommons, g_hAllowFreeze,
        //g_hGridSearchRadius,
-       g_hGrid, g_hSpawnerMode, g_hPanicRefill, g_hCursed, g_hGridCooldown, g_hTraps, g_hJumpscare;
+       g_hGrid, g_hSpawnerMode, g_hPanicRefill, g_hCursed, g_hGridCooldown, g_hTraps, g_hJumpscare, g_hGnome;
 ConVar g_hCostTrapDoor, g_hCostTrapCar, g_hMaxTrapDoor, g_hMaxTrapCar, g_hTrapCooldown, g_hTrapDoorBurst;
 ConVar g_hCostTrapTornado, g_hMaxTrapTornado, g_hTornadoDuration, g_hTornadoRadius, g_hTornadoHeight, g_hTornadoGrace;
 
 float g_fBankRateBase,g_fBankRatePlayer,g_fUpdateRate,g_fSpawnMinDistance,g_fStopInactivity,g_fSpecialCooldown, g_fPanicRateMultiplier,
 g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fSpitterCooldown, g_fMinFinaleStage, g_fPanicDuration, g_fFairQueueWait, g_fMenuTimeout,
 //g_fGridSearchRadius,
-g_fAbilityCooldown, g_fGridCooldown;
+g_fAbilityCooldown, g_fGridCooldown, g_fGnomeLastUsed;
 
 bool g_bFairQueue, g_bDiscountTank, g_bMemes, g_bClownGlow, g_bAllowFreeze;
 char g_sForceCommon[32];

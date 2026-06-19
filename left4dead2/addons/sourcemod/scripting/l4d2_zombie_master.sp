@@ -387,7 +387,14 @@ public void OnPluginStart()
 	
 	g_hCursed = CreateConVar("zm_cursed", "0", "Enable dumb stuff.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
     g_hJumpscare = CreateConVar("zm_enable_jumpscare", "0", "Enable jumpscare.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
-	
+    g_hGnome = CreateConVar("zm_enable_gnome", "1", "Gnome effect from the ZM weapons menu. 0 = off, 1 = all alive survivors, 2 = only survivors holding a gnome.",FCVAR_PROTECTED, true, 0.0, true, 2.0);
+
+    // r_screenoverlay is cheat-flagged by default; strip the flag so the gnome
+    // effect can push a per-client overlay without sv_cheats.
+    int gnomeOverlayFlags = GetCommandFlags("r_screenoverlay");
+    if (gnomeOverlayFlags != INVALID_FCVAR_FLAGS)
+        SetCommandFlags("r_screenoverlay", gnomeOverlayFlags & ~FCVAR_CHEAT);
+
 	GetCvars();
 	Traps_Init();
 
@@ -1704,7 +1711,9 @@ public void OnMapStart()
     PrecacheSound(SOUND_JUMPSCARE4);
     PrecacheSound(SOUND_JUMPSCARE5);
     PrecacheSound(SOUND_JUMPSCARE6);
-    
+
+    PrecacheSound(SOUND_GNOMED);
+
     PrecacheSound(SOUND_TORNADO_ALARM);
     
     PrecacheSound(EXPLOSION1);
@@ -1778,8 +1787,14 @@ public void OnMapStart()
             AddFileToDownloadsTable(buffer); 
 
             Format(buffer, sizeof(buffer), "sound/%s", SOUND_JUMPSCARE6);
-            AddFileToDownloadsTable(buffer); 
-        
+            AddFileToDownloadsTable(buffer);
+
+            Format(buffer, sizeof(buffer), "sound/%s", SOUND_GNOMED);
+            AddFileToDownloadsTable(buffer);
+
+            AddFileToDownloadsTable("materials/vgui/zm_gnome.vmt");
+            AddFileToDownloadsTable("materials/vgui/zm_gnome.vtf");
+
             //if (lipsync_available)
             //{
             //    AddFileToDownloadsTable(VCD_ELLIS_ZM);
