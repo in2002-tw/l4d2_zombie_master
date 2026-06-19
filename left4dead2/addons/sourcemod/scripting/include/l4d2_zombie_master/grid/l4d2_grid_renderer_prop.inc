@@ -438,7 +438,7 @@ static void GridRendererProp_CreatePool(int client)
 		created++;
 
 		//SET_TRANSMIT_ALWAYS(ent); // see cells through the whole map.
-		RequestFrame(SET_TRANSMIT_ALWAYS,EntIndexToEntRef(ent));
+		//RequestFrame(SET_TRANSMIT_ALWAYS,EntIndexToEntRef(ent));
 
 	}
 
