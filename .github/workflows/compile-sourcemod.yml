@@ -1,4 +1,4 @@
-name: Compile SourceMod Script
+name: Compile SourceMod Plugins
 
 on:
   push:
@@ -9,11 +9,14 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   compile:
     runs-on: ubuntu-latest
+
+    env:
+      scripting_dir: left4dead2/addons/sourcemod/scripting
 
     steps:
       - name: Checkout repository
@@ -71,24 +74,72 @@ jobs:
               "https://cdn.jsdelivr.net/gh/alliedmodders/sourcemod@master/plugins/include/dhooks.inc"
           fi
 
-      - name: Compile l4d2_zombie_master.sp
+      - name: Compile every plugin
         shell: bash
         run: |
           set -euo pipefail
+          shopt -s nullglob
 
-          mkdir -p "$GITHUB_WORKSPACE/build"
+          build_dir="$GITHUB_WORKSPACE/build"
+          mkdir -p "$build_dir"
 
-          spcomp \
-            -v2 \
-            -E \
-            -i"$GITHUB_WORKSPACE/left4dead2/addons/sourcemod/scripting/include" \
-            -i"$GITHUB_WORKSPACE/.ci/includes" \
-            "$GITHUB_WORKSPACE/left4dead2/addons/sourcemod/scripting/l4d2_zombie_master.sp" \
-            -o"$GITHUB_WORKSPACE/build/l4d2_zombie_master.smx"
+          sources=("$GITHUB_WORKSPACE/$scripting_dir"/*.sp)
+          if [ ${#sources[@]} -eq 0 ]; then
+            echo "No .sp source files found under $scripting_dir" >&2
+            exit 1
+          fi
 
-      - name: Upload compiled plugin artifact
+          for src in "${sources[@]}"; do
+            name="$(basename "${src%.sp}")"
+            echo "::group::Compiling $name"
+            spcomp \
+              -v2 \
+              -E \
+              -i"$GITHUB_WORKSPACE/$scripting_dir/include" \
+              -i"$GITHUB_WORKSPACE/.ci/includes" \
+              "$src" \
+              -o"$build_dir/$name.smx"
+            echo "::endgroup::"
+          done
+
+      - name: Upload compiled plugin artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: l4d2_zombie_master-sourcemod-1.12
-          path: build/l4d2_zombie_master.smx
+          name: compiled-plugins-sourcemod-1.12
+          path: build/*.smx
           if-no-files-found: error
+
+      - name: Publish a release for each bumped plugin
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          for src in "$GITHUB_WORKSPACE/$scripting_dir"/*.sp; do
+            name="$(basename "${src%.sp}")"
+
+            # Pull the first whitespace-delimited token from the PLUGIN_VERSION
+            # string, dropping any trailing date (e.g. "0.9.2 2026-06-19" -> "0.9.2").
+            version="$(sed -nE 's/.*#define[[:space:]]+PLUGIN_VERSION[[:space:]]+"([^" ]+).*/\1/p' "$src" | head -n1)"
+            if [ -z "$version" ]; then
+              echo "No PLUGIN_VERSION in $name, skipping release."
+              continue
+            fi
+
+            tag="${name}-${version}"
+
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "Release $tag already exists, nothing to publish."
+              continue
+            fi
+
+            echo "Publishing release $tag"
+            gh release create "$tag" \
+              "build/$name.smx" \
+              --target "$GITHUB_SHA" \
+              --title "$name $version" \
+              --notes "Automated release of $name version $version."
+          done
