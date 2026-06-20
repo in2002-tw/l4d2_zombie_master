@@ -17,7 +17,7 @@
 #include <dhooks>
 #include <l4d_path_to_goal>
 
-#define PLUGIN_VERSION 			"1.36 2026-06-14"
+#define PLUGIN_VERSION 			"1.37 2026-06-20"
 
 public Plugin myinfo =
 {
@@ -102,6 +102,12 @@ public void OnPluginStart()
     g_hCvarZM = FindConVar("zm_enable"); // check if zombie master is active
     }
 
+}
+
+public void OnAllPluginsLoaded()
+{
+    elevator_available = GetFeatureStatus(FeatureType_Native,"L4D_NavArea_GetElevator")==FeatureStatus_Available;
+    if (!elevator_available) LogMessage("Please update l4dhooks for better performance.");
 }
 
 void evtFinaleVehicle(Event event, const char[] name, bool dontBroadcast)

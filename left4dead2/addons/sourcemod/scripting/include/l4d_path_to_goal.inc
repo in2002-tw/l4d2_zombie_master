@@ -76,6 +76,21 @@ enum struct Cell
 	float center[3]; // cell position slightly above ground
 }
 
+// How are two nav areas connected?
+enum ConnectionType {
+    CONNECTED_NOT = 0,
+    CONNECTED_ADJACENT = 1, // dir
+    CONNECTED_LADDER = 2, // ladder
+    CONNECTED_ELEVATOR = 3 // elevator
+};
+
+// Connection to navArea
+enum struct NavConnection
+{
+	Address navArea;
+    int connectiontype;
+}
+
 ArrayList g_GuideCells;
 ConVar g_hCvarMPGameMode, g_hCvarEnable, g_hCvarMax, g_hCvarSurvivors, g_hCvarInfected, g_hCvarSpec, g_hCvarBudget, g_hCvarFinaleAuto, g_hCvarZM;
 bool gamemode_guidable, guide_ready, guide_prep, map_started, nav_started, enable, g_bL4D2, finale, finale_rescue, finale_gauntlet;
@@ -90,6 +105,8 @@ bool g_bFlowRecomputeHooked;
 
 bool finale_stitched; // finale guide was drawn
 bool finale_backwards; // rescue vehicle is not at max flow -> flow cannot be used for guiding
+
+bool elevator_available; // check fi l4dhooks is up to date
 
 ConVar g_hCvarFinale;
 #define FINALE_ALWAYS 0 
@@ -1726,6 +1743,13 @@ void guide_add_cell(ArrayList cells, Cell cell)
     }
     static Cell cell_prev, cell_prev2;
     cells.GetArray(cells.Length-1,cell_prev,sizeof(Cell)); // last cell
+
+    //int ladder = ladder_from_to(cell_prev.navArea,cell.navArea);
+    //if (ladder>0)
+    //{
+    //    LogMessage("guide_add_cell ladder %d", ladder);
+    //    //static Cell cell_ladder;
+    //}
     
     bool prev2 = cells.Length>=2;
     if (prev2) cells.GetArray(cells.Length-2,cell_prev2,sizeof(Cell));
@@ -2214,31 +2238,128 @@ stock bool entity_solid(int entity)
     return true;
 }
 
+///////////// Connections
+
+// Fill navList with navmeshes connected to navArea. returns length of array
+// backwards = false allow only connections navArea -> adjArea
+// backards = true allow only connections adjArea -> navArea
+stock int get_navAreas(Address navArea, ArrayList navList, int team = TEAM_SURVIVOR,
+                       bool adjacent = true, bool elevator = true, bool ladder = true, bool backwards = false, bool fast = false)
+{
+    if (navArea == Address_Null) return 0;
+    navList.Clear();
+    ArrayList tempList = new ArrayList();
+    Address adjArea;
+    if (adjacent)
+    {
+        for (int dir = 0; dir < 5; dir++)
+        {
+            tempList.Clear();
+            L4D_NavArea_GetAdjacentAreas(navArea, dir, tempList);
+            for (int i = 0; i < tempList.Length; i++)
+            {
+                adjArea = tempList.Get(i);
+                if (adjArea == Address_Null) continue;
+                if (!fast && navList.FindValue(adjArea)!=-1)
+                {
+                    LogMessage("get_connected_navAreas %d <-> %d duplicate", navArea, adjArea);
+                    continue;
+                }
+                if (!L4D_NavArea_IsConnected(backwards ? adjArea : navArea, backwards ? navArea : adjArea,dir)) continue;
+                navList.Push(adjArea);
+            }
+        }
+    }
+    if (elevator && team!=TEAM_SURVIVOR) // only survivors can activate elevators
+    {
+        //adjArea = 
+    }
+    if (ladder)
+    {
+        // team
+        // adjAreas
+    }
+    delete tempList;
+    return navList.Length;
+}
+
 // Check if connection from -> to can be made.
+// check_ladder manually searches for nearby func_simpleladder that may not be connected due to mapper skill issue
 stock bool cell_connected(Cell from, Cell to, bool check_ladder = true)
 {
     if (from.navArea != Address_Null && to.navArea != Address_Null)
     { 
-        for (int dir = 0; dir < 5; dir++)
-        {
-            if (L4D_NavArea_IsConnected(from.navArea,to.navArea,dir)) return true;
-        }
+        if (navArea_connected(from.navArea,to.navArea)) return true;
     }
-    //if (twopos_traversable(from.center,to.center)) return true;
-    static Cell cell;
-    if (check_ladder && try_ladder(from.flow,from.center,cell) && cell_connected(cell,to,false)) return true;
+    if (check_ladder) // manual ladder search, expensive
+    {
+        static Cell cell;
+        if (try_ladder(from.flow,from.center,cell) && cell_connected(cell,to,false)) return true;
+    }
     return false;
 }
 
 // Check if connection from -> to can be made.
-stock bool navArea_connected(Address from, Address to)
+stock bool navArea_connected(Address from, Address to, int team = TEAM_SURVIVOR)
 {
     if (from == Address_Null || to == Address_Null) return false;
+    if (from == to) return true;
+    if (elevator_from_to(from,to)>0) return true;
     for (int dir = 0; dir < 5; dir++)
     {
         if (L4D_NavArea_IsConnected(from,to,dir)) return true;
     }
+    if (ladder_from_to(from,to,team)>0) return true;
     return false;
+}
+
+ArrayList ladders1, ladders2;
+
+// Return func_simpleladder connecting from -> to. returns -1 on failure.
+stock int ladder_from_to(Address from, Address to, int team = TEAM_SURVIVOR)
+{
+    if (from == Address_Null || to == Address_Null) return -1;
+    if (ladders1 == null) ladders1 = new ArrayList();
+    ladders1.Clear();
+    int count1 = NavArea_GetLadders(from,ladders1);
+    if (count1<=0) return -1;
+
+    if (ladders2 == null) ladders2 = new ArrayList();
+    ladders2.Clear();
+    int count2 = NavArea_GetLadders(to,ladders2);
+    if (count2<=0) return -1;
+
+    for (int i1 = 0; i1 < ladders1.Length; i1++)
+    {
+        int ladder = ladders1.Get(i1);
+        if (ladder<=0 || !IsValidEntity(ladder)) continue;
+        for (int i2 = 0; i2 < ladders2.Length; i2++)
+        {
+            if (ladders2.Get(i2)==ladder)
+            {
+                int team_ladder = GetEntProp(ladder, Prop_Send, "m_iTeamNum");
+                if (team_ladder==0 || team_ladder==team) return ladder;
+            }
+        }
+    }
+    return -1;
+}
+
+// Fill ladderList with func_simpleladder connected to navArea.
+stock int NavArea_GetLadders(Address navArea, ArrayList ladderList)
+{
+    if (!elevator_available || navArea == Address_Null) return 0;
+    return (L4D_NavArea_GetLadder(navArea,ladderList));
+}
+
+// Return func_elevator connecting from -> to. returns -1 on failure.
+stock int elevator_from_to(Address from, Address to)
+{
+    if (!elevator_available || from == Address_Null || to == Address_Null) return -1;
+    int elevator = L4D_NavArea_GetElevator(from);
+    if (elevator<=0 || !IsValidEntity(elevator)) return -1;
+    if (elevator == L4D_NavArea_GetElevator(to)) return elevator;
+    return -1;
 }
 
 // Check if nav area is relevant to survivor escape path.
