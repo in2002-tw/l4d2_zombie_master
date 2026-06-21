@@ -42,6 +42,7 @@ bool DEBUG = false;
 #include <l4d2_grid_lib>
 #include <l4d2_zombie_master/sdk>
 #include <l4d2_zombie_master/glow>
+#include <l4d2_zombie_master/l4d2_pvs_force>
 #include <l4d2_zombie_master/grid/l4d2_grid_renderer>
 #include <l4d2_zombie_master/los_cellcache>
 #include <l4d2_zombie_master/spawner_validate>
@@ -114,6 +115,7 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
 	if (DEBUG) LogMessage("[zm] OnPluginStart");
+
 	l4dhooks_updated = GetFeatureStatus(FeatureType_Native,"L4D_NavArea_IsBlocked")==FeatureStatus_Available;
     if (!l4dhooks_updated) LogMessage("Please update l4dhooks to improve performance.");
 	load_gamemodes();
@@ -417,6 +419,7 @@ public void OnPluginStart()
 
     //for (int i = 1; i <= MaxClients; i++)
     //    if (IsClientInGame(i)) SDKHook(i, SDKHook_OnTakeDamage, TrapTornado_OnTakeDamage);
+    PvsForce_Init();
 }
 
 public void OnAdminMenuReady(Handle aTopMenu)
@@ -2176,6 +2179,7 @@ void EvtPlayerCallHelp(Event event, const char[] name, bool dontBroadcast)
 
 public void OnPluginEnd()
 {
+	PvsForce_Cleanup();
     if (DEBUG) LogMessage("[zm] OnPluginEnd");
     if (IsValidClientZM()) ChangeClientTeam(zm_client,TEAM_SURVIVOR);
     Spawner_OnDisabled(zm_client);
@@ -2414,6 +2418,7 @@ public void OnClientPostAdminCheck(int client)
 
 public void OnClientDisconnect(int client)
 {
+	PvsForce_OnClientDisconnect(client);
 	if (!g_bCvarAllow) return;
 	if (client<=0) return;
 	hp_timers[client] = null;

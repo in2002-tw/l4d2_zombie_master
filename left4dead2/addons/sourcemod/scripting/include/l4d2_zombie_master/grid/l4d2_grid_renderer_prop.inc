@@ -323,6 +323,22 @@ stock int GridRendererProp_DrawCells(int client,
 			GridRendererProp_HideEntity(client, e);
 	}
 
+	// Inject only the highlighted closest-valid cell through walls (the spawn target).
+    // TODO: should be center cell probably, since what if all cells are invalid
+	int primaryEnt = -1;
+	if (closestValidIdx >= 0)
+	{
+		for (int e = 0; e < totalEnts; e++)
+		{
+			if (entityDataIdx[e] == closestValidIdx)
+			{
+				primaryEnt = EntRefToEntIndex(g_PropPool[client].entities[e]);
+				break;
+			}
+		}
+	}
+	PvsForce_SetPrimary(client, primaryEnt);
+
 	g_PropPool[client].activeCount = drawn;
 	return drawn;
 }
@@ -437,8 +453,9 @@ static void GridRendererProp_CreatePool(int client)
 		g_PropPool[client].entities[i] = EntIndexToEntRef(ent);
 		created++;
 
-		//SET_TRANSMIT_ALWAYS(ent); // see cells through the whole map.
-		//RequestFrame(SET_TRANSMIT_ALWAYS,EntIndexToEntRef(ent));
+		// Force-visible to the owner through walls and across the whole map, while
+		// the SDKHook_SetTransmit gate above keeps it invisible to other clients.
+		PvsForce_Register(ent, client);
 
 	}
 
@@ -464,6 +481,10 @@ static void GridRendererProp_DestroyPool(int client)
 
 	for (int i = 0; i < g_PropPool[client].totalAllocated; i++)
 	{
+		// Unregister by the stored ref unconditionally, so the PVS-force count is
+		// released even if the prop was already invalidated before teardown.
+		PvsForce_UnregisterRef(g_PropPool[client].entities[i]);
+
 		int ent = EntRefToEntIndex(g_PropPool[client].entities[i]);
 		if (ent != INVALID_ENT_REFERENCE && IsValidEntity(ent))
 		{
