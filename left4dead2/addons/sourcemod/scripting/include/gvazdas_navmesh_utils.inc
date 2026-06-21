@@ -24,7 +24,7 @@
 stock bool project_navmesh_xy(Address navArea, float pos[3], bool force_OOB = false)
 {
     if (navArea == Address_Null) return false;
-    if (!force_OOB && navmesh_OOB(navArea,pos)) return false;
+    if (!force_OOB && navmesh_OOB(navArea,pos,false)) return false;
     pos[2] = L4D_NavArea_GetZ(navArea,pos);
     return true;
 }

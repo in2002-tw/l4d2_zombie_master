@@ -1671,6 +1671,29 @@ bool TraceFilter_OnlyTargetEntity(int entity, int contentsMask, int ignore = -1)
     return (entity == g_TraceFilter_TargetEntity);
 }
 
+// Check if Survivor would be stuck if teleported to given position. Provide the client if known.
+stock bool IsObstructed_Survivor(float pos[3], int client = -1)
+{
+    bool isObstructed = false;
+    Handle hullTrace;
+    g_iObstructingEntity = -1;
+    hullTrace = TR_TraceHullFilterEx(pos,pos,HULL_MINS,HULL_MAXS,MASK_PLAYERSOLID,TraceFilter_Survivor,client);
+	isObstructed = TR_DidHit(hullTrace);
+    if (isObstructed) g_iObstructingEntity = TR_GetEntityIndex(hullTrace);
+	delete hullTrace;
+	return isObstructed;
+}
+
+bool TraceFilter_Survivor(int entity, int contentsMask, int ignore = -1)
+{
+    if (entity==ignore) return false;
+    if (IsValidClient(entity))
+    {
+        if (!IsPlayerAlive(entity) || GetClientTeam(entity)==TEAM_SURVIVOR) return false;
+    }
+    return true;
+}
+
 // Attempt to rescue obstruction by moving vPos upwards.
 // Supply entity that should be ignored if needed.
 // We check the hull of the obstructing entity and set vPos[2] to the max height of the obstructing entity.
@@ -1725,6 +1748,7 @@ bool obstruction_rescue_hull_up(float vPos[3], int entity = -1, int zClass = ZOM
     }
     return rescued;
 }
+
 
 // Recursion depth counter for stacked-prop rescues.
 #define GRID_RESCUE_MAX_DEPTH 2
