@@ -1677,7 +1677,7 @@ stock bool IsObstructed_Survivor(float pos[3], int client = -1)
     bool isObstructed = false;
     Handle hullTrace;
     g_iObstructingEntity = -1;
-    hullTrace = TR_TraceHullFilterEx(pos,pos,HULL_MINS,HULL_MAXS,MASK_PLAYERSOLID,TraceFilter_Survivor,client);
+    hullTrace = TR_TraceHullFilterEx(pos,pos,{-20.0,-20.0,10.0},{20.0,20.0,72.0},MASK_PLAYERSOLID,TraceFilter_Survivor,client);
 	isObstructed = TR_DidHit(hullTrace);
     if (isObstructed) g_iObstructingEntity = TR_GetEntityIndex(hullTrace);
 	delete hullTrace;

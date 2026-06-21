@@ -646,7 +646,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float pos
         bool found = false;
         flow_best = flow_curr;
         best_steep = false;
-        for (int dir = 0; dir < 5; dir++) // Enqueue adjacent nav areas (all 4 directions)
+        for (int dir = 0; dir < 4; dir++) // Enqueue adjacent nav areas (all 4 directions)
         {
             NavAdj.Clear();
             L4D_NavArea_GetAdjacentAreas(navArea_curr, dir, NavAdj);
@@ -1191,7 +1191,7 @@ void OnFramePrep(bool new_frame = true)
                     bool found = false;
                     flow_best = flow_curr;
                     bool steep_best = false;
-                    for (int dir = 0; dir < 5; dir++) // Enqueue adjacent nav areas (all 4 directions)
+                    for (int dir = 0; dir < 4; dir++) // Enqueue adjacent nav areas (all 4 directions)
                     {
                         adjAreas.Clear();
                         L4D_NavArea_GetAdjacentAreas(navArea_curr, dir, adjAreas);
@@ -1635,7 +1635,7 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
         bool found = false;
         bool steep_best = false;
         float flow_best = flow_curr;
-        for (int dir = 0; dir < 5; dir++)
+        for (int dir = 0; dir < 4; dir++)
         {
             adjAreas.Clear();
             L4D_NavArea_GetAdjacentAreas(navArea_curr, dir, adjAreas);
@@ -1859,33 +1859,60 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2,
     L4D_GetNavAreaPos(cell_old.navArea,pos_candidate); pos_candidate[2] += 16.0;
     pos_candidates.PushArray(pos_candidate);
 
+    // Priority: projected first, then stragglers.
+    ArrayList pos_candidates2 = new ArrayList(3); // lower priority candidates
+
     bool success = false;
-    for (int i = 0; i < pos_candidates.Length; i++) 
+    bool priority = elevator_available;
+    while (!success)
     {
-        pos_candidates.GetArray(i,pos_candidate,sizeof(pos_candidate));
-
-        // Use GetZ here
-
-        if (pos_underwater(pos_candidate))
+        int length = (priority) ? pos_candidates.Length : pos_candidates2.Length;
+        bool projected = false;
+        for (int i = 0; i<length; i++) 
         {
-            pos_candidate[2] += 16.0;
-            if (pos_underwater(pos_candidate)) pos_candidate[2] += 16.0;
+            if (priority) pos_candidates.GetArray(i,pos_candidate,sizeof(pos_candidate));
+            else pos_candidates2.GetArray(i,pos_candidate,sizeof(pos_candidate));
+            if (elevator_available && priority) // try to project xy onto navmesh z
+            {
+                // Get appropriate z value for given xy position. Useful for slopes, stairs etc.
+                pos_template = pos_candidate;
+                projected = project_navmesh_xy(cell_new.navArea,pos_candidate);
+                if (!projected) projected = project_navmesh_xy(cell_old.navArea,pos_candidate);
+                if (projected)
+                {
+                    pos_candidate[2] += 16.0;
+                    projected = GetVectorDistance(pos_template,pos_candidate,true)>5.0; // if we're in the exact same place, doesn't matter
+                }
+            }
+            if (pos_underwater(pos_candidate))
+            {
+                pos_candidate[2] += 16.0;
+                if (pos_underwater(pos_candidate)) pos_candidate[2] += 16.0;
+            }
+            bool traversable = twopos_traversable(cell_new.center,pos_candidate) && twopos_traversable(cell_old.center,pos_candidate);
+            if (!traversable)
+            {
+                if (!projected) continue;
+                pos_candidates2.PushArray(pos_template); // Try non-projected candidate later
+                continue;
+            }
+            float d_flow = GetVectorDistance(cell_old.center,pos_candidate);
+            cell.flow = cell_old.flow + d_flow;
+            if (cell.flow>=cell_new.flow) cell.flow = (cell_old.flow + cell_new.flow)/2.0;
+            cell.navArea = Address_Null;
+            cell.center = pos_candidate;
+            if (prev2 && triple_valid_ground(cell_prev2.center,cell.center) && twopos_traversable(cell.center,cell_prev2.center))
+                cells.SetArray(cells.Length-1,cell,sizeof(Cell));
+            else
+                cells.PushArray(cell);
+            success = true;
+            break;
         }
-        if (!twopos_traversable(cell_new.center,pos_candidate)) continue;
-        if (!twopos_traversable(cell_old.center,pos_candidate)) continue;
-        float d_flow = GetVectorDistance(cell_old.center,pos_candidate);
-        cell.flow = cell_old.flow + d_flow;
-        if (cell.flow>=cell_new.flow) cell.flow = (cell_old.flow + cell_new.flow)/2.0;
-        cell.navArea = Address_Null;
-        cell.center = pos_candidate;
-        if (prev2 && triple_valid_ground(cell_prev2.center,cell.center) && twopos_traversable(cell.center,cell_prev2.center))
-            cells.SetArray(cells.Length-1,cell,sizeof(Cell));
-        else
-            cells.PushArray(cell);
-        success = true;
-        break;
+        if (priority) priority = false; // try unprojected candidates now
+        else break;
     }
     delete pos_candidates;
+    delete pos_candidates2;
     if (success)
     {
         cells.PushArray(cell_new);
@@ -1899,7 +1926,7 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2,
     {
         Address navArea = navAreas[i_nav];
         if (navArea == Address_Null) continue;
-        for (int dir = 0; dir < 5; dir++) // Enqueue adjacent nav areas (all 4 directions)
+        for (int dir = 0; dir < 4; dir++) // Enqueue adjacent nav areas (all 4 directions)
         {
             adjAreas.Clear();
             L4D_NavArea_GetAdjacentAreas(navArea, dir, adjAreas);
@@ -2256,7 +2283,7 @@ stock int get_navAreas(Address navArea, ArrayList navList, int team = TEAM_SURVI
     Address adjArea;
     if (adjacent)
     {
-        for (int dir = 0; dir < 5; dir++)
+        for (int dir = 0; dir < 4; dir++)
         {
             tempList.Clear();
             L4D_NavArea_GetAdjacentAreas(navArea, dir, tempList);
@@ -2309,7 +2336,7 @@ stock bool navArea_connected(Address from, Address to, int team = TEAM_SURVIVOR)
     if (from == Address_Null || to == Address_Null) return false;
     if (from == to) return true;
     if (elevator_from_to(from,to)>0) return true;
-    for (int dir = 0; dir < 5; dir++)
+    for (int dir = 0; dir < 4; dir++)
     {
         if (L4D_NavArea_IsConnected(from,to,dir)) return true;
     }

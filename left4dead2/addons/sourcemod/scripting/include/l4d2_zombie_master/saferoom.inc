@@ -553,10 +553,10 @@ void tp_survivor_start(int client, bool notify = false)
                 if (IsObstructed_Survivor(randomPos,client))
                 {
                     L4D_FindRandomSpot(safezone_navArea,randomPos);
-                    if (IsObstructed_Survivor(randomPos,client))
-                    {
-                        Grid_TryRescueObstruction(-1,randomPos,client);
-                    }
+                    //if (IsObstructed_Survivor(randomPos,client))
+                    //{
+                    //    Grid_TryRescueObstruction(-1,randomPos,client);
+                    //}
                 }
            }
            //TeleportEntity(client, randomPos, NULL_VECTOR, NULL_VECTOR);
