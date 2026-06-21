@@ -573,71 +573,91 @@ Action Timer_StartPrecomputeNav(Handle timer)
 {
 	if (DEBUG) LogMessage("[zm] Starting navmesh precomputation...");
 	float startTime = GetEngineTime(); // for profiling
-	// Get all nav areas
-	ArrayList allAreas = new ArrayList();
-	L4D_GetAllNavAreas(allAreas);
-	int totalAreas = allAreas.Length;
     g_bNavReady = false;
-    
-	LogMessage("[zm] Found %d nav areas to process", totalAreas);
-    if (totalAreas<1)
-    {
-        delete allAreas;
-        return Plugin_Stop;
-    }
 
     Address temp_navArea;
-    float vector_start[3];
+    static float vector_start[3];
     bool start_known = false;
-    int g_iInfoPlayerStart = FindEntityByClassname(INVALID_ENT_REFERENCE, "info_player_start");
-    if(IsValidEntity_Safe(g_iInfoPlayerStart))
+    int entity = -1;
+    while ((entity = FindEntityByClassname(entity, "info_player_start")) != -1)
     {
-        GetEntPropVector(g_iInfoPlayerStart, Prop_Data, "m_vecOrigin", vector_start);
+        GetEntPropVector(entity, Prop_Data, "m_vecOrigin", vector_start);
         temp_navArea = L4D_GetNearestNavArea(vector_start,500.0,true,false,true,TEAM_SURVIVOR);
-        if (navArea_validStart(temp_navArea)) start_known = true;
+        start_known = navArea_validStart(temp_navArea);
+        if (start_known) break;
     }
     if (!start_known)
     {
-        int entity = INVALID_ENT_REFERENCE;
-        while( INVALID_ENT_REFERENCE != (entity = FindEntityByClassname(entity, "info_survivor_position")) )
+        entity = -1;
+        while ((entity = FindEntityByClassname(entity, "info_survivor_position")) != -1)
 	    {
-       	    if(IsValidEntity_Safe(entity)) 
-       	    {
-           	     GetEntPropVector(entity, Prop_Data, "m_vecOrigin", vector_start);
-           	     temp_navArea = L4D_GetNearestNavArea(vector_start,500.0,true,false,true,TEAM_SURVIVOR);
-                 if (navArea_validStart(temp_navArea)) start_known = true;
-            }
+            GetEntPropVector(entity, Prop_Data, "m_vecOrigin", vector_start);
+            temp_navArea = L4D_GetNearestNavArea(vector_start,500.0,true,false,true,TEAM_SURVIVOR);
+            start_known = navArea_validStart(temp_navArea);
+            if (start_known) break;
 	   }
     }
-    
-    
-    int total_stored_start = 0;
-    PreCalcNav cell;
-    float pos[3], vSize[3];
-	for (int i = 0; i < totalAreas; i++)
-	{
-		Address navArea = allAreas.Get(i);
-		if (navArea == Address_Null) continue;
-		if (!navArea_validStart(navArea)) continue;
-        L4D_GetNavAreaSize(navArea, vSize);
-        if (vSize[0]<=50.0 && vSize[1]<=50.0) continue;
-		L4D_GetNavAreaCenter(navArea,pos);
-        if (start_known && GetVectorDistance(vector_start,pos)>400.0) continue;
-        if (IsObstructed(pos)) continue;
-        cell.position = pos;
-        cell.navArea = navArea;
-        g_hStartAreaList.PushArray(cell);
-        total_stored_start += 1;
-	}
+    if (!start_known)
+    {
+        //LogMessage("Could not find info_player_start or info_survivor_position");
+        // scan all navAreas
+        //return Plugin_Stop;
+    }
+    if (!start_known)
+    {
+        LogMessage("Could not find start area");
+        return Plugin_Stop;
+    }
 
-	delete allAreas;
+    Address navArea_start = temp_navArea;
 
+    ArrayList explored = new ArrayList(); // navAreas already checked
+    explored.Push(navArea_start);
+    ArrayList pending = new ArrayList(); // navAreas that haven't had their adjacent areas checked
+    pending.Push(navArea_start);
+    ArrayList adjAreas = new ArrayList(); // temporary adjacent areas
+
+    static PreCalcNav cell;
+    static float pos[3], vSize[3];
+    L4D_GetNavAreaCenter(navArea_start,pos);
+    cell.position = pos;
+    cell.navArea = navArea_start;
+    g_hStartAreaList.PushArray(cell);
+    int total_stored_start = 1;
+    while (pending.Length>0)
+    {
+        Address navArea_curr = pending.Get(0);
+        for (int dir = 0; dir < 5; dir++)
+        {
+            adjAreas.Clear();
+            L4D_NavArea_GetAdjacentAreas(navArea_curr, dir, adjAreas);
+            for (int i = 0; i < adjAreas.Length; i++)
+            {
+                temp_navArea = adjAreas.Get(i);
+                if (temp_navArea == Address_Null) continue;
+                if (explored.FindValue(temp_navArea)!=-1) continue;
+                explored.Push(temp_navArea);
+                if (!navArea_validStart(temp_navArea)) continue;
+                pending.Push(temp_navArea);
+                L4D_GetNavAreaSize(temp_navArea, vSize);
+                if (vSize[0]<=50.0 && vSize[1]<=50.0) continue;
+                L4D_GetNavAreaCenter(temp_navArea,pos);
+                if (GetVectorDistance(vector_start,pos)>400.0) continue;
+                if (IsObstructed(pos)) continue;
+                cell.position = pos;
+                cell.navArea = temp_navArea;
+                g_hStartAreaList.PushArray(cell);
+                total_stored_start += 1;
+            }
+        }
+        pending.Erase(0);
+    }
+    delete explored;
+    delete pending;
+    delete adjAreas;
 	g_bNavReady = true;
-
 	float duration = GetEngineTime() - startTime;
-	LogMessage("[zm] Navmesh precomputation took %f seconds", duration);
-	LogMessage("[zm] Total start area navmeshes: %d", total_stored_start);
-
+	LogMessage("[zm] Found %d start area navmeshes, %f seconds", total_stored_start, duration);
 	return Plugin_Stop;
 }
 

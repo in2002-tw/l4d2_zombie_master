@@ -46,6 +46,7 @@ public void __pl_l4d_path_to_goal_SetNTVOptional()
 #include <sourcemod>
 #include <left4dhooks>
 #include <dhooks>
+#include <gvazdas_navmesh_utils>
 
 #define PLUGIN_NAME			    "l4d_path_to_goal"
 #define GAMEDATA_FILE           PLUGIN_NAME
@@ -1862,6 +1863,9 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2,
     for (int i = 0; i < pos_candidates.Length; i++) 
     {
         pos_candidates.GetArray(i,pos_candidate,sizeof(pos_candidate));
+
+        // Use GetZ here
+
         if (pos_underwater(pos_candidate))
         {
             pos_candidate[2] += 16.0;

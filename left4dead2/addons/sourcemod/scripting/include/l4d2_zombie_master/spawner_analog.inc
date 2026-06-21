@@ -5,6 +5,8 @@
 #define _zm_spawner_analog_included
 ///////////////////////////////////////
 
+#include <gvazdas_navmesh_utils>
+
 // Filter context for SpawnerCellFilter callback
 //float  g_SpawnerFilterOrigin[3];
 //float  g_SpawnerFilterRadius;
@@ -219,7 +221,7 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
         zm_spawner_cellIdx = -1;
     }
     float navSize[3], navCenter[3];
-    if (navArea)
+    if (navArea != Address_Null)
     {
         navAttrFlags = L4D_GetNavArea_AttributeFlags(navArea);
         navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
@@ -235,7 +237,9 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
         if (!fail)
         {
             //float z_min = navCenter[2] - FloatAbs(navSize[2])/2.0;
-            float z_min = navCenter[2] - FloatAbs(navSize[2]); // fix only egregious out of bounds
+            float z_min;
+            if (GetFeatureStatus(FeatureType_Native,"L4D_NavArea_GetZ")==FeatureStatus_Available) z_min = L4D_NavArea_GetZ(navArea,vPos_spawner);
+            else z_min = navCenter[2] - FloatAbs(navSize[2]); // fix only egregious out of bounds
             
             bool OOB = nav_xy_OOB(vPos_spawner,navCenter,navSize); // are we out of bounds for the navmesh?
             bool obstruction_checked = false;
@@ -258,7 +262,7 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
             {
                 float new_vPos[3];
                 new_vPos = vPos_spawner;
-                new_vPos[2] = navCenter[2] + FloatAbs(navSize[2])/2.0 + 1.0;
+                new_vPos[2] = z_min + 1.0;
                 if (!IsObstructed(new_vPos,_,_,ignore_zombies)) vPos_spawner = new_vPos;
                 else fail = true;
             }
@@ -856,6 +860,9 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         return resolved;
     }
 
+    bool use_GetZ = false; // use L4D_FindRandomSpot_Constrained
+    //bool use_GetZ = GetFeatureStatus(FeatureType_Native,"L4D_NavArea_GetZ")==FeatureStatus_Available;
+
     // Aimed position path: GridLib with per-iteration PVS validation + navmesh fallback
     static int gridlib_cells[500];
     int gridlib_cell_count = 0;
@@ -876,14 +883,12 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         }
         
         bool try_gridlib = true;
-        if (zm_spawner_navArea) // is navmesh roughly the right size to fit all the zombies about to spawn?
+        if (zm_spawner_navArea) // can we fit all zombies inside this one nav area? if not, use gridlib.
         {
-            float navSize[3];
-            L4D_GetNavAreaSize(zm_spawner_navArea, navSize);
-            if (navSize[0] < 32.0) navSize[0] = 32.0;
-            if (navSize[1] < 32.0) navSize[1] = 32.0;
-            float count_navmesh = (navSize[0] * navSize[1]) / AREA_COMMON + 1.0;
-            try_gridlib = count_navmesh < count || count_navmesh > (4.0 * count);
+            static float size[3];
+            L4D_GetNavAreaSpawnSize(zm_spawner_navArea,size); // effective size for zombie spawning (not the true size vector)
+            float count_navmesh = (size[0] * size[1]) / AREA_COMMON + 1.0;
+            try_gridlib = count_navmesh<count || ( !use_GetZ && count_navmesh>(4.0*count) );
         }
         if (try_gridlib && (GetEngineTime()-t)*1000.0<GRID_BUDGET_MS) // if not, ask gridlib for better positions
         {
@@ -896,7 +901,6 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         
     }
 
-    //Spawner_CacheSurvivorData();
     static float pos[3];
     for (int i = 0; i < count && resolved < maxOut; i++)
     {
@@ -921,7 +925,8 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         {
             if (zm_spawner_navArea && count > 1 && (GetEngineTime()-t)*1000.0<GRID_BUDGET_MS)
             {
-                L4D_FindRandomSpot(zm_spawner_navArea, pos);
+                if (use_GetZ) L4D_FindRandomSpot_Constrained(zm_spawner_navArea,zm_spawner_pos,count,pos);
+                else L4D_FindRandomSpot(zm_spawner_navArea,pos);
                 if (valid_last && distance_last_saferoom(pos)<DISTANCE_LAST_SAFEROOM)
                     pos = zm_spawner_pos;
                 else if (IsObstructed(pos,_,_,true) && !obstruction_rescue_hull_up(pos,_,ZOMBIECLASS_COMMON)) // use zyiks obstruction correction
