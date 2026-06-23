@@ -17,7 +17,7 @@
 #include <dhooks>
 #include <l4d_path_to_goal>
 
-#define PLUGIN_VERSION 			"1.37 2026-06-21"
+#define PLUGIN_VERSION 			"1.41 2026-06-23"
 
 public Plugin myinfo =
 {
@@ -72,13 +72,19 @@ public void OnPluginStart()
     "Allow request based on alive state: 0=all,1=alive only,2=dead only.",FCVAR_NOTIFY, true, 0.0, true, 2.0);
 
     g_hCvarBudget = CreateConVar("l4d_path_to_goal_budget", "0.5",
-    "Max CPU budget (ms per frame) for escape route calculation. Larger budget makes requests available faster at the expense of server lag. 0 to disable.",FCVAR_NOTIFY, true, 0.0, true, 1000.0);
+    "Max CPU budget (ms per frame) for escape route calculation. Larger budget makes requests available faster at the expense of server lag. 0 for infinite budget.",FCVAR_NOTIFY, true, 0.0, true, 1000.0);
+
+    g_hCvarDetourBudget = CreateConVar("l4d_path_to_goal_detour_budget", "10.0",
+    "Max CPU budget (ms) for detour beams. 0 for infinite budget.",FCVAR_NOTIFY, true, 0.0, true, 100.0);
+    #if DEBUG
+    SetConVarFloat(g_hCvarDetourBudget,0.0);
+    #endif
 
     g_hCvarFinale = CreateConVar("l4d_path_to_goal_finale", "1",
     "On Finale maps, connect to rescue vehicle... 0: ALWAYS, 1: FINALE STARTED, 2: RESCUE ARRIVED, 3: NEVER",FCVAR_NOTIFY, true, 0.0, true, 3.0);
 
     g_hCvarFinaleAuto = CreateConVar("l4d_path_to_goal_finale_auto", "0",
-    "Draw beams to rescue vehicle when it arrives. l4d_path_to_goal_finale must be less than 3.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    "Automatically draw beams to rescue vehicle for all clients. l4d_path_to_goal_finale must be less than 3.",FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
   	g_hCvarMPGameMode = FindConVar("mp_gamemode");
   	g_hCvarMPGameMode.AddChangeHook(ConVarGameMode);
@@ -99,7 +105,6 @@ public void OnPluginStart()
     {
     HookEvent("gauntlet_finale_start", 	  evtGauntletStart,  EventHookMode_PostNoCopy);
     HookEvent("finale_vehicle_incoming",  evtFinaleVehicle,  EventHookMode_PostNoCopy);
-    g_hCvarZM = FindConVar("zm_enable"); // check if zombie master is active
     }
 
 }
@@ -108,6 +113,7 @@ public void OnAllPluginsLoaded()
 {
     elevator_available = GetFeatureStatus(FeatureType_Native,"L4D_NavArea_GetElevator")==FeatureStatus_Available;
     if (!elevator_available) LogMessage("Please update l4dhooks for better performance.");
+    if (g_bL4D2) g_hCvarZM = FindConVar("zm_enable"); // check if zombie master is active
 }
 
 void evtFinaleVehicle(Event event, const char[] name, bool dontBroadcast)
@@ -187,6 +193,8 @@ void ConVarGameMode(ConVar convar, const char[] oldValue, const char[] newValue)
 	RequestFrame(Check_Guidable);
 }
 
+//int client_hint;
+
 Action CmdRequestGuide(int client, int args)
 {
     if (!enable || !map_started || !nav_started || !gamemode_guidable || !IsValidClient(client) || IsFakeClient(client)) return Plugin_Continue;
@@ -195,14 +203,14 @@ Action CmdRequestGuide(int client, int args)
     if (args>0)
     {
         float duration_new = GetCmdArgFloat(1);
-        if (duration_new>0.0) duration = duration_new;
+        if (duration_new>=0.1) duration = duration_new;
         char arg[16];
         GetCmdArg(1,arg,sizeof(arg));
         if (strcmp(arg,"backward")==0) backward = true;
         if (args>1)
         {
             duration_new = GetCmdArgFloat(2);
-            if (duration_new>0.0) duration = duration_new;
+            if (duration_new>=0.1) duration = duration_new;
             GetCmdArg(2,arg,sizeof(arg));
             if (strcmp(arg,"backward")==0) backward = true;
         }
@@ -245,6 +253,41 @@ Action CmdRequestGuide(int client, int args)
             else str2 = "\0";
             if (g_fRequestFlow>0.0) ReplyToCommand(client, "[PTG|%.0f|%.0f] %t%s %s", g_fRequestFlow, g_fMaxFlow, "ptg_look", str1, str2);
             else ReplyToCommand(client, "[PTG] %t%s %s", "ptg_look", str1, str2);
+
+            // Instructor Hint
+            //client_hint = client;
+            //int entity = CreateEntityByName("info_target"); 
+            //DispatchKeyValue(entity, "targetname", "ptg_hint");
+            //DispatchKeyValue(entity, "spawnflags", "2");
+            //DispatchSpawn(entity);
+            //TeleportEntity(entity, g_RequestFirstPos, NULL_VECTOR, NULL_VECTOR);
+            //SDKHook(entity, SDKHook_SetTransmit, TransmitInfoTarget);
+            //static char szBuffer[36];
+            //Format(szBuffer, sizeof szBuffer, "OnUser1 !self:Kill::%f:-1", duration);
+            //SetVariantString(szBuffer); 
+            //AcceptEntityInput(entity, "AddOutput"); 
+            //AcceptEntityInput(entity, "FireUser1");
+            //entity = CreateEntityByName("env_instructor_hint");
+            //DispatchKeyValueFloat(entity, "hint_timeout", duration);
+            //DispatchKeyValue(entity, "hint_allow_nodraw_target", "1");
+            //DispatchKeyValue(entity, "hint_target", "ptg_hint"); //a entity's targetname
+            //DispatchKeyValue(entity, "hint_auto_start", "1");
+            //DispatchKeyValue(entity, "hint_color", "255 255 255");
+            //DispatchKeyValue(entity, "hint_icon_offscreen", "icon_door");
+            //DispatchKeyValue(entity, "hint_instance_type", "2");
+            //DispatchKeyValue(entity, "hint_icon_onscreen", "icon_door");
+            //DispatchKeyValue(entity, "hint_caption", "PTG");
+            //DispatchKeyValue(entity, "hint_static", "0");
+            //DispatchKeyValue(entity, "hint_nooffscreen", "0");
+            //DispatchKeyValue(entity, "hint_icon_offset", "0");
+            //DispatchKeyValue(entity, "hint_range", "10000");
+            //DispatchKeyValue(entity, "hint_forcecaption", "0");
+            //DispatchKeyValue(entity, "hint_suppress_rest", "1");
+            //DispatchSpawn(entity);
+            //TeleportEntity(entity, g_RequestFirstPos, NULL_VECTOR, NULL_VECTOR); 
+            //SetVariantString(szBuffer); 
+            //AcceptEntityInput(entity, "AddOutput"); 
+            //AcceptEntityInput(entity, "FireUser1");
         }
         default: // beams not drawn
         {
@@ -253,6 +296,23 @@ Action CmdRequestGuide(int client, int args)
     }
     return Plugin_Continue;
 }
+
+//Action TransmitInfoTarget(int entity, int client)
+//{
+//	 if (client==client_hint)
+//   {
+//        static float pos1[3],pos2[3];
+//        GetEntPropVector(entity, Prop_Send, "m_vecOrigin", pos1);
+//        GetEntPropVector(client, Prop_Send, "m_vecOrigin", pos2); pos2[2] += 16.0;
+//        if (GetVectorDistance(pos1,pos2,true)<=1024.0)
+//        {
+//            AcceptEntityInput(entity, "Kill");
+//            return Plugin_Handled;
+//        }
+//        return Plugin_Continue;
+//    }
+//    return Plugin_Handled;
+//}
 
 Action CmdRecalculate(int client, int args)
 {

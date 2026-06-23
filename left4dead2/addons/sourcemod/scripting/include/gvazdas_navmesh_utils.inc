@@ -20,6 +20,10 @@
     #define AREA_COMMON 1024.0 // how much xy area a common infected takes up 
 #endif
 
+#if !defined DEBUG
+    #define DEBUG 0
+#endif
+
 // Project given xy coordinates onto navArea (get Z automatically). return false on failure. force_OOB ignores OOB prevention
 stock bool project_navmesh_xy(Address navArea, float pos[3], bool force_OOB = false)
 {
@@ -96,7 +100,59 @@ stock void clip_xy(float pos[3], const float mins[3], const float maxs[3])
     else if (pos[1]>maxs[1]) pos[1] = maxs[1];
 }
 
-// Find random spot on navArea, preferably centered around spawner_pos, for given count of common zombies
+#define ADJACENT_TOO_FAR_SQ 20000.0
+
+// Check if two connected navmeshes are reasonably close. 
+stock bool navmesh_adjacent_too_far(Address from, Address to)
+{
+    if (from == Address_Null || to == Address_Null) return false;
+    static float center_from[3], center_to[3], size_from[3], size_to[3], vGap[3];
+    L4D_GetNavAreaCenter(from,center_from); L4D_GetNavAreaCenter(to,center_to);
+    center_from[2] = 0.0; center_to[2] = 0.0;
+    float dist_centers = GetVectorDistance(center_from,center_to,true);
+    if (dist_centers<ADJACENT_TOO_FAR_SQ) return false;
+    L4D_GetNavAreaSize(from,size_from); L4D_GetNavAreaSize(to,size_to);
+    vGap[0] = FloatAbs(center_to[0]-center_from[0]) - size_from[0]/2.0 - size_to[0]/2.0;
+    if (vGap[0]<0.0) vGap[0] = 0.0;
+    vGap[1] = FloatAbs(center_to[1]-center_from[1]) - size_from[1]/2.0 - size_to[1]/2.0;
+    if (vGap[1]<0.0) vGap[1] = 0.0;
+    float gap = GetVectorLength(vGap,true);
+    if (gap>=ADJACENT_TOO_FAR_SQ)
+    {
+        #if DEBUG>1
+        LogMessage("navmesh_adjacent_too_far %.1f", gap);
+        #endif
+        return true;
+    }
+    return false;
+}
+
+// Check if navmesh is too far from given position to be considered "adjacent"
+stock bool navmesh_xy_too_far(Address from, const float pos[3])
+{
+    if (from == Address_Null) return false;
+    static float center_from[3], center_to[3], size_from[3], vGap[3];
+    L4D_GetNavAreaCenter(from,center_from); center_from[2] = 0.0;
+    center_to = pos; center_to[2] = 0.0;
+    float dist_centers = GetVectorDistance(center_from,center_to,true);
+    if (dist_centers<ADJACENT_TOO_FAR_SQ) return false;
+    L4D_GetNavAreaSize(from,size_from);
+    vGap[0] = FloatAbs(center_to[0]-center_from[0]) - size_from[0]/2.0;
+    if (vGap[0]<0.0) vGap[0] = 0.0;
+    vGap[1] = FloatAbs(center_to[1]-center_from[1]) - size_from[1]/2.0;
+    if (vGap[1]<0.0) vGap[1] = 0.0;
+    float gap = GetVectorLength(vGap,true);
+    if (gap>=ADJACENT_TOO_FAR_SQ)
+    {
+        #if DEBUG>1
+        LogMessage("navmesh_xy_too_far %.1f", gap);
+        #endif
+        return true;
+    }
+    return false;
+}
+
+// Find random pos on navArea, preferably centered around spawner_pos, for given count of common zombies
 float mins_cached[3], maxs_cached[3], spawner_pos_cached[3];
 Address navArea_cached;
 int count_cached;
@@ -141,5 +197,25 @@ stock void L4D_FindRandomSpot_Constrained(Address navArea, const float spawner_p
     }
     pos[0] = GetRandomFloat(mins_cached[0],maxs_cached[0]);
     pos[1] = GetRandomFloat(mins_cached[1],maxs_cached[1]);
-    pos[2] = L4D_NavArea_GetZ(navArea,pos);
+    pos[2] = L4D_NavArea_GetZ(navArea,pos) + 1.0;
+}
+
+// In-place re-order pos1 and pos2 so that pos1 is closer to start.
+stock void SortTwoVectorsClosest(const float start[3], float pos1[3], float pos2[3])
+{
+    float dist1 = GetVectorDistance(start,pos1,true);
+    float dist2 = GetVectorDistance(start,pos2,true);
+    static float pos_close[3], pos_far[3];
+    if (dist1>dist2)
+    {
+        pos_close = pos2;
+        pos_far = pos1;
+    }
+    else
+    {
+        pos_close = pos1;
+        pos_far = pos2;
+    }
+    pos1 = pos_close;
+    pos2 = pos_far;
 }
