@@ -17,7 +17,7 @@
 #include <dhooks>
 #include <l4d_path_to_goal>
 
-#define PLUGIN_VERSION 			"1.41 2026-06-23"
+#define PLUGIN_VERSION 			"1.43 2026-06-24"
 
 public Plugin myinfo =
 {
@@ -76,6 +76,7 @@ public void OnPluginStart()
 
     g_hCvarDetourBudget = CreateConVar("l4d_path_to_goal_detour_budget", "10.0",
     "Max CPU budget (ms) for detour beams. 0 for infinite budget.",FCVAR_NOTIFY, true, 0.0, true, 100.0);
+
     #if DEBUG
     SetConVarFloat(g_hCvarDetourBudget,0.0);
     #endif
@@ -200,21 +201,18 @@ Action CmdRequestGuide(int client, int args)
     if (!enable || !map_started || !nav_started || !gamemode_guidable || !IsValidClient(client) || IsFakeClient(client)) return Plugin_Continue;
     float duration = 5.0;
     bool backward = GetClientTeam(client)!=TEAM_SURVIVOR;
-    if (args>0)
+    
+    static char arg[16];
+    int i = 0;
+    g_sCustomKeys[client] = "";
+    arg = "";
+    while (i>=0 && i<=10)
     {
-        float duration_new = GetCmdArgFloat(1);
-        if (duration_new>=0.1) duration = duration_new;
-        char arg[16];
-        GetCmdArg(1,arg,sizeof(arg));
-        if (strcmp(arg,"backward")==0) backward = true;
-        if (args>1)
-        {
-            duration_new = GetCmdArgFloat(2);
-            if (duration_new>=0.1) duration = duration_new;
-            GetCmdArg(2,arg,sizeof(arg));
-            if (strcmp(arg,"backward")==0) backward = true;
-        }
+        if (args>i) {GetCmdArg(i+1,arg,sizeof(arg)); process_cmd_arg(client,arg,duration,backward);}
+        else break;
+        i += 1;
     }
+
     switch (RequestGuide(client,duration,backward))
     {
         case true: // beams drawn
@@ -313,6 +311,46 @@ Action CmdRequestGuide(int client, int args)
 //    }
 //    return Plugin_Handled;
 //}
+
+// add custom flags for client from arg: duration, backward, g_sCustomKeys[client]
+stock void process_cmd_arg(int client, char arg[16], float &duration, bool &backward)
+{
+    float duration_new = StringToFloat(arg);
+    if (duration_new>=0.1)
+    {
+        duration = duration_new;
+        return;
+    }
+    switch (CharToLower(arg[0]))
+    {
+        case 'b':
+        {
+            backward = true;
+            return;
+        }
+        case 'w':
+        {
+            g_sCustomKeys[client][0] = 'w'; // white
+            return;
+        }
+        case 'c':
+        {
+            g_sCustomKeys[client][0] = 'c'; // custom
+            return;
+        }
+        case 's':
+        {
+            if (strncmp(arg,"small",5,false)==0) g_sCustomKeys[client][2] = 's'; // small
+            else g_sCustomKeys[client][1] = 's'; // shake
+            return;
+        }
+        case 'l':
+        {
+            g_sCustomKeys[client][2] = 'l'; // large
+            return;
+        }
+    }
+}
 
 Action CmdRecalculate(int client, int args)
 {
@@ -419,6 +457,8 @@ Action CmdRecomputeFlow(int client, int args)
 public void OnMapStart()
 {
 	g_iLaser = PrecacheModel(VMT_LASERBEAM, true);
+    g_iLaserWhite = PrecacheModel(VMT_LASERBEAM_WHITE, true);
+    g_iLaserCustom = PrecacheModel(VMT_LASERBEAM_CUSTOM, true);
     RequestFrame(MapStarted);
     //GetCurrentMap(mapName, sizeof(mapName));
 }
@@ -454,6 +494,7 @@ public void OnClientPutInServer(int client)
 {
     if (!IsValidClient(client) || IsFakeClient(client)) return;
     beams_cooldown_reset(client,true); // reset cooldown and last request from client
+    g_sCustomKeys[client] = "";
 }
 
 // NATIVE //
