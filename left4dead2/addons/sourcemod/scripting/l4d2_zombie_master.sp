@@ -1556,6 +1556,7 @@ public void OnAllPluginsLoaded()
 	if (shoot_alert_enable) SetConVarFlags(shoot_alert_enable, GetConVarFlags(shoot_alert_enable) & ~FCVAR_NOTIFY);
 	clown_world_enable = FindConVar("clown_world_enable"); // CLOWN WORLD - https://forums.alliedmods.net/showthread.php?t=352413
 	if (clown_world_enable) SetConVarFlags(clown_world_enable, GetConVarFlags(clown_world_enable) & ~FCVAR_NOTIFY);
+    getz_available = GetFeatureStatus(FeatureType_Native,"L4D_NavArea_GetZ")==FeatureStatus_Available;
 	SetCvarsZM();
 }
 

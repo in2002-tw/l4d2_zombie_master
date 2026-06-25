@@ -239,7 +239,7 @@ int Analog_CanSpawnPos(float vPos[3], int zClass = ZOMBIECLASS_BOOMER,bool hint 
         {
             //float z_min = navCenter[2] - FloatAbs(navSize[2])/2.0;
             float z_min;
-            if (GetFeatureStatus(FeatureType_Native,"L4D_NavArea_GetZ")==FeatureStatus_Available) z_min = L4D_NavArea_GetZ(navArea,vPos_spawner);
+            if (getz_available) z_min = L4D_NavArea_GetZ(navArea,vPos_spawner);
             else z_min = navCenter[2] - FloatAbs(navSize[2]); // fix only egregious out of bounds
             
             bool OOB = nav_xy_OOB(vPos_spawner,navCenter,navSize); // are we out of bounds for the navmesh?
@@ -861,8 +861,8 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
         return resolved;
     }
 
-    bool use_GetZ = false; // use L4D_FindRandomSpot_Constrained
-    //bool use_GetZ = GetFeatureStatus(FeatureType_Native,"L4D_NavArea_GetZ")==FeatureStatus_Available;
+    //bool use_GetZ = false; // use L4D_FindRandomSpot_Constrained
+    bool use_GetZ = getz_available;
 
     // Aimed position path: GridLib with per-iteration PVS validation + navmesh fallback
     static int gridlib_cells[500];

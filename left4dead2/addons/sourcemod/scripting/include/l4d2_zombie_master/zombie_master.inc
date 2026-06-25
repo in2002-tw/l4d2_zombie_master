@@ -364,7 +364,7 @@ int g_iPistol, g_iMagnum, g_iMelee, g_iSMG, g_iShotgunT1, g_iRifle, g_iShotgunT2
 // Reduce inventory and weapons update spam
 bool g_bInventory,g_bWeapons;
 
-bool l4dhooks_updated = false; // check if native L4D_FindEntityByClassnameWithin is available
+bool l4dhooks_updated, getz_available = false; // check version of l4dhooks
 ConVar g_hCvarDebug, g_hCvarAllow, z_max_player_zombies, infectedbots_enable, jukebox_horde, shoot_alert_enable, clown_world_enable;
 bool g_bCvarAllow;
 bool g_bSpawnWitchBride = false; // avoid crash

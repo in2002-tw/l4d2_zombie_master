@@ -1075,6 +1075,7 @@ void gnome_client(int client)
 
 void zm_gnome_effect()
 {
+    if (g_iGnome<=0) return;
     float now = GetGameTime();
     float elapsed = now - g_fGnomeLastUsed;
     if (g_fGnomeLastUsed > 0.0 && elapsed >= 0.0 && elapsed < GNOME_COOLDOWN)
@@ -1114,7 +1115,7 @@ int weapons_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
         case MenuAction_Select:
         {
         	if (param1!=zm_client || zm_stage>=ZM_END) return 0;
-            if (param2==8 && g_hGnome.BoolValue) zm_gnome_effect();
+            if (param2==8 && g_hGnome.BoolValue && g_iGnome>0) zm_gnome_effect();
             zm_menu_state=ZM_MENU_MAIN;
         	RequestFrame(reopen_zm_menu,true);
         }
