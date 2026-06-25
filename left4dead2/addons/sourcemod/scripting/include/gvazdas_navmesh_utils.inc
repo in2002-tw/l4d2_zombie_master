@@ -161,7 +161,7 @@ int count_cached;
 stock void L4D_FindRandomSpot_Constrained(Address navArea, const float spawner_pos[3], int count, float pos[3])
 {
     float area_full = nav_xy_area(navArea) * 1.25;
-    float desired_area = AREA_COMMON*count;
+    float desired_area = AREA_COMMON*(count+1);
     if (area_full<=desired_area)
     {
         L4D_FindRandomSpot(navArea,pos);
