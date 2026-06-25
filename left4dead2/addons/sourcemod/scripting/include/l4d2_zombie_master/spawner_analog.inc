@@ -6,6 +6,7 @@
 ///////////////////////////////////////
 
 #include <gvazdas_navmesh_utils>
+#undef DEBUG
 
 // Filter context for SpawnerCellFilter callback
 //float  g_SpawnerFilterOrigin[3];
