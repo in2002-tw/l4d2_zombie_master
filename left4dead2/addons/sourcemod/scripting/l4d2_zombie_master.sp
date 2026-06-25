@@ -34,7 +34,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.2 2026-06-19"
+#define PLUGIN_VERSION 			"0.9.2 2026-06-24"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -84,7 +84,7 @@ public Plugin myinfo =
 // 2. Ambush system: Specials that are vomited on, fighting Survivors, or burning, are not included in Freeze/Unfreeze commands.
 // 3. Other -> Give Up now asks for confirmation to avoid accidents.
 // 4. Traditional Chinese localization updated (thanks in2002)
-// 5. Start area fixes for better compatibility with custom maps.
+// 5. Major optimization to how start area navmeshes are collected + improved compatibility with custom maps.
 // 6. Common flow spawns fixed. Should fail less.
 // 7. PTG
 // 8. Menu overhaul.
@@ -92,6 +92,13 @@ public Plugin myinfo =
 // 10. Clientprefs.
 // 11. Spitter is more expensive and has 2x cooldown compared to other Specials.
 // 12. zm_hud_per_element
+// 13. Commons, spawner visible when inside walls
+// 14. l4dhooks native GetZ implemented, spawner z position is always verified if on a valid navmesh.
+// 15. Glow fixes.
+// 16. ZM player name is now printed if you type /zm.
+// 17. Better tank run balance.
+// 18. Fix finale softlock for custom gamemodes. Finale stage will now correctly advance if ZM has >0 bank but not enough to spawn anything.
+// 19. Some features are not ready but implemented if you want to test them: zm_traps, zm_enable_jumpscare, zm_gnome.
 
 // TO DO LIST:
 // 15. Performance bottlenecks.
@@ -1832,8 +1839,8 @@ public void OnMapStart()
 
 	g_bSpawnWitchBride = false;
 	char sMap[64];
-	GetCurrentMap(sMap, sizeof(sMap));
-	if(StrEqual("c6m1_riverbank", sMap, false)) g_bSpawnWitchBride = true;
+	GetCurrentMap(sMap,sizeof(sMap));
+	if (strncmp(sMap,"c6m1",4,false)==0) g_bSpawnWitchBride = true;
 	else g_bSpawnWitchBride = false;
 	
 	saferoom_locked = false;
