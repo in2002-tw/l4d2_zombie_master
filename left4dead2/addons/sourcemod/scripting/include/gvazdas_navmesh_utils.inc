@@ -108,6 +108,8 @@ stock bool navmesh_adjacent_too_far(Address from, Address to)
     if (from == Address_Null || to == Address_Null) return false;
     static float center_from[3], center_to[3], size_from[3], size_to[3], vGap[3];
     L4D_GetNavAreaCenter(from,center_from); L4D_GetNavAreaCenter(to,center_to);
+    //float dist_centers = GetVectorDistance({0.0,0.0,center_from[2]},{0.0,0.0,center_to[2]},true);
+    //if (dist_centers>500000.0) return true;
     center_from[2] = 0.0; center_to[2] = 0.0;
     float dist_centers = GetVectorDistance(center_from,center_to,true);
     if (dist_centers<ADJACENT_TOO_FAR_SQ) return false;

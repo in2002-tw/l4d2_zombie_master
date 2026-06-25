@@ -17,7 +17,7 @@
 #include <dhooks>
 #include <l4d_path_to_goal>
 
-#define PLUGIN_VERSION 			"1.43 2026-06-24"
+#define PLUGIN_VERSION 			"1.45 2026-06-24"
 
 public Plugin myinfo =
 {
@@ -204,8 +204,8 @@ Action CmdRequestGuide(int client, int args)
     
     static char arg[16];
     int i = 0;
-    g_sCustomKeys[client] = "";
-    arg = "";
+    g_sCustomKeys[client] = "              ";
+    //g_GuidePrefs[client].Init();
     while (i>=0 && i<=10)
     {
         if (args>i) {GetCmdArg(i+1,arg,sizeof(arg)); process_cmd_arg(client,arg,duration,backward);}
@@ -323,30 +323,40 @@ stock void process_cmd_arg(int client, char arg[16], float &duration, bool &back
     }
     switch (CharToLower(arg[0]))
     {
+        case 'a':
+        {
+            g_sCustomKeys[client][3] = 'a'; // arrow. beam increases in width from start to end
+            return;
+        }
         case 'b':
         {
             backward = true;
             return;
         }
-        case 'w':
-        {
-            g_sCustomKeys[client][0] = 'w'; // white
-            return;
-        }
         case 'c':
         {
-            g_sCustomKeys[client][0] = 'c'; // custom
+            if (g_iLaserCustom!=0) g_sCustomKeys[client][0] = 'c'; // VMT_LASERBEAM_CUSTOM
+            return;
+        }
+        case 'd':
+        {
+            g_sCustomKeys[client][4] = 'd'; // delay between beam draws, looks cool
             return;
         }
         case 's':
         {
-            if (strncmp(arg,"small",5,false)==0) g_sCustomKeys[client][2] = 's'; // small
-            else g_sCustomKeys[client][1] = 's'; // shake
+            if (strncmp(arg,"small",5,false)==0) g_sCustomKeys[client][2] = 's'; // small beam size
+            else if (strncmp(arg,"shake",5,false)==0) g_sCustomKeys[client][1] = 's'; // shake beam
             return;
         }
         case 'l':
         {
-            g_sCustomKeys[client][2] = 'l'; // large
+            g_sCustomKeys[client][2] = 'l'; // large beam size
+            return;
+        }
+        case 'w':
+        {
+            if (g_iLaserWhite!=0) g_sCustomKeys[client][0] = 'w'; // VMT_LASERBEAM_WHITE
             return;
         }
     }

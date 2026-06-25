@@ -94,9 +94,9 @@ enum struct NavConnection
 }
 
 // GetNavConnections filter
-#define CON_FILTER_KEEP_ALL 0 // keep all nav connections
-#define CON_FILTER_KEEP_FORWARD 1 // keep only forward-going nav connections
-#define CON_FILTER_KEEP_BACKWARD 2 // keep only backwards-going nav connections
+#define CON_KEEP_ALL 0 // keep all adjacent connections
+#define CON_KEEP_FORWARD 1 // keep only forward-going adjacent connections
+#define CON_KEEP_BACKWARD 2 // keep only backwards-going adjacent connections
 
 ArrayList g_GuideCells;
 ConVar g_hCvarMPGameMode, g_hCvarEnable, g_hCvarMax, g_hCvarSurvivors, g_hCvarInfected, g_hCvarSpec, g_hCvarBudget, g_hCvarDetourBudget, g_hCvarFinaleAuto, g_hCvarZM;
@@ -106,6 +106,7 @@ float t_nav = -1.0; // nav event gametime
 Handle timer_nav;
 //char mapName[PLATFORM_MAX_PATH];
 char g_sCustomKeys[MAXPLAYERS+1][PLATFORM_MAX_PATH]; // customization keys -> modify DrawBeam
+float g_BeamDelay[MAXPLAYERS+1];
 
 DynamicDetour g_hRecomputeFlowDetour;
 Handle g_hRecomputeFlow;
@@ -307,6 +308,7 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     g_CellRequests[client].join_client = join_client;
     g_CellRequests[client].duration = duration;
     g_CellRequests[client].backward = backward;
+    g_BeamDelay[client] = 0.0;
 
     if (!guide_ready)
     {
@@ -432,7 +434,7 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
         if (backward && g_iBackward>=0)
         {
             g_GuideCells.GetArray(g_iBackward,cell,sizeof(Cell));
-            i_draw += DrawBeam(client,pos_split,cell.center,duration,color_backward);
+            i_draw += DrawBeam(client,cell.center,pos_split,duration,color_backward);
         }
         last_pos = pos_split;
         LOS = true;
@@ -501,7 +503,7 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
             {
                 g_iBackward -= 1;
                 g_GuideCells.GetArray(g_iBackward,cell,sizeof(Cell));
-                DrawBeam(client,pos_backward,cell.center,duration,color_backward);
+                DrawBeam(client,cell.center,pos_backward,duration,color_backward);
                 pos_backward = cell.center;
                 end = false;
                 i_draw += 1;
@@ -621,9 +623,8 @@ int get_flow_iStart(float flow, bool check_LOS = true, float pos[3])
     return i_start;
 }
 
-//#define DETOUR_BUDGET_MS 5.0
 ArrayList ConAdj, AdjNN, queue;
-//ArrayList explored;
+ArrayList explored;
 
 // detour client_join, return how many beams were drawn
 int detour_join(int client, Address navArea, float pos[3], float flow, float duration, int team = TEAM_SURVIVOR)
@@ -650,8 +651,8 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float dur
     if (ConAdj==null) ConAdj = new ArrayList(sizeof(NavConnection));
     if (AdjNN==null) AdjNN = new ArrayList(); // nearest neighbor explore for dips in flow when about to climb a ladder
     if (queue==null) queue = new ArrayList(3);
-    //if (explored==null) explored = new ArrayList();
-    //explored.Clear();
+    if (explored==null) explored = new ArrayList();
+    explored.Clear();
     queue.Clear();
     queue.PushArray(pos);
         
@@ -671,16 +672,16 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float dur
         bool found = false;
         flow_best = flow_curr;
         d_flow_best = d_flow_curr;
-        best_steep = false;
-        int count = GetNavConnections(navArea_curr,ConAdj,team,CON_FILTER_KEEP_FORWARD);
+        best_steep = false; 
+        int count = GetNavConnections(navArea_curr,ConAdj,team,true,true,true,CON_KEEP_FORWARD);
         static NavConnection nav_connection;
         for (i = 0; i < count; i++)
         {
             ConAdj.GetArray(i,nav_connection,sizeof(NavConnection));
             if (nav_connection.navArea == Address_Null || nav_connection.connectiontype <= CONNECTED_NOT) continue;
             if (nav_connection.navArea == navArea_curr) continue;
-            //if (explored.FindValue(nav_connection.navArea)>=0) continue;
-            //explored.Push(nav_connection.navArea);
+            if (explored.FindValue(nav_connection.navArea)>=0) continue;
+            explored.Push(nav_connection.navArea);
             if (L4D_NavArea_IsBlocked(nav_connection.navArea,team,true)) continue;
             flow_temp =  L4D2Direct_GetTerrorNavAreaFlow(nav_connection.navArea);
             d_flow_temp = FloatAbs(flow_temp-flow_target);
@@ -694,7 +695,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float dur
                 if (adjArea == Address_Null || adjArea == navArea_curr || adjArea == nav_connection.navArea) continue;
                 float new_flow = L4D2Direct_GetTerrorNavAreaFlow(adjArea);
                 float new_d_flow = FloatAbs(new_flow-flow_target);
-                if (flow_better(new_d_flow,d_flow_temp,false))
+                if (new_d_flow<d_flow_temp)
                 {
                     #if DEBUG>1
                     LogMessage("Ladder intervention %.1f -> %.1f", flow_temp, new_flow);
@@ -702,7 +703,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float dur
                     d_flow_temp = new_d_flow;
                 }
             }
-            if (!flow_better(d_flow_temp,d_flow_curr,false)) continue;
+            if (d_flow_temp>d_flow_curr) continue;
             L4D_GetNavAreaCenter(nav_connection.navArea,pos_temp); pos_temp[2] += 16.0;
             dz = pos_temp[2] - pos_curr[2];
             bool steep = nav_connection.connectiontype == CONNECTED_ADJACENT && nav_too_steep(navArea_curr,nav_connection.navArea);
@@ -710,7 +711,9 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float dur
             {
                 if (!best_steep || dz>dz_best)
                 {
+                    #if DEBUG>1
                     LogMessage("detour_join steep or dz skip");
+                    #endif
                     continue; // prefer to go down than up
                 }
             }
@@ -719,7 +722,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float dur
                 int spawnAttrs = L4D_GetNavArea_SpawnAttributes(nav_connection.navArea);
                 success = (!explore_backwards && spawnAttrs & NAV_SPAWN_ESCAPE_ROUTE) || (finale_stitched && spawnAttrs & NAV_SPAWN_RESCUE_VEHICLE);
             }
-            if ( success || flow_better(d_flow_temp,d_flow_best,false) || (best_steep && flow_better(d_flow_temp,d_flow_curr,false) ) )
+            if ( success || d_flow_temp<=d_flow_best || (best_steep && d_flow_temp<=d_flow_curr ) )
             {
                 flow_best = flow_temp;
                 d_flow_best = d_flow_temp;
@@ -864,7 +867,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float dur
                 if (g_CellRequests[client].backward && g_iBackward>=0)
                 {
                     g_GuideCells.GetArray(g_iBackward,cell,sizeof(Cell));
-                    beams += DrawBeam(client,pos_split,cell.center,duration,color_backward);
+                    beams += DrawBeam(client,cell.center,pos_split,duration,color_backward);
                 }
             }
         }
@@ -876,6 +879,32 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float dur
 
     return beams;
 }
+
+// Data structure for beam client preferences
+//enum struct GuidePref
+//{
+//	int ModelIndex;
+//    int HaloIndex;
+//    float duration;
+//    float amp;
+//    float start_width;
+//    float end_width;
+//    int color_forward[4];
+//    int color_backward[4];
+//    void Init()
+//    {
+//        this.ModelIndex = g_iLaser;
+//        this.HaloIndex = 0;
+//        this.duration = 5.0;
+//        this.amp = 0.0;
+//        this.start_width = 1.5;
+//        this.end_width = 1.5;
+//        this.color_forward = color_forward;
+//        this.color_backward = color_backward;
+//    }
+//}
+
+//GuidePref g_GuidePrefs[MAXPLAYERS+1];
 
 // Draw beam with given color for client from pos_start to pos_end for duration. Don't draw if distance squared is below min_dist_sq.
 // Return number of drawn beams.
@@ -892,8 +921,8 @@ int DrawBeam(int client, float pos_start[3], float pos_end[3], float duration = 
     int laser = g_iLaser;
     if (g_sCustomKeys[client][0]!=0)
     {
-        if (g_sCustomKeys[client][0]=='c') laser = g_iLaserCustom;
-        else if (g_sCustomKeys[client][0]=='w') laser = g_iLaserWhite;
+        if (g_sCustomKeys[client][0]=='c' && g_iLaserCustom!=0) laser = g_iLaserCustom;
+        else if (g_sCustomKeys[client][0]=='w' && g_iLaserWhite!=0) laser = g_iLaserWhite;
     }
     
     // Set "shake"
@@ -906,13 +935,20 @@ int DrawBeam(int client, float pos_start[3], float pos_end[3], float duration = 
         else if (g_sCustomKeys[client][2]=='s') start_width /= 2.0; // small
     }
 
-    float end_width = start_width;
+    // Set "arrow"
+    float end_width = start_width*1.05;
+    if (g_sCustomKeys[client][3]=='a')
+    {
+        start_width /= 1.25;
+        end_width = 1.5*start_width;
+    }
 
     #if DEBUG>2
     LogMessage("client %d duration %f laser %d custom %s", client, duration, laser, g_sCustomKeys[client]);
     #endif
     TE_SetupBeamPoints(pos_start,pos_end,laser,0,0,0,duration,start_width,end_width,fade_length,amp,color,0);
-    TE_SendToClient(client);
+    TE_SendToClient(client,g_BeamDelay[client]);
+    if (g_sCustomKeys[client][4]=='d') g_BeamDelay[client] += 0.05;
     return 1;
 }
 
@@ -1074,7 +1110,7 @@ void OnFramePrep(bool new_frame = true)
                 navArea = allAreas.Get(g_iLoop);
                 g_iLoop += 1;
                 if (!navArea) continue;
-                flow = get_navFlow(navArea);
+                flow = L4D2Direct_GetTerrorNavAreaFlow(navArea);
                 //if (flow>g_fMaxFlow) continue;
                 int navSpawnAttrs = L4D_GetNavArea_SpawnAttributes(navArea);
                 bool rescue = (navSpawnAttrs & NAV_SPAWN_RESCUE_VEHICLE) > 0;
@@ -1286,14 +1322,15 @@ void OnFramePrep(bool new_frame = true)
                 pos_curr = cell.center;
                 if (ConAdj==null) ConAdj = new ArrayList(sizeof(NavConnection));
                 if (AdjNN==null) AdjNN = new ArrayList(); // nearest neighbor explore for dips in flow when about to climb a ladder
-                    
+
                 Address navArea_curr = cell.navArea;
                 float flow_temp, flow_best;
                 static float pos_temp[3], pos_best[3];
                 Address navArea_best;
                 float dz, dz_best;
 
-                int con_filter = finale_backwards ? CON_FILTER_KEEP_BACKWARD : CON_FILTER_KEEP_FORWARD;
+                // when finale is backwards, we start at some flow value and must go to max flow. 
+                // -> when finale_backwards, set increasing=true
 
                 while (navArea_curr != Address_Null)
                 {
@@ -1301,7 +1338,7 @@ void OnFramePrep(bool new_frame = true)
                     bool found = false;
                     flow_best = flow_curr;
                     bool best_steep = false;
-                    int count = GetNavConnections(navArea_curr,ConAdj,TEAM_SURVIVOR,true,true,true,con_filter);
+                    int count = GetNavConnections(navArea_curr,ConAdj,TEAM_SURVIVOR,true,true,true,CON_KEEP_ALL);
                     static NavConnection nav_connection;
                     for (int i = 0; i < count; i++)
                     {
@@ -1309,7 +1346,7 @@ void OnFramePrep(bool new_frame = true)
                         if (nav_connection.navArea == Address_Null || nav_connection.connectiontype <= CONNECTED_NOT) continue;
                         if (nav_connection.navArea == navArea_curr) continue;
                         if (L4D_NavArea_IsBlocked(nav_connection.navArea,TEAM_SURVIVOR,true)) continue;
-                        flow_temp = get_navFlow(nav_connection.navArea);
+                        flow_temp = L4D2Direct_GetTerrorNavAreaFlow(nav_connection.navArea);
                         #if DEBUG>1
                             LogMessage("STAGE_FINALE (%d %.1f) try %d %d %.1f", navArea_curr, flow_curr, nav_connection.connectiontype, nav_connection.navArea, flow_temp);
                         #endif
@@ -1537,7 +1574,7 @@ stock bool try_ladder(float flow_curr,float pos_curr[3],Cell cell_ladder,bool fl
             else GetEntPropVector(closest, Prop_Send, "m_vecMins", pos_temp);
             Address adjArea = L4D_GetNearestNavArea(pos_temp,500.0,true,false,false,TEAM_SURVIVOR);
             if (adjArea == Address_Null) continue;
-            flow_temp = get_navFlow(adjArea);
+            flow_temp = L4D2Direct_GetTerrorNavAreaFlow(adjArea);
             switch (flow_increasing)
             {
                 case true: { if (flow_temp<=flow_best) continue; }
@@ -1742,6 +1779,8 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
     }
 
     if (cells_explore==null) cells_explore = new ArrayList(sizeof(Cell));
+    if (ConAdj==null) ConAdj = new ArrayList(sizeof(NavConnection));
+    if (AdjNN==null) AdjNN = new ArrayList(); // nearest neighbor explore for dips in flow when about to climb a ladder
     cells_explore.Clear();
 
     cells.GetArray(i_start-1,cell,sizeof(Cell));
@@ -1752,9 +1791,8 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
     Address navArea_curr = cell.navArea;
     Address navArea_best = navArea_curr;
     pos_best = pos_curr;
-    float flow_temp;
+    float flow_temp, dz, dz_best;
 
-    ArrayList adjAreas = new ArrayList();
     int steps = 0;
     int i_end = -1;
     while (steps<max_steps)
@@ -1762,43 +1800,60 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
         bool found = false;
         bool best_steep = false;
         float flow_best = flow_curr;
-        for (int dir = 0; dir < 4; dir++)
+        int count = GetNavConnections(navArea_curr,ConAdj,TEAM_SURVIVOR,true,true,true,CON_KEEP_FORWARD);
+        static NavConnection nav_connection;
+        for (i = 0; i < count; i++)
         {
-            adjAreas.Clear();
-            L4D_NavArea_GetAdjacentAreas(navArea_curr, dir, adjAreas); // asdf
-            for (i = 0; i < adjAreas.Length; i++)
+            ConAdj.GetArray(i,nav_connection,sizeof(NavConnection));
+            if (nav_connection.navArea == Address_Null || nav_connection.connectiontype <= CONNECTED_NOT) continue;
+            if (nav_connection.navArea == navArea_curr) continue;
+            if (L4D_NavArea_IsBlocked(nav_connection.navArea,TEAM_SURVIVOR,true)) continue;
+            flow_temp = L4D2Direct_GetTerrorNavAreaFlow(nav_connection.navArea);
+            int count2 = navArea_ladder_navAreas(nav_connection.navArea,AdjNN,TEAM_SURVIVOR); // ladder intervention. flow dips when stepping onto ladder navmeshes...
+            for (int i2 = 0; i2 < count2; i2++)
             {
-                bool steep = false;
-                Address adjArea = adjAreas.Get(i);
-                if (adjArea == Address_Null) continue;
-                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
-                if (!L4D_NavArea_IsConnected(navArea_curr,adjArea,dir)) continue;
-                flow_temp = get_navFlow(adjArea);
-                if (flow_temp<=flow_curr) continue;
-                //if ( !twopos_traversable(pos_curr,pos_temp) && !LOS_rescue_cheap(pos_curr,pos_temp,_) ) continue;
-                //if ( !twopos_traversable(pos_curr,pos_temp) ) continue;
-                //if (g_bL4D2 && !L4D2_NavAreaBuildPath(navArea_curr,adjArea,2.0*GetVectorDistance(pos_temp,pos_curr),TEAM_SURVIVOR,false)) continue;
-                L4D_GetNavAreaCenter(adjArea,pos_temp);
-                pos_temp[2] += 16.0;
-                if (pos_underwater(pos_temp)) pos_temp[2] += 16.0;
-                //LogMessage("explore_stitch step %d flow %f -> %f", steps, flow_curr, flow_temp);
-                i_end = cells.FindValue(adjArea,1);
-                if (i_end>=i_start) success = true;
-                //else steep = !g_bHitLadder && nav_too_steep(navArea_curr,adjArea);
-                else steep = nav_too_steep(navArea_curr,adjArea);
-                if (!success && found && steep) continue;
-                if ( success || flow_temp>flow_best || (best_steep && flow_temp>flow_curr) )
+                Address adjArea = AdjNN.Get(i2);
+                if (adjArea == Address_Null || adjArea == navArea_curr || adjArea == nav_connection.navArea) continue;
+                float new_flow = L4D2Direct_GetTerrorNavAreaFlow(adjArea);
+                if (new_flow>flow_temp)
                 {
-                    flow_best = flow_temp;
-                    navArea_best = adjArea;
-                    pos_best = pos_temp;
-                    found = true;
-                    best_steep = steep;
-                    if (success) break;
+                    #if DEBUG>1
+                    LogMessage("Ladder intervention %.1f -> %.1f", flow_temp, new_flow);
+                    #endif
+                    flow_temp = new_flow;
                 }
             }
-            if (success) break;
+            if (flow_temp<flow_curr) continue;
+            L4D_GetNavAreaCenter(nav_connection.navArea,pos_temp); pos_temp[2] += 16.0;
+            if (pos_underwater(pos_temp))
+            {
+                pos_temp[2] += 16.0;
+                if (pos_underwater(pos_temp)) pos_temp[2] += 16.0;
+            }
+            dz = pos_temp[2] - pos_curr[2];
+            bool steep = nav_connection.connectiontype == CONNECTED_ADJACENT && nav_too_steep(navArea_curr,nav_connection.navArea);
+            if (found && steep)
+            {
+                if (!best_steep || dz>dz_best) continue; // prefer to go down than up
+            }
+            else if (!steep)
+            {
+                i_end = cells.FindValue(nav_connection.navArea,1);
+                if (i_end>=i_start) success = true;
+            }
+            if ( success || flow_temp>=flow_best || (best_steep && flow_temp>=flow_curr) )
+            {
+                flow_best = flow_temp;
+                navArea_best = nav_connection.navArea;
+                pos_best = pos_temp;
+                found = true;
+                best_steep = steep;
+                dz_best = dz;
+                if (success) break;
+            }
         }
+        if (success) break;
+        
         if (found)
         {
             cell.flow = flow_best;
@@ -1807,6 +1862,7 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
         }
         else found = try_ladder(flow_curr,pos_curr,cell);
         if (!found) break;
+
         pos_curr = cell.center;
         navArea_curr = cell.navArea;
         flow_curr = cell.flow;
@@ -1858,7 +1914,6 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
         i_start += num_deleted;
     }
 
-    delete adjAreas;
     return success;
 }
 
@@ -1931,6 +1986,21 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2,
     if (!flat) i_turns_flat += 1; // two turns if not flat
     int i_turns_mid = 2; // one cycle at old cell, then one cycle at midpoint
 
+    if (elevator_available)
+    {
+        for (int dir = 0; dir < 4; dir++) // Add all 4 corners of navmesh. These are usually in very good positions for LOS.
+        {
+            L4D_NavArea_GetCorner(cell_new.navArea,view_as<NavCornerType>(dir),pos_candidate); pos_candidate[2] += 16.0; pos_candidates.PushArray(pos_candidate);
+            L4D_NavArea_GetCorner(cell_old.navArea,view_as<NavCornerType>(dir),pos_candidate); pos_candidate[2] += 16.0; pos_candidates.PushArray(pos_candidate);
+        }
+    }
+    else
+    {
+        // Add known corners of navmesh - crappy method
+        L4D_GetNavAreaPos(cell_new.navArea,pos_candidate); pos_candidate[2] += 16.0; pos_candidates.PushArray(pos_candidate);
+        L4D_GetNavAreaPos(cell_old.navArea,pos_candidate); pos_candidate[2] += 16.0; pos_candidates.PushArray(pos_candidate);
+    }
+
     for (int i_turn_flat = 0; i_turn_flat < i_turns_flat; i_turn_flat++)
     {
         diff_template = diff;
@@ -1979,13 +2049,6 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2,
             AddVectors(pos_template,{0.0,0.0,16.0},pos_candidate); pos_candidates.PushArray(pos_candidate);
         }
     }
-
-    // Add known corners of navmesh. Better natives would help here...
-    L4D_GetNavAreaPos(cell_new.navArea,pos_candidate); pos_candidate[2] += 16.0;
-    pos_candidates.PushArray(pos_candidate);
-
-    L4D_GetNavAreaPos(cell_old.navArea,pos_candidate); pos_candidate[2] += 16.0;
-    pos_candidates.PushArray(pos_candidate);
 
     // Priority: projected first, then stragglers.
     ArrayList pos_candidates2 = new ArrayList(3); // lower priority candidates
@@ -2184,18 +2247,6 @@ int SortFlow(int index1, int index2, Handle array, Handle hndl)
     if (flow1 > flow2) return 1;
     else if (flow1 < flow2) return -1;
     return 0;
-}
-
-stock float get_navFlow(Address navArea)
-{
-    return L4D2Direct_GetTerrorNavAreaFlow(navArea);
-    //if (g_bL4D2) return L4D2Direct_GetTerrorNavAreaFlow(navArea);
-    //else
-    //{
-    //    static float pos[3];
-    //    L4D_GetNavAreaCenter(navArea,pos);
-    //    return L4D_GetFlowFromPoint(pos);
-    //}
 }
 
 // Test if it's possible to travel to cell position from given position
@@ -2408,7 +2459,7 @@ stock bool entity_solid(int entity)
 
 // Fill conList with NavConnection (navArea+connection_type) to navArea. returns length of array
 stock int GetNavConnections(Address navArea, ArrayList conList, int team = TEAM_SURVIVOR,
-                            bool adjacent = true, bool elevator = true, bool ladder = true, int filter = CON_FILTER_KEEP_FORWARD)
+                            bool adjacent = true, bool elevator = true, bool ladder = true, int filter = CON_KEEP_FORWARD)
 {
     if (navArea == Address_Null) return 0;
     conList.Clear();
@@ -2426,30 +2477,27 @@ stock int GetNavConnections(Address navArea, ArrayList conList, int team = TEAM_
             {
                 adjArea = tempList.Get(i);
                 if (adjArea == Address_Null || adjArea == navArea) continue;
-                if (filter != CON_FILTER_KEEP_ALL)
-                {
-                    if (filter==CON_FILTER_KEEP_FORWARD && !L4D_NavArea_IsConnected(navArea,adjArea,dir)) continue;
-                    else
-                    {
-                        bool skip = true; // navarea must be connected backwards, inverted dir should not be dir
-                        for (int dir2 = 0; dir2 < 4; dir2++)
-                        {
-                            if (dir2==dir) continue;
-                            if (L4D_NavArea_IsConnected(adjArea,navArea,dir2))
-                            {
-                                skip = false;
-                                break;
-                            }
-                        }
-                        if (skip) continue;
-                    }
-                }
                 if (navmesh_adjacent_too_far(navArea,adjArea))
                 {
                     #if DEBUG>1
                         LogMessage("navmesh_adjacent_too_far %d -> %d", navArea, adjArea);
                     #endif
                     continue;
+                }
+                switch (filter)
+                {
+                    case CON_KEEP_FORWARD:
+                    {
+                        if (!adjacent_connected(navArea,adjArea)) continue;
+                    }
+                    case CON_KEEP_BACKWARD:
+                    {
+                        if (!adjacent_connected(adjArea,navArea)) continue;
+                    }
+                    default: // CON_KEEP_ALL
+                    {
+                        if (!adjacent_connected(navArea,adjArea) && !adjacent_connected(adjArea,navArea)) continue;
+                    }
                 }
                 nav_connection.navArea = adjArea;
                 nav_connection.connectiontype = CONNECTED_ADJACENT;
@@ -2506,7 +2554,19 @@ stock bool navArea_connected(Address from, Address to, int team = TEAM_SURVIVOR)
     if (from == to) return true;
     if (elevator_from_to(from,to)>0) return true;
     if (ladder_from_to(from,to,team)>0) return true;
-    if (navmesh_adjacent_too_far(from,to)) return false;
+    if (navmesh_adjacent_too_far(from,to))
+    {
+        #if DEBUG>1
+            LogMessage("navmesh_adjacent_too_far %d -> %d", navArea, adjArea);
+        #endif
+        return false;
+    }
+    return adjacent_connected(from,to);
+}
+
+// Check if from -> to is connected adjacently
+stock bool adjacent_connected(Address from, Address to)
+{
     for (int dir = 0; dir < 4; dir++)
     {
         if (L4D_NavArea_IsConnected(from,to,dir)) return true;
@@ -2636,11 +2696,11 @@ stock void NavChanged(bool recompute = false)
     else timer_nav = CreateTimer( (recompute) ? 0.1 : NAV_COOLDOWN , Timer_CheckRequests, _, TIMER_FLAG_NO_MAPCHANGE );
 }
 
-// return true if given flow value is better than old value
+// return true if given flow value is better than old value. increasing=true if better is bigger.
 stock bool flow_better(const float flow_new, const float flow_old, const bool increasing = true)
 {
-    if (increasing) return (flow_new+0.001)>=flow_old;
-    else return (flow_new-0.001)<=flow_old;
+    if (increasing) return (flow_new)>=flow_old;
+    else return (flow_new)<=flow_old;
 }
 
 stock bool IsValidClient(int client, bool replaycheck = true)
