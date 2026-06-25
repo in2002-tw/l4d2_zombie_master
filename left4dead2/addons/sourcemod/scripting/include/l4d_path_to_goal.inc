@@ -1736,7 +1736,7 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
     while (num_good<=stitch_gap && i<(cells.Length))
     {
         cells.GetArray(i,cell2,sizeof(Cell));
-        if ( !cell_connected(cell,cell2) && !twopos_traversable(cell.center,cell2.center) )
+        if ( !cell_connected(cell,cell2) || !twopos_traversable(cell.center,cell2.center) )
         {
             num_good = 0;
             i_min = i-1;
