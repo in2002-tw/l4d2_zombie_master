@@ -378,30 +378,28 @@ void UpdateSurvivorGlow(int client)
         GetClientName(client,name,sizeof(name));
         LogMessage("[zm] UpdateSurvivorGlow %d %s alive %d SurvivorGlow %d",client,name,alive,survivor_glow);
     }
+
+    bool pinned = false;
+    if (alive)
+    {
+        pinned = survivor_dominated(client);
+        if (pinned!=dominated[client])
+        {
+            dominated[client] = pinned;
+            if (pinned) CreateTimer(g_fUpdateRate,Check_Dominated,client,TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+        }
+    }
     
     if (alive && survivor_glow) L4D2_RemoveEntityGlow(client);
     else
     {
-        bool rescue = false;
         if (alive)
-        {
-            rescue = survivor_dominated(client);
-            if (dominated[client] != rescue)
-            {
-                CreateTimer(g_fUpdateRate,Check_Dominated,client,TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
-            }
-            dominated[client] = rescue;
-        }
-        else dominated[client] = false;
-        
-        bool should_glow = rescue || alive;
-        if (should_glow)
         {
            int hp = GetEntProp(client,Prop_Data,"m_iHealth");
            bool flashing = alive && L4D_IsPlayerOnThirdStrike(client);
            bool critical = alive && (L4D_IsPlayerIncapacitated(client) || L4D_IsPlayerHangingFromLedge(client));
            int color[3];
-           GetSurvivorHealthColor_pre(hp,color,rescue,critical);
+           GetSurvivorHealthColor_pre(hp,color,pinned,critical);
        	   L4D2_SetEntityGlow(client,
                               L4D2Glow_Constant,
                               0,0,color,flashing);

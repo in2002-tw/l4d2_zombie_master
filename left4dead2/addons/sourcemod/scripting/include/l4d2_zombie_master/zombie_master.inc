@@ -248,7 +248,7 @@ stock void get_uncommon_model(char label[16], char model[64])
 #define SOUND_GNOMED "zm/gnomed.mp3"
 #define GNOME_OVERLAY "vgui/zm_gnome"
 #define GNOME_COOLDOWN 30.0
-#define GNOME_DURATION 0.25
+#define GNOME_DURATION 1.0
 
 #define SOUND_TORNADO_ALARM "ambient/alarms/perimeter_alarm.wav"
 
@@ -1360,46 +1360,46 @@ void set_bank_begin()
 float get_bank_rate()
 {
  
- bool zero_rate = L4D_IsSurvivalMode() || !L4D_HasAnySurvivorLeftSafeArea();
- float multiplier = 1.0;
- if (!zero_rate && ZM_finale_announced)
- {
-     // Coop finale logic
-     if (can_change_finale_stage()) L4D2Direct_SetPendingMobCount(0);
-     else
-     {
-         // Hold pending mob to prevent stage advance!
-         int pending_mob = L4D2Direct_GetPendingMobCount();
-         if (script_CommonLimit>0 && pending_mob<script_CommonLimit)
-            L4D2Direct_SetPendingMobCount(script_CommonLimit);
-     }
-     int current = L4D2_GetCurrentFinaleStage();
-     if (current==FINALE_GAUNTLET_ESCAPE || current==FINALE_HORDE_ESCAPE)
-     {
-         // Infinite Finale
-         zero_rate = false;
-         multiplier = 2.0;
-     }
-     else if ( (current==FINALE_CUSTOM_CLEAROUT || current==FINALE_CUSTOM_SCRIPTED) &&
-               (GetGameTime()-t_finale)>=g_fMinFinaleStage ) 
-     {
-         zero_rate = false;
-     }
-     else zero_rate = true;
- }
- 
- if (zero_rate)
- {
-     bank_rate = 0.0;
-     return bank_rate;
- }
- 
- // Coop logic
- float final_rate = g_fBankRateBase;
- if (g_iAliveSurvivors>0) final_rate += g_iAliveSurvivors*g_fBankRatePlayer;
- if (panic && manual_panic) final_rate *= g_fPanicRateMultiplier;
- bank_rate = multiplier*final_rate;
- return bank_rate;
+    bool zero_rate = L4D_IsSurvivalMode() || !L4D_HasAnySurvivorLeftSafeArea();
+    float multiplier = 1.0;
+    if (!zero_rate && ZM_finale_announced)
+    {
+        // Coop finale logic
+        if (can_change_finale_stage()) L4D2Direct_SetPendingMobCount(0);
+        else
+        {
+            // Hold pending mob to prevent stage advance!
+            int pending_mob = L4D2Direct_GetPendingMobCount();
+            if (script_CommonLimit>0 && pending_mob<script_CommonLimit)
+                L4D2Direct_SetPendingMobCount(script_CommonLimit);
+        }
+        int current = L4D2_GetCurrentFinaleStage();
+        if (current==FINALE_GAUNTLET_ESCAPE || current==FINALE_HORDE_ESCAPE)
+        {
+            // Infinite Finale
+            zero_rate = false;
+            multiplier = 2.0;
+        }
+        else if ( (current==FINALE_CUSTOM_CLEAROUT || current==FINALE_CUSTOM_SCRIPTED) &&
+                (GetGameTime()-t_finale)>g_fMinFinaleStage ) 
+        {
+            zero_rate = false;
+        }
+        else zero_rate = true;
+    }
+    
+    if (zero_rate)
+    {
+        bank_rate = 0.0;
+        return bank_rate;
+    }
+    
+    // Coop logic
+    float final_rate = g_fBankRateBase;
+    if (g_iAliveSurvivors>0) final_rate += g_iAliveSurvivors*g_fBankRatePlayer;
+    if (panic && manual_panic) final_rate *= g_fPanicRateMultiplier;
+    bank_rate = multiplier*final_rate;
+    return bank_rate;
 }
 
 Action ZM_Vision(int client, int args)

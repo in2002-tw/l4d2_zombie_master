@@ -1474,9 +1474,7 @@ public void L4D2_OnDominatedBySpecialInfected(int victim, int dominator)
 {
     if (!g_bCvarAllow || !IsValidClient(victim) || dominated[victim]) return;
     if (DEBUG) LogMessage("[zm] Dominated start %d", victim);
-    request_update_glow(victim,true,0.0);
-    //request_update_glow(victim,true); // delayed by 0.1 sec
-    //request_update_glow(victim,false,1.0);
+    if (survivor_dominated(victim)) request_update_glow(victim,true,0.0);
 }
 
 public void L4D_OnLedgeGrabbed_Post(int client)
@@ -1581,8 +1579,7 @@ public Action evtPlayerDeath(Event event, const char[] name, bool dontBroadcast)
     
     if (clients_timer==INVALID_HANDLE) clients_timer = CreateTimer(0.1,CountClients);
     
-    //request_update_glow(victim,true,0.0); // Force update glow to reduce glow glitches.
-    request_update_glow(victim,true); 
+    request_update_glow(victim,true,0.0); 
     
     if(GetClientTeam(victim)!=TEAM_INFECTED)
     {
@@ -2106,9 +2103,9 @@ Action EvtBotReplacePlayer(Event event, const char[] name, bool dontBroadcast)
     int bot = GetClientOfUserId(event.GetInt("bot"));
     int client = GetClientOfUserId(event.GetInt("player"));
     if (DEBUG) LogMessage("[zm] EvtBotReplacePlayer %d replaced %d", bot, client);
-    //request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
+    request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
     request_update_glow(client,true); 
-    //request_update_glow(bot,true,0.0); // Force update glow to reduce glow glitches.
+    request_update_glow(bot,true,0.0); // Force update glow to reduce glow glitches.
     request_update_glow(bot,true); 
     if (GetEntityFlags(client) & FL_DUCKING)
     {
@@ -2124,9 +2121,9 @@ Action EvtPlayerReplaceBot(Event event, const char[] name, bool dontBroadcast)
     int bot = GetClientOfUserId(event.GetInt("bot"));
     int client = GetClientOfUserId(event.GetInt("player"));
     if (DEBUG) LogMessage("[zm] EvtPlayerReplaceBot %d replaced %d", client, bot);
-    //request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
+    request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
     request_update_glow(client,true); 
-    //request_update_glow(bot,true,0.0); // Force update glow to reduce glow glitches.
+    request_update_glow(bot,true,0.0); // Force update glow to reduce glow glitches.
     request_update_glow(bot,true); 
     if (GetEntityFlags(bot) & FL_DUCKING)
     {
@@ -2232,8 +2229,8 @@ void evtPlayerSpawned(Event event, const char[] name, bool dontBroadcast)
    	   dominated[client] = false;
    	   if (clients_timer==INVALID_HANDLE) clients_timer = CreateTimer(0.1,CountClients);
        if (zm_timer==INVALID_HANDLE) zm_update();
-   	   request_update_glow(client);
    	   if (!IsPlayerAlive(client)) return;
+       request_update_glow(client);
    	   if (GetClientTeam(client)==TEAM_SURVIVOR)
    	   {
        	   if (g_bLockSaferoom && L4D_IsInIntro()>0) freeze_player(client);
@@ -2346,7 +2343,7 @@ void evtPlayerTeam(Event event, const char[] name, bool dontBroadcast)
     int client = GetClientOfUserId(event.GetInt("userid"));
     if (!IsValidClient(client)) return;
     if (DEBUG) LogMessage("[zm] evtPlayerTeam %d", client);
-    //request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
+    request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
     request_update_glow(client,true); 
     if (zm_timer==INVALID_HANDLE) zm_update();
     if (zm_client==client) RequestFrame(check_zm_team);
@@ -2392,7 +2389,7 @@ public void OnClientPutInServer(int client)
 	if (DEBUG) LogMessage("[zm] OnClientPutInServer %d", client);
 	hp_timers[client] = null;
     //request_update_glow(client,true,0.0); // Force update glow to reduce glow glitches.
-    request_update_glow(client,true); 
+    if (IsPlayerAlive(client)) request_update_glow(client,true); 
 	clients_active[client] = false;
 	clients_offered[client] = false;
 	dominated[client] = false;
