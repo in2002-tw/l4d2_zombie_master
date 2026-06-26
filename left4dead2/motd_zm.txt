@@ -1,0 +1,11 @@
+This server is running Left 4 Dead 2 Zombie Master!
+
+Type /zm or /zm_vote to enable/disable Zombie Master.
+Type /zm_help to read the Zombie Master tutorial in console.
+
+Visit the Steam Guide:
+https://steamcommunity.com/sharedfiles/filedetails/?id=3660216145
+
+Download the latest stable version here:
+https://forums.alliedmods.net/showthread.php?t=352060
+https://github.com/gvazdas/l4d2_zombie_master/releases
