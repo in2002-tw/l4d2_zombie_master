@@ -483,6 +483,7 @@ void on_changed_rules()
    else if (g_iCostCommon<0 || valid_uncommon(g_sForceCommon)) autocommon_uncommons=true;
    if (g_bCvarAllow && IsValidClientZM())
    {
+      ZMPrefs_Apply(zm_client);
       update_menus();
       update_EMS_HUD(true,0.0);
    }
