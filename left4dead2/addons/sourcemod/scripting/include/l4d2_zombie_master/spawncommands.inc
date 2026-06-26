@@ -49,12 +49,12 @@ Action ZM_Spawn_Horde(int client, int args)
     int count = 10;
     bool angry = false;
     bool flow = false;
-    char type[16] = "";
+    static char type[16];
+	strcopy(type,sizeof(type), "");
     if (args>0)
     {
-        static char arg[16] = "";
-        GetCmdArg(1,arg,sizeof(arg));
-        process_horde_arg(count,type,angry,flow,arg);
+        static char arg[16];
+        GetCmdArg(1,arg,sizeof(arg)); process_horde_arg(count,type,angry,flow,arg);
     	if (args>1) {GetCmdArg(2,arg,sizeof(arg)); process_horde_arg(count,type,angry,flow,arg);}
     	if (args>2) {GetCmdArg(3,arg,sizeof(arg)); process_horde_arg(count,type,angry,flow,arg);}
     	if (args>3) {GetCmdArg(4,arg,sizeof(arg)); process_horde_arg(count,type,angry,flow,arg);}
@@ -118,7 +118,7 @@ void get_random_xy_orientation(float angle[3])
  * @param flow    If true, spawn near the highest-flow survivor instead of the aimed position
  * @param hint    If true, show HUD feedback to the ZM
  */
-void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bool flow = false, bool hint = true, float t_budget_ms = HORDE_BUDGET_MS)
+void ZM_Horde(const int client, int count=10, const char type0[16] = "", bool angry = false, bool flow = false, bool hint = true, const float t_budget_ms = HORDE_BUDGET_MS)
 {
 	if (!g_bCvarAllow) return;
 	if (!(client==zm_client || client==0)) return;
@@ -154,18 +154,21 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
     }
     
     if (IsValidClientZM()) update_t_zm_activity();
+
+	static char type[16];
+	strcopy(type,sizeof(type),type0);
     
     TrimString(type);
     bool force_type = false;
-    if (g_sForceCommon[0]!=0 && valid_uncommon(g_sForceCommon))
+    if (valid_uncommon(g_sForceCommon))
     {
-        strcopy(type,sizeof(type),g_sForceCommon);
+		strcopy(type,sizeof(type),g_sForceCommon);
         force_type = true;
     }
-    else if (type[0]!=0 && !valid_uncommon(type)) strcopy(type,sizeof(type),"");
+    else if (!valid_uncommon(type)) strcopy(type,sizeof(type), "");
 	
-	if (g_iCostCommon<0 && type[0]==0) strcopy(type,sizeof(type),"random"); // commons disabled -> can only spawn uncommons
-	else if (type[0]!=0 && g_iCostUncommon<0) strcopy(type,sizeof(type),""); // uncommons disabled -> can only spawn commons
+	if (g_iCostCommon<0 && (type[0]==0 || strcmp(type,"",false)==0)) type = "random"; // commons disabled -> can only spawn uncommons
+	else if ( (type[0]!=0 || strcmp(type,"",false)!=0) && g_iCostUncommon<0) strcopy(type,sizeof(type), ""); // uncommons disabled -> can only spawn commons
 	
 	if (strcmp(type,"jimmy",false)==0)
 	{
@@ -228,7 +231,8 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 	float randomPos[3], angle[3];
 	bool glow, random;
 
-	char set_model[64] = "";
+	static char set_model[PLATFORM_MAX_PATH];
+	strcopy(set_model,sizeof(set_model), "")
 	if (strcmp(type,"random")==0) random = true;
     else if (g_bClownGlow && strcmp(type,"clown")==0) glow = true;
     
@@ -244,8 +248,8 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
 
         if (!angry) get_random_xy_orientation(angle);
 		int zombie = -1;
-		if (type[0]!=0) get_uncommon_model(type,set_model);
-		if (set_model[0]==0) zombie = L4D_SpawnCommonInfected(randomPos,angle);
+		if (strcmp(type,"",false)!=0 && type[0]!=0 && type[0]!=' ') get_uncommon_model(type,set_model);
+		if (strcmp(set_model,"",false)==0 || set_model[0]==0 || set_model[0]==' ') zombie = L4D_SpawnCommonInfected(randomPos,angle);
 		else
 		{
       		zombie = CreateEntityByName("infected");
@@ -298,7 +302,7 @@ void ZM_Horde(int client, int count=10, char type[16]="", bool angry = false, bo
         
 	    if (hint)
 	    {
-    	    char label[32];
+    	    static char label[32];
     	    Format(label, sizeof(label), "%T", "Common", zm_client);
     	    update_hint("%T", "Spawned X Y", zm_client, spawned, label);
 	    }

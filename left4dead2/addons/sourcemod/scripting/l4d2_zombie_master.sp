@@ -99,7 +99,7 @@ public Plugin myinfo =
 // 17. Better tank run balance.
 // 18. Fix finale softlock for custom gamemodes. Finale stage will now correctly advance if ZM has >0 bank but not enough to spawn anything.
 // 19. Some features are not ready but implemented if you want to test them: zm_traps, zm_enable_jumpscare, zm_gnome.
-// 20. Fixed Random Uncommons
+// 20. Fixed random Uncommons
 // 21. Survivors rescued bank added
 
 // TO DO LIST:

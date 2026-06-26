@@ -141,23 +141,42 @@ static float HULL_MAXS_LOOK[3] = {HULL_DX,HULL_DX,HULL_DZ};
 #define MODEL_FALLEN2 "models/infected/common_male_parachutist.mdl"
 #define MODEL_FALLEN3 "models/infected/common_male_fallen_survivor_l4d1.mdl" // this one has 2 bodygroups as well
 
-stock bool valid_uncommon(char arg[32])
+stock bool valid_uncommon(const char arg[16])
 {
-    if (arg[0]==0) return false;
-    if (strcmp(arg,"random")==0) return true;
-    else if (strcmp(arg,"riot")==0) return true;
-	else if (strcmp(arg,"ceda")==0) return true;
-	else if (strcmp(arg,"clown")==0) return true;
-	else if (strcmp(arg,"mud")==0) return true;
-	else if (strcmp(arg,"road")==0) return true;
-	else if (strcmp(arg,"jimmy")==0) return true;
-	else if (strcmp(arg,"fallen")==0) return true;
+    if (strcmp(arg,"",false)==0 || arg[0]==0 || arg[0]==' ') return false;
+    switch (arg[0])
+    {
+        case 'r':
+        {
+            if (strcmp(arg,"random")==0) return true;
+            else if (strcmp(arg,"riot")==0) return true;
+            else if (strcmp(arg,"road")==0) return true;
+        }
+        case 'c':
+        {
+            if (strcmp(arg,"ceda")==0) return true;
+            else if (strcmp(arg,"clown")==0) return true;
+        }
+        case 'm':
+        {
+            if (strcmp(arg,"mud")==0) return true;
+        }
+        case 'j':
+        {
+            if (strcmp(arg,"jimmy")==0) return true;
+        }
+        case 'f':
+        {
+            if (strcmp(arg,"fallen")==0) return true;
+        }
+    }
 	return false;
 }
 
-stock void get_uncommon_model(char label[16], char model[64])
+stock void get_uncommon_model(const char label[16], char model[PLATFORM_MAX_PATH])
 {
     model = "";
+    if (strcmp(label,"",false)==0 || label[0]==0 || label[0]==' ') return;
     switch (label[0])
     {
         case 'r':
@@ -248,7 +267,7 @@ stock void get_uncommon_model(char label[16], char model[64])
 #define SOUND_GNOMED "zm/gnomed.mp3"
 #define GNOME_OVERLAY "vgui/zm_gnome"
 #define GNOME_COOLDOWN 30.0
-#define GNOME_DURATION 1.0
+#define GNOME_DURATION 0.25
 
 #define SOUND_TORNADO_ALARM "ambient/alarms/perimeter_alarm.wav"
 
@@ -581,7 +600,7 @@ g_fCommonRate, g_fWitchCooldown, g_fTankCooldown, g_fSpitterCooldown, g_fMinFina
 g_fAbilityCooldown, g_fGridCooldown, g_fGnomeLastUsed;
 
 bool g_bFairQueue, g_bDiscountTank, g_bMemes, g_bClownGlow, g_bAllowFreeze;
-char g_sForceCommon[32];
+char g_sForceCommon[16];
 
 char g_sZMGamemode[PLATFORM_MAX_PATH];
 
@@ -1507,35 +1526,28 @@ void toggle_ZM_vision(int client)
 
 stock void process_horde_arg(int &count, char type[16], bool &angry, bool &flow, char arg[16])
 {
-    if (!angry)
-    {
-        if (strcmp(arg,"angry")==0)
-        {
-            angry = true;
-            return;
-        }
-    }
-    if (!flow)
-    {
-        if (strcmp(arg,"flow")==0)
-        {
-            flow = true;
-            return;
-        }
-    }
-    if (!valid_uncommon(type))
-    {
-        if (valid_uncommon(arg))
-        {
-            type = arg;
-            return;
-        }
-    }
     int arg_int = StringToInt(arg);
-    if (arg_int!=0)
+    if (arg_int>0)
     {
         count = arg_int;
         if (count<=0) count = 10;
+        return;
+    }
+    if (strcmp(arg,"angry")==0)
+    {
+        angry = true;
+        return;
+    }
+    if (strcmp(arg,"flow")==0)
+    {
+        flow = true;
+        return;
+    }
+    if (valid_uncommon(arg))
+    {
+        type = arg;
+        strcopy(type,sizeof(type),arg);
+        return;
     }
 }
 
