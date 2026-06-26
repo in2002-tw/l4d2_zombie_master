@@ -10,10 +10,10 @@
 //along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 // Made for the Knockout.chat community
-// Plugin authors: gvazdas, zyiks
+// Plugin authors: gvazdas, zyiks, Skerion
 // HUGE THANKS TO TESTERS: Hatsune Miku Fan (God's Strongest Playtester), Skerion, Raykeno, IronBar, ngh, Lil Ole Fella, ShaunOfTheLive, zyiks
 // Chance, Lett1, AGGA Lambo, Robotnik, AriesToffle, Shadowcat, Wicket, GARFIELD'S SKELETON, Perchance, 
-// Snake22, Mark9013100, Sarahtonin, Rex Bosworth, g3intel, SomeENG, nativehenu
+// Snake22, Mark9013100, Sarahtonin, Rex Bosworth, Sarah "NOTHING EVER HAPPENS" Tonin, g3intel, SomeENG, nativehenu
 // HUGE THANKS for scripting help: HarryPotter, xerox8521, Forgetest, little_froy, Lux, Marttt, Bacardi, Silvers, zyiks
 // HUGE THANKS TO Reagy and IronBar for hosting the Knockout Left 4 Dead 2 Server
 // Sentence-mixed survivor voice lines: Skerion (Ellis voice line by zyiks)
@@ -34,7 +34,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.2 2026-06-24"
+#define PLUGIN_VERSION 			"0.9.2 2026-06-25"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -93,12 +93,14 @@ public Plugin myinfo =
 // 11. Spitter is more expensive and has 2x cooldown compared to other Specials.
 // 12. zm_hud_per_element
 // 13. Commons, spawner visible when inside walls
-// 14. l4dhooks native GetZ implemented, spawner z position is always verified if on a valid navmesh.
+// 14. l4dhooks native GetZ implemented. Spawner z position is always verified if on a valid navmesh.
 // 15. Glow fixes.
 // 16. ZM player name is now printed if you type /zm.
 // 17. Better tank run balance.
 // 18. Fix finale softlock for custom gamemodes. Finale stage will now correctly advance if ZM has >0 bank but not enough to spawn anything.
 // 19. Some features are not ready but implemented if you want to test them: zm_traps, zm_enable_jumpscare, zm_gnome.
+// 20. Fixed Random Uncommons
+// 21. Survivors rescued bank added
 
 // TO DO LIST:
 // 15. Performance bottlenecks.
@@ -880,8 +882,8 @@ Action zm_update(Handle timer = null)
                 reset_available_zombies();
                 if (IsValidClientZM())
                 {
-                    update_hint("Survivors rescued");
-                    PrintToChat(zm_client, "[zm] Survivors rescued: bank added, cooldowns reset.");
+                    PrintToChat(zm_client, "%t", "Survivors rescued");
+                    update_hint("%T", "Survivors rescued short", zm_client);
                 }
             }
             bank += d_bank;

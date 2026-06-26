@@ -709,5 +709,14 @@
 		"lt"			"Gnomas"
 	}
 
+	"Survivors rescued short"
+	{
+		"lt"			"Išgyventojai išgelbėti"
+	}
+
+	"Survivors rescued"
+	{
+		"lt"			"Išgyventojai išgelbėti: pridėta banko, zombių pauzės atstatytos."
+	}
 	
 }

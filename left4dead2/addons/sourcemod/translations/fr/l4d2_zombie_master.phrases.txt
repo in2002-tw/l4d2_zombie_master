@@ -709,5 +709,14 @@
 		"fr"			"Gnome"
 	}
 	
+	"Survivors rescued short"
+	{
+		"fr"			"Survivors rescued"
+	}
+
+	"Survivors rescued"
+	{
+		"fr"			"Survivors rescued: bank added, cooldowns reset."
+	}
 	
 }

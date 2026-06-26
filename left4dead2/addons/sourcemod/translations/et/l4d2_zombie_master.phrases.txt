@@ -708,6 +708,16 @@
 	{
 		"et"			"Gnome"
 	}
+
+	"Survivors rescued short"
+	{
+		"et"			"Survivors rescued"
+	}
+
+	"Survivors rescued"
+	{
+		"et"			"Survivors rescued: bank added, cooldowns reset."
+	}
 	
 
 }
