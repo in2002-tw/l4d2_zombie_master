@@ -108,3 +108,38 @@ jobs:
           name: compiled-plugins-sourcemod-1.12
           path: build/*.smx
           if-no-files-found: error
+
+      - name: Publish a release for each bumped plugin
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          for src in "$GITHUB_WORKSPACE/$scripting_dir"/*.sp; do
+            name="$(basename "${src%.sp}")"
+
+            # Pull the first whitespace-delimited token from the PLUGIN_VERSION
+            # string, dropping any trailing date (e.g. "0.9.2 2026-06-19" -> "0.9.2").
+            version="$(sed -nE 's/.*#define[[:space:]]+PLUGIN_VERSION[[:space:]]+"([^" ]+).*/\1/p' "$src" | head -n1)"
+            if [ -z "$version" ]; then
+              echo "No PLUGIN_VERSION in $name, skipping release."
+              continue
+            fi
+
+            tag="${name}-${version}"
+
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "Release $tag already exists, nothing to publish."
+              continue
+            fi
+
+            echo "Publishing release $tag"
+            gh release create "$tag" \
+              "build/$name.smx" \
+              --target "$GITHUB_SHA" \
+              --title "$name $version" \
+              --notes "Automated release of $name version $version."
+          done
