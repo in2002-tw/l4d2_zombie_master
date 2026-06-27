@@ -301,8 +301,8 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     }
 
     if (beams_cooldown(client)) return false;
-
     if (duration < 0.1) duration = 0.1; // prevent beams with infinite lifetime
+    beams_cooldown_update(client,duration);
 
     // Store info of latest request from client
     g_CellRequests[client].join_client = join_client;
@@ -512,7 +512,6 @@ bool RequestGuide(int client, float duration = 5.0, bool backward = false, bool 
     }
     if (i_draw>0)
     {
-        beams_cooldown_update(client,duration);
         #if DEBUG
         LogMessage("RequestGuide: client %d flow %f cells %d g_iStart %d (%f ms)", client, flow, i_draw, g_iStart, (GetEngineTime()-t)*1000.0);
         #endif
@@ -1036,7 +1035,9 @@ void OnFramePrep(bool new_frame = true)
     {
         #if DEBUG
         g_iPrepFrames += 1;
-        //LogMessage("OnFramePrep %d %d", g_iPrepFrames, g_iPrepStage);
+        #if DEBUG>2
+        LogMessage("OnFramePrep %d %d", g_iPrepFrames, g_iPrepStage);
+        #endif
         #endif
         g_tFrameStart = GetEngineTime();
     }
@@ -1045,6 +1046,17 @@ void OnFramePrep(bool new_frame = true)
         case STAGE_PREP:
         {
 
+            g_fMaxFlow = L4D2Direct_GetMapMaxFlowDistance();
+            if (g_fMaxFlow<=0.0)
+            {
+                guide_prep = false;
+                g_iPrepStage = STAGE_NONE;
+                #if DEBUG
+                    LogMessage("WARNING: L4D2Direct_GetMapMaxFlowDistance returned <=0.0");
+                #endif
+                return;
+            }
+
             delete allAreas;
             allAreas = new ArrayList();
             L4D_GetAllNavAreas(allAreas);
@@ -1052,17 +1064,12 @@ void OnFramePrep(bool new_frame = true)
             {
                 delete allAreas;
                 guide_prep = false;
+                #if DEBUG
+                    LogMessage("WARNING: L4D_GetAllNavAreas returned no areas");
+                #endif
                 return;
             }
 
-            g_fMaxFlow = L4D2Direct_GetMapMaxFlowDistance();
-
-            if (g_fMaxFlow<=0.0)
-            {
-                guide_prep = false;
-                g_iPrepStage = STAGE_NONE;
-                return;
-            }
 
             g_fFlowRescueVehicle = -1.0;
             g_bFoundRescueVehicle = false;
@@ -1221,6 +1228,9 @@ void OnFramePrep(bool new_frame = true)
                 {
                     delete all_cells;
                     guide_prep = false;
+                    #if DEBUG
+                    LogMessage("WARNING: all_cells has no cells");
+                    #endif
                     return;
                 }
 
@@ -2557,7 +2567,7 @@ stock bool navArea_connected(Address from, Address to, int team = TEAM_SURVIVOR)
     if (navmesh_adjacent_too_far(from,to))
     {
         #if DEBUG>1
-            LogMessage("navmesh_adjacent_too_far %d -> %d", navArea, adjArea);
+            LogMessage("navmesh_adjacent_too_far %d -> %d", from, to);
         #endif
         return false;
     }

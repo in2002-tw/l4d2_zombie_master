@@ -793,14 +793,18 @@ void create_other_menu()
     AddMenuItem(menu_other, "item_4", buffer);
 
     Format(buffer, sizeof(buffer), "%T", "Give Up", zm_language);
-    if (!g_hJumpscare.BoolValue) buffer_add_rawline(buffer);
+    //if (!g_hJumpscare.BoolValue) buffer_add_rawline(buffer);
     AddMenuItem(menu_other, "item_5", buffer);
+
+    Format(buffer, sizeof(buffer), "-");
+    if (!g_hJumpscare.BoolValue) buffer_add_rawline(buffer);
+    AddMenuItem(menu_other, "item_6", buffer);
 
     if (g_hJumpscare.BoolValue)
     {
         Format(buffer, sizeof(buffer), "Jumpscare");
         buffer_add_rawline(buffer);
-        AddMenuItem(menu_other, "item_6", buffer);
+        AddMenuItem(menu_other, "item_7", buffer);
     }
 	
 	if (zm_menu_state == ZM_MENU_OTHER && IsValidClientZM()) open_menu(zm_client,ZM_MENU_OTHER);
@@ -845,7 +849,8 @@ int other_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
                         create_other_menu();
                 }
                 case 4: {open_menu(zm_client, ZM_MENU_QUIT); return 0;}
-                case 5: zm_jumpscare();
+                case 5: stop_sound(zm_client);
+                case 6: zm_jumpscare();
                 default: zm_menu_state=ZM_MENU_MAIN;
         	}
         	RequestFrame(reopen_zm_menu,true);     	
@@ -860,6 +865,19 @@ int other_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
         }
     }
 	return 0;
+}
+
+void stop_sound(int client)
+{
+    L4D_CleanupPlayerState(client);
+    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_AUTO,SNDLEVEL_RUSTLE,_,0.00);
+    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_BODY,SNDLEVEL_RUSTLE,_,0.00);
+    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_ITEM,SNDLEVEL_RUSTLE,_,0.00);
+    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_REPLACE,SNDLEVEL_RUSTLE,_,0.00);
+    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_STATIC,SNDLEVEL_RUSTLE,_,0.00);
+    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_STREAM,SNDLEVEL_RUSTLE,_,0.00);
+    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_WEAPON,SNDLEVEL_RUSTLE,_,0.00);
+    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_VOICE,SNDLEVEL_RUSTLE,_,0.00);
 }
 
 void zm_jumpscare()

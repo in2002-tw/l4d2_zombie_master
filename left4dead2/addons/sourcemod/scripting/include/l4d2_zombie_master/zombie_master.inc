@@ -2818,6 +2818,7 @@ void JoinZM(int client)
 	{
        if (client==zm_client)
        {
+          L4D_CleanupPlayerState(zm_client);
           if (GetClientTeam(zm_client)!=TEAM_ZM)
           {
               ChangeClientTeam(zm_client,TEAM_ZM);
@@ -2867,29 +2868,32 @@ void JoinZM(int client)
     }
     
     remove_all_ZM_glows();
-
-    g_bWeapons = false; // reset survivor weapons tracking
-    g_bInventory = false; // reset survivor inventory tracking
-    
-    ZMPrefs_Apply(client);
-    g_iLastZombieClass = -1;
-    
-    ChangeClientTeam(client,TEAM_ZM);
+    // Hold player in spectator for a frame.
+    ChangeClientTeam(client,TEAM_SPECTATOR);
     L4D_State_Transition(client, STATE_OBSERVER_MODE);
-    if (!g_bAllowFreeze) ZM_specials_frozen = false;
+    SetEntProp(client, Prop_Data, "m_iObserverMode", 6);
+    L4D_CleanupPlayerState(client);
+    RequestFrame(JoinZM_Post,client);
+    
+}
+
+void JoinZM_Post(int client)
+{
+    if (!g_bCvarAllow || zm_stage>=ZM_END || !IsValidClient(client) || IsFakeClient(client) || IsValidClientZM()) return;
+    static char name[MAX_NAME_LENGTH]; 
+    ChangeClientTeam(client,TEAM_ZM);
+    L4D_CleanupPlayerState(client);
+    L4D_State_Transition(client, STATE_OBSERVER_MODE);
+    SetEntProp(client, Prop_Data, "m_iObserverMode", 6);
     zm_client = client;
     zm_client_userid = GetClientUserId(zm_client);
+    if (!g_bAllowFreeze) ZM_specials_frozen = false;
+    g_bWeapons = false; // reset survivor weapons tracking
+    g_bInventory = false; // reset survivor inventory tracking
+    ZMPrefs_Apply(client);
+    g_iLastZombieClass = -1;
     Spawner_OnEnabled(client);
     update_menus();
-    
-    // Prevent InputKill - thanks Shadowsyn
-   	//SetVariantString("self.ValidateScriptScope()");
-   	//AcceptEntityInput(client, "RunScriptCode");
-  	//SetVariantString("plugin_shouldKill <- false;");
-  	//AcceptEntityInput(client, "RunScriptCode");
-  	//SetVariantString("function InputKill() {return plugin_shouldKill}");
-   	//AcceptEntityInput(client, "RunScriptCode");
-    
     spawner_last_valid = false;
     GetClientName(client,name,sizeof(name));
     int playcount = get_rounds(client);
@@ -2926,7 +2930,7 @@ void JoinZM(int client)
     if (zm_stage<ZM_PREP) set_bank_begin();
     
     ZMTeleport(zm_client,0);
-    L4D_CleanupPlayerState(client);
+    L4D_CleanupPlayerState(zm_client);
     SetEntityMoveType(zm_client, MOVETYPE_NOCLIP);
     
     // Make end saferoom door glow, and close it.
@@ -2948,6 +2952,9 @@ void JoinZM(int client)
     }
 
     set_zm_stage(ZM_PREP);
+
+    EmitSoundToClient(zm_client,SOUND_PANIC_ON,_,_,_,_,_,GetRandomInt(90,110));
+
 }
 
 void QuitZM_Force(int client)
@@ -2955,7 +2962,9 @@ void QuitZM_Force(int client)
     if (!IsValidClient(client)) return;
     L4D_State_Transition(client, STATE_OBSERVER_MODE);
     SetEntProp(client, Prop_Data, "m_iObserverMode", 6);
+    L4D_CleanupPlayerState(client);
     QuitZM(client,false);
+    L4D_CleanupPlayerState(client);
 }
 
 void QuitZM(int client, bool print = true)
@@ -3006,19 +3015,22 @@ void QuitZM(int client, bool print = true)
     {
             // Find bot that can be taken over. Credit: l4dmultislots by HarryPotter
             int bot = -1;
-            for (int i = 1; i <= MaxClients; i++)
-        	{
-        		if (!IsClientInGame(i)) continue;
-        		if (GetClientTeam(i)!=TEAM_SURVIVOR) continue;
-        		if (!IsPlayerAlive(i)) continue;
-        		if (!IsFakeClient(i)) continue;
-        		if (HasEntProp(i,Prop_Send,"m_humanSpectatorUserID"))
-        		{
-            		if (GetEntProp(i, Prop_Send, "m_humanSpectatorUserID")>0) continue;
-        		}
-        		if (L4D_IsPlayerIncapacitated(i)) continue;
-        		bot = i;
-        		break;
+            if (zm_stage<ZM_END)
+            {
+                for (int i = 1; i <= MaxClients; i++)
+                {
+                    if (!IsClientInGame(i)) continue;
+                    if (GetClientTeam(i)!=TEAM_SURVIVOR) continue;
+                    if (!IsPlayerAlive(i)) continue;
+                    if (!IsFakeClient(i)) continue;
+                    if (HasEntProp(i,Prop_Send,"m_humanSpectatorUserID"))
+                    {
+                        if (GetEntProp(i, Prop_Send, "m_humanSpectatorUserID")>0) continue;
+                    }
+                    if (L4D_IsPlayerIncapacitated(i)) continue;
+                    bot = i;
+                    break;
+                }
             }
             ChangeClientTeam(client,TEAM_SURVIVOR);
    			if(bot > 0)

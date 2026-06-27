@@ -34,7 +34,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.2 2026-06-25"
+#define PLUGIN_VERSION 			"0.9.3 2026-06-26"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -79,7 +79,7 @@ public Plugin myinfo =
 	url = "https://forums.alliedmods.net/showthread.php?t=352060, https://github.com/gvazdas/l4d2_zombie_master"
 }
 
-// Changelog for 0.9.2
+// Changelog for 0.9.3
 // 1. Fixed Specials not refunding if deleted immediately on spawn due to ability cooldown checks
 // 2. Ambush system: Specials that are vomited on, fighting Survivors, or burning, are not included in Freeze/Unfreeze commands.
 // 3. Other -> Give Up now asks for confirmation to avoid accidents.
@@ -101,6 +101,8 @@ public Plugin myinfo =
 // 19. Some features are not ready but implemented if you want to test them: zm_traps, zm_enable_jumpscare, zm_gnome.
 // 20. Fixed random Uncommons
 // 21. Survivors rescued bank added
+// 22. QuitZM no assign to player after round end -> TESTING NEEDED
+// 23. Make JoinZM send you to observer first -> TESTING NEEDED
 
 // TO DO LIST:
 // 15. Performance bottlenecks.
@@ -897,6 +899,7 @@ Action zm_update(Handle timer = null)
       zm_fake_gamemode(); // have to run this periodically or it gets reset
       if (!IsPlayerAlive(zm_client))
       {
+          DispatchKeyValue(zm_client, "targetname", "zm_client");
           if (GetEntityMoveType(zm_client)!=MOVETYPE_NONE) SetEntityMoveType(zm_client, MOVETYPE_NOCLIP);
           if (!IsValidEntRef(entref_control) && live_SI>0)
           {
