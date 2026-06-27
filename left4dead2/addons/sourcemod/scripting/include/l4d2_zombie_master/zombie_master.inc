@@ -2873,6 +2873,7 @@ void JoinZM(int client)
     L4D_State_Transition(client, STATE_OBSERVER_MODE);
     SetEntProp(client, Prop_Data, "m_iObserverMode", 6);
     L4D_CleanupPlayerState(client);
+    stop_sound(client,true); // stops survivor-related sounds
     RequestFrame(JoinZM_Post,client);
     
 }
@@ -2882,7 +2883,6 @@ void JoinZM_Post(int client)
     if (!g_bCvarAllow || zm_stage>=ZM_END || !IsValidClient(client) || IsFakeClient(client) || IsValidClientZM()) return;
     static char name[MAX_NAME_LENGTH]; 
     ChangeClientTeam(client,TEAM_ZM);
-    L4D_CleanupPlayerState(client);
     L4D_State_Transition(client, STATE_OBSERVER_MODE);
     SetEntProp(client, Prop_Data, "m_iObserverMode", 6);
     zm_client = client;
@@ -2925,12 +2925,9 @@ void JoinZM_Post(int client)
     entref_control = INVALID_ENT_REFERENCE;
     entref_delete = INVALID_ENT_REFERENCE;
     
-    if (IsValidClientZM()) EmitSoundToClient(zm_client,SOUND_VISION);
-    
     if (zm_stage<ZM_PREP) set_bank_begin();
     
     ZMTeleport(zm_client,0);
-    L4D_CleanupPlayerState(zm_client);
     SetEntityMoveType(zm_client, MOVETYPE_NOCLIP);
     
     // Make end saferoom door glow, and close it.
@@ -2952,9 +2949,11 @@ void JoinZM_Post(int client)
     }
 
     set_zm_stage(ZM_PREP);
+    EmitSoundToClient(zm_client,SOUND_VISION);
 
-    EmitSoundToClient(zm_client,SOUND_PANIC_ON,_,_,_,_,_,GetRandomInt(90,110));
-
+    GetClientAbsOrigin(zm_client, zm_deathPos);
+    GetClientEyeAngles(zm_client, zm_deathAngles); 
+    RequestFrame(ZM_FixTankStutter,true); // should clear vignettes, post processing effects, etc.
 }
 
 void QuitZM_Force(int client)

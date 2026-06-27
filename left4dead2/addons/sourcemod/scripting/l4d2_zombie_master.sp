@@ -103,6 +103,7 @@ public Plugin myinfo =
 // 21. Survivors rescued bank added
 // 22. QuitZM no assign to player after round end -> TESTING NEEDED
 // 23. Make JoinZM send you to observer first -> TESTING NEEDED
+// 24. Stop Sound
 
 // TO DO LIST:
 // 15. Performance bottlenecks.

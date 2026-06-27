@@ -934,7 +934,7 @@ int Analog_ResolveCommonPositions(int count, bool flow, bool angry, bool hint,
                     pos = zm_spawner_pos;
                 else if ( g_fSpawnMinDistance>0.0 && distance_too_close(min_distance_to_survivors(pos,false,_,zm_spawner_navArea)) )
                     pos = zm_spawner_pos;
-                else if (can_any_alive_survivor_see_cheap(pos,zm_spawner_cluster,zm_spawner_navArea,zm_spawner_cellIdx))
+                else if (can_any_alive_survivor_see_cheap(pos,_,zm_spawner_navArea,_))
                     pos = zm_spawner_pos;
             }
             else pos = zm_spawner_pos;

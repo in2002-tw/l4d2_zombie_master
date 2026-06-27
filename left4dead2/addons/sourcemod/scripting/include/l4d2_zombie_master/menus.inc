@@ -796,7 +796,7 @@ void create_other_menu()
     //if (!g_hJumpscare.BoolValue) buffer_add_rawline(buffer);
     AddMenuItem(menu_other, "item_5", buffer);
 
-    Format(buffer, sizeof(buffer), "-");
+    Format(buffer, sizeof(buffer), "Stop Sound");
     if (!g_hJumpscare.BoolValue) buffer_add_rawline(buffer);
     AddMenuItem(menu_other, "item_6", buffer);
 
@@ -867,17 +867,178 @@ int other_menu_Handler(Menu menu, MenuAction action, int param1, int param2)
 	return 0;
 }
 
-void stop_sound(int client)
+// Clear looping music for client. if zm_joined, clear out survivor-related sounds but not background music or etc.
+void stop_sound(int client, bool zm_joined = false)
 {
-    L4D_CleanupPlayerState(client);
-    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_AUTO,SNDLEVEL_RUSTLE,_,0.00);
-    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_BODY,SNDLEVEL_RUSTLE,_,0.00);
-    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_ITEM,SNDLEVEL_RUSTLE,_,0.00);
-    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_REPLACE,SNDLEVEL_RUSTLE,_,0.00);
-    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_STATIC,SNDLEVEL_RUSTLE,_,0.00);
-    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_STREAM,SNDLEVEL_RUSTLE,_,0.00);
-    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_WEAPON,SNDLEVEL_RUSTLE,_,0.00);
-    EmitSoundToClient(zm_client,SOUND_READY,_,SNDCHAN_VOICE,SNDLEVEL_RUSTLE,_,0.00);
+    if (!IsValidClient(client)) return;
+    if (!IsPlayerAlive(client)) L4D_CleanupPlayerState(client);
+    EmitSoundToClient(client,SOUND_READY,zm_client,SNDCHAN_AUTO,SNDLEVEL_RUSTLE,_,0.00);
+    EmitSoundToClient(client,SOUND_READY,zm_client,SNDCHAN_BODY,SNDLEVEL_RUSTLE,_,0.00);
+    EmitSoundToClient(client,SOUND_READY,zm_client,SNDCHAN_ITEM,SNDLEVEL_RUSTLE,_,0.00);
+    EmitSoundToClient(client,SOUND_READY,zm_client,SNDCHAN_REPLACE,SNDLEVEL_RUSTLE,_,0.00);
+    EmitSoundToClient(client,SOUND_READY,zm_client,SNDCHAN_STATIC,SNDLEVEL_RUSTLE,_,0.00);
+    EmitSoundToClient(client,SOUND_READY,zm_client,SNDCHAN_STREAM,SNDLEVEL_RUSTLE,_,0.00);
+    EmitSoundToClient(client,SOUND_READY,zm_client,SNDCHAN_WEAPON,SNDLEVEL_RUSTLE,_,0.00);
+    EmitSoundToClient(client,SOUND_READY,zm_client,SNDCHAN_VOICE,SNDLEVEL_RUSTLE,_,0.00);
+    ClientCommand(client,"cl_soundscape_flush");
+
+    // Below full credit to HarryPotter l4dinfectedbots.sp
+    // https://github.com/fbef0102/L4D1_2-Plugins/blob/master/l4dinfectedbots/scripting/l4dinfectedbots.sp
+    
+    // Zombat
+    L4D_StopMusic(client, "Event.Zombat_1");
+    L4D_StopMusic(client, "Event.Zombat_A_1");
+    L4D_StopMusic(client, "Event.Zombat_B_1");
+    L4D_StopMusic(client, "Event.Zombat_2");
+    L4D_StopMusic(client, "Event.Zombat_A_2");
+    L4D_StopMusic(client, "Event.Zombat_B_2");
+    L4D_StopMusic(client, "Event.Zombat_3");
+    L4D_StopMusic(client, "Event.Zombat_A_3");
+    L4D_StopMusic(client, "Event.Zombat_B_3");
+    L4D_StopMusic(client, "Event.Zombat_4");
+    L4D_StopMusic(client, "Event.Zombat_A_4");
+    L4D_StopMusic(client, "Event.Zombat_B_4");
+    L4D_StopMusic(client, "Event.Zombat_5");
+    L4D_StopMusic(client, "Event.Zombat_A_5");
+    L4D_StopMusic(client, "Event.Zombat_B_5");
+    L4D_StopMusic(client, "Event.Zombat_6");
+    L4D_StopMusic(client, "Event.Zombat_A_6");
+    L4D_StopMusic(client, "Event.Zombat_B_6");
+    L4D_StopMusic(client, "Event.Zombat_7");
+    L4D_StopMusic(client, "Event.Zombat_A_7");
+    L4D_StopMusic(client, "Event.Zombat_B_7");
+    L4D_StopMusic(client, "Event.Zombat_8");
+    L4D_StopMusic(client, "Event.Zombat_A_8");
+    L4D_StopMusic(client, "Event.Zombat_B_8");
+    L4D_StopMusic(client, "Event.Zombat_9");
+    L4D_StopMusic(client, "Event.Zombat_A_9");
+    L4D_StopMusic(client, "Event.Zombat_B_9");
+    L4D_StopMusic(client, "Event.Zombat_10");
+    L4D_StopMusic(client, "Event.Zombat_A_10");
+    L4D_StopMusic(client, "Event.Zombat_B_10");
+    L4D_StopMusic(client, "Event.Zombat_11");
+    L4D_StopMusic(client, "Event.Zombat_A_11");
+    L4D_StopMusic(client, "Event.Zombat_B_11");
+    
+    // Zombat specific maps
+    
+    // C1 Mall
+    L4D_StopMusic(client, "Event.Zombat2_Intro_Mall");
+    L4D_StopMusic(client, "Event.Zombat3_Intro_Mall");
+    L4D_StopMusic(client, "Event.Zombat3_A_Mall");
+    L4D_StopMusic(client, "Event.Zombat3_B_Mall");
+    
+    // A2 Fairgrounds
+    L4D_StopMusic(client, "Event.Zombat_Intro_Fairgrounds");
+    L4D_StopMusic(client, "Event.Zombat_Fairgrounds");
+    L4D_StopMusic(client, "Event.Zombat_A_Fairgrounds");
+    L4D_StopMusic(client, "Event.Zombat_B_Fairgrounds");
+    L4D_StopMusic(client, "Event.Zombat_B_Fairgrounds");
+    L4D_StopMusic(client, "Event.Zombat2_Intro_Fairgrounds");
+    L4D_StopMusic(client, "Event.Zombat3_Intro_Fairgrounds");
+    L4D_StopMusic(client, "Event.Zombat3_A_Fairgrounds");
+    L4D_StopMusic(client, "Event.Zombat3_B_Fairgrounds");
+    
+    // C3 Plankcountry
+    L4D_StopMusic(client, "Event.Zombat_PlankCountry");
+    L4D_StopMusic(client, "Event.Zombat_A_PlankCountry");
+    L4D_StopMusic(client, "Event.Zombat_B_PlankCountry");
+    L4D_StopMusic(client, "Event.Zombat2_Intro_Plankcountry");
+    L4D_StopMusic(client, "Event.Zombat3_Intro_Plankcountry");
+    L4D_StopMusic(client, "Event.Zombat3_A_Plankcountry");
+    L4D_StopMusic(client, "Event.Zombat3_B_Plankcountry");
+    
+    // A2 Milltown
+    L4D_StopMusic(client, "Event.Zombat2_Intro_Milltown");
+    L4D_StopMusic(client, "Event.Zombat3_Intro_Milltown");
+    L4D_StopMusic(client, "Event.Zombat3_A_Milltown");
+    L4D_StopMusic(client, "Event.Zombat3_B_Milltown");
+    
+    // C5 BigEasy
+    L4D_StopMusic(client, "Event.Zombat2_Intro_BigEasy");
+    L4D_StopMusic(client, "Event.Zombat3_Intro_BigEasy");
+    L4D_StopMusic(client, "Event.Zombat3_A_BigEasy");
+    L4D_StopMusic(client, "Event.Zombat3_B_BigEasy");
+    
+    // A2 Clown
+    L4D_StopMusic(client, "Event.Zombat3_Intro_Clown");
+
+    // ledge hang
+    L4D_StopMusic(client, "Event.LedgeHangTwoHands");
+    L4D_StopMusic(client, "Event.LedgeHangOneHand");
+    L4D_StopMusic(client, "Event.LedgeHangFingers");
+    L4D_StopMusic(client, "Event.LedgeHangAboutToFall");
+    L4D_StopMusic(client, "Event.LedgeHangFalling");
+    
+    // Down
+    // Survivor is down and being beaten by infected
+    
+    L4D_StopMusic(client, "Event.Down");
+    L4D_StopMusic(client, "Event.BleedingOut");
+    
+    // Survivor death
+    // This is for the death of an individual survivor to be played after the health meter has reached zero
+    
+    L4D_StopMusic(client, "Event.SurvivorDeath");
+    L4D_StopMusic(client, "Event.ScenarioLose");
+    
+    // Bosses
+    
+    // Tank
+    L4D_StopMusic(client, "Event.Tank");
+    L4D_StopMusic(client, "Event.TankMidpoint");
+    L4D_StopMusic(client, "Event.TankMidpoint_Metal");
+    L4D_StopMusic(client, "Event.TankBrothers");
+    L4D_StopMusic(client, "C2M5.RidinTank1");
+    L4D_StopMusic(client, "C2M5.RidinTank2");
+    L4D_StopMusic(client, "C2M5.BadManTank1");
+    L4D_StopMusic(client, "C2M5.BadManTank2");
+    
+    // Witch
+    L4D_StopMusic(client, "Event.WitchAttack");
+    L4D_StopMusic(client, "Event.WitchBurning");
+    L4D_StopMusic(client, "Event.WitchRage");
+    L4D_StopMusic(client, "Event.WitchDead");
+    
+    // mobbed
+    L4D_StopMusic(client, "Event.Mobbed");
+    
+    // Hunter
+    L4D_StopMusic(client, "Event.HunterPounce");
+    
+    // Smoker
+    L4D_StopMusic(client, "Event.SmokerChoke");
+    L4D_StopMusic(client, "Event.SmokerDrag");
+    
+    // Boomer
+    L4D_StopMusic(client, "Event.VomitInTheFace");
+    
+    // Charger
+    L4D_StopMusic(client, "Event.ChargerSlam");
+    
+    // Jockey
+    L4D_StopMusic(client, "Event.JockeyRide");
+    
+    // Spitter
+    L4D_StopMusic(client, "Event.SpitterSpit");
+    L4D_StopMusic(client, "Event.SpitterBurn");
+
+    if (zm_joined) return;
+
+    // Music when Mission Starts
+    L4D_StopMusic(client, "Event.MissionStart_BaseLoop_Mall");
+    L4D_StopMusic(client, "Event.MissionStart_BaseLoop_Fairgrounds");
+    L4D_StopMusic(client, "Event.MissionStart_BaseLoop_Plankcountry");
+    L4D_StopMusic(client, "Event.MissionStart_BaseLoop_Milltown");
+    L4D_StopMusic(client, "Event.MissionStart_BaseLoop_BigEasy");
+    
+    // Checkpoints
+    L4D_StopMusic(client, "Event.CheckPointBaseLoop_Mall");
+    L4D_StopMusic(client, "Event.CheckPointBaseLoop_Fairgrounds");
+    L4D_StopMusic(client, "Event.CheckPointBaseLoop_Plankcountry");
+    L4D_StopMusic(client, "Event.CheckPointBaseLoop_Milltown");
+    L4D_StopMusic(client, "Event.CheckPointBaseLoop_BigEasy");
+
 }
 
 void zm_jumpscare()
