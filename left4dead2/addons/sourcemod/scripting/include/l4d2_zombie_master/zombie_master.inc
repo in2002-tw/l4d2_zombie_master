@@ -2875,7 +2875,8 @@ void JoinZM(int client)
     
     remove_all_ZM_glows();
     // Hold player in spectator for a frame.
-    ChangeClientTeam(client,TEAM_SPECTATOR);
+    //ChangeClientTeam(client,TEAM_SPECTATOR);
+    ChangeClientTeam(client,TEAM_ZM);
     L4D_State_Transition(client, STATE_OBSERVER_MODE);
     SetEntProp(client, Prop_Data, "m_iObserverMode", 6);
     stop_sound(client,true);
@@ -2888,7 +2889,7 @@ void JoinZM_Post(int client)
 {
     if (!g_bCvarAllow || zm_stage>=ZM_END || !IsValidClient(client) || IsFakeClient(client) || IsValidClientZM()) return;
     static char name[MAX_NAME_LENGTH]; 
-    ChangeClientTeam(client,TEAM_ZM);
+    if (GetClientTeam(client) != TEAM_ZM) ChangeClientTeam(client,TEAM_ZM);
     L4D_State_Transition(client, STATE_OBSERVER_MODE);
     SetEntProp(client, Prop_Data, "m_iObserverMode", 6);
     zm_client = client;
