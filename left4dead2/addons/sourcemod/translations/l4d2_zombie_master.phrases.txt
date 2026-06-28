@@ -720,4 +720,9 @@
 		"en"			"Survivors rescued: bank added, cooldowns reset."
 	}
 
+	"Stop sound"
+	{
+		"en"			"Stop sound"
+	}
+
 }

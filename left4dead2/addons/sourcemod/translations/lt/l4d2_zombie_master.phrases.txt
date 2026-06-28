@@ -718,5 +718,10 @@
 	{
 		"lt"			"Išgyventojai išgelbėti: pridėta banko, zombių pauzės atstatytos."
 	}
+
+	"Stop sound"
+	{
+		"lt"			"Sustabdyti garsą"
+	}
 	
 }

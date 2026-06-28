@@ -63,13 +63,20 @@ void NextFrame_Check_Stutter(int stored_roundcount)
     else RequestFrame(NextFrame_Check_Stutter,stored_roundcount);
 }
 
-void ZM_FixTankStutter(bool freeze = true)
+void ZM_FixTankStutter()
+{
+    ZM_ClientCleanup();
+}
+
+void ZM_ClientCleanup()
 {
     if (!IsValidClientZM()) return;
     if (GetClientTeam(zm_client)==TEAM_SURVIVOR && IsPlayerAlive(zm_client)) return;
 
     recordpos = false;
+    mute_zm();
     
+    L4D_CleanupPlayerState(zm_client);
     SetEntityMoveType(zm_client, MOVETYPE_NONE);
     L4D_State_Transition(zm_client, STATE_OBSERVER_MODE);
     L4D_BecomeGhost(zm_client);
@@ -284,11 +291,11 @@ void sanity_check_available(int zClass, float t_now = -1.0)
     bool apply_cooldown = false;
     if (live_zombie_arr[zClass]>0) apply_cooldown = true;
     else if ( available_zombie_arr[zClass]<max_zombie_arr[zClass] &&
-              t_now>(timestamp_available_arr[zClass]+0.15) ) //timers can jitter
+              t_now>(timestamp_available_arr[zClass]+0.15) ) // timers can jitter
     {
-        char zClassName[32]; 
+        static char zClassName[32]; 
         get_zombieclass_name(zClass,zClassName);
-        LogMessage("[zm] unexpected sanity_check %s fallthrough, report to mod authors", zClassName);
+        if (DEBUG) LogMessage("[zm] unexpected sanity_check %s fallthrough, report to mod authors", zClassName);
         add_available_zombie(zClass);
         apply_cooldown = true;
     }
@@ -320,8 +327,8 @@ Action timer_add_available_zombie(Handle timer, DataPack pack)
     pack.Reset();
     zClass = pack.ReadCell();
     round = pack.ReadCell();
+    if (round!=roundcount) return Plugin_Stop;
     count = pack.ReadCell();
-    if (round!=roundcount) return Plugin_Continue;
     add_available_zombie(zClass,count);
     return Plugin_Stop;
 }
@@ -332,12 +339,13 @@ void add_available_zombie(int zClass, int add=1, bool draw = true)
     
     if (zm_stage>=ZM_PREP)
     {
-        char zClassName[32]; 
+        static char zClassName[32]; 
         get_zombieclass_name(zClass,zClassName);
         if (DEBUG) LogMessage("[zm] add_available_zombie %d %s", add, zClassName);
     }
     
     if (add<0) timestamp_available_arr[zClass] = GetGameTime()+get_class_cooldown(zClass);
+    else if (available_zombie_arr[zClass]>=max_zombie_arr[zClass]) return;
     
     available_zombie_arr[zClass] += add;
     if (available_zombie_arr[zClass]>max_zombie_arr[zClass]) available_zombie_arr[zClass] = max_zombie_arr[zClass];

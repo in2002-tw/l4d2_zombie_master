@@ -718,6 +718,11 @@
 	{
 		"et"			"Survivors rescued: bank added, cooldowns reset."
 	}
+
+	"Stop sound"
+	{
+		"et"			"Stop sound"
+	}
 	
 
 }

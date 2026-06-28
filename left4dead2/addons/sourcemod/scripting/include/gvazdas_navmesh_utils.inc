@@ -9,6 +9,8 @@
 //You should have received a copy of the GNU General Public License
 //along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+// v1.01 -- improved constrained logic
+
 #if defined _gvazdas_navmesh_utils_inc_included
  #endinput
 #endif
@@ -18,6 +20,7 @@
 
 #if !defined AREA_COMMON
     #define AREA_COMMON 1024.0 // how much xy area a common infected takes up 
+    #define SIDE_COMMON 32.0
 #endif
 
 #if !defined DEBUG
@@ -197,31 +200,42 @@ stock void L4D_FindRandomSpot_Constrained(const Address navArea, float spawner_p
         half_size[0] = desired_side / 2.0;
         half_size[1] = desired_side / 2.0;
         build_clipped_box(spawner_pos,half_size,mins,maxs,mins_cached,maxs_cached);
+        float size_x = maxs_cached[0]-mins_cached[0]; // actual size after clip
+        float size_y = maxs_cached[1]-mins_cached[1]; // actual size after clip
+        float length_missing;
+        if (size_x<desired_side && size[0]>size_x) // Space available along x
+        {
+            length_missing = desired_side-size_x;
+            if (maxs_cached[0]<maxs[0]) { maxs_cached[0] += length_missing; clip_xy(maxs_cached,mins,maxs);}
+            else if (mins_cached[0]>mins[0]) { mins_cached[0] -= length_missing; clip_xy(mins_cached,mins,maxs);}
+            size_x = maxs_cached[0]-mins_cached[0];
+        }
+        if (size_y<desired_side && size[1]>size_y) // Space available along y
+        {
+            length_missing = desired_side-size_y;
+            if (maxs_cached[1]<maxs[1]) { maxs_cached[1] += length_missing; clip_xy(maxs_cached,mins,maxs);}
+            else if (mins_cached[1]>mins[1]) { mins_cached[1] -= length_missing; clip_xy(mins_cached,mins,maxs);}
+            size_y = maxs_cached[1]-mins_cached[1];
+        }
         float final_area = clipped_box_xy_Spawnarea(mins_cached,maxs_cached) + 1.0;
         constrained_fail = final_area<desired_area;
-        if (constrained_fail)
+        while (constrained_fail)
         {
-            float size_x = (maxs_cached[0]-mins_cached[0]); // actual size after clip
-            float size_y = (maxs_cached[1]-mins_cached[1]); // actual size after clip
-            static float center_clipped[3];
-            center_clipped[0] = (maxs_cached[0]+mins_cached[0])/2.0;
-            center_clipped[1] = (maxs_cached[1]+mins_cached[1])/2.0;
-            if (size[0]>size_x) // there is room in x, try increasing x
+            if (maxs_cached[0]<maxs[0] || mins_cached[0]>mins[0]) // Space available along x
             {
-                half_size[1] = size[1]*2.0; // full extent in other direction
-                half_size[0] = desired_area / size[1] / 2.0;
-                build_clipped_box(center_clipped,half_size,mins,maxs,mins_cached,maxs_cached);
-                final_area = clipped_box_xy_Spawnarea(mins_cached,maxs_cached) + 1.0;
-                constrained_fail = final_area<desired_area;
+                length_missing = desired_area/size_y - size_x;
+                if (maxs_cached[0]<maxs[0]) { maxs_cached[0] += length_missing; clip_xy(maxs_cached,mins,maxs);}
+                else if (mins_cached[0]>mins[0]) { mins_cached[0] -= length_missing; clip_xy(mins_cached,mins,maxs);}
             }
-            if (constrained_fail && size[1]>size_y) // there is room in y, try increasing y
+            else if (maxs_cached[1]<maxs[1] || mins_cached[1]>mins[1]) // Space available along y
             {
-                half_size[0] = size[0]/2.0; // full extent in other direction
-                half_size[1] = desired_area / size[0] / 2.0;
-                build_clipped_box(center_clipped,half_size,mins,maxs,mins_cached,maxs_cached);
-                final_area = clipped_box_xy_Spawnarea(mins_cached,maxs_cached) + 1.0;
-                constrained_fail = final_area<desired_area;
+                length_missing = desired_area/size_x - size_y;
+                if (maxs_cached[1]<maxs[1]) { maxs_cached[1] += length_missing; clip_xy(maxs_cached,mins,maxs);}
+                else if (mins_cached[1]>mins[1]) { mins_cached[1] -= length_missing; clip_xy(mins_cached,mins,maxs);}
             }
+            final_area = clipped_box_xy_Spawnarea(mins_cached,maxs_cached) + 1.0;
+            constrained_fail = final_area<desired_area;
+            break;
         }
         spawner_pos_cached = spawner_pos;
     }

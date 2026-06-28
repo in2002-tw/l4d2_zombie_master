@@ -34,7 +34,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.3 2026-06-26"
+#define PLUGIN_VERSION 			"0.9.3 2026-06-27"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -101,9 +101,8 @@ public Plugin myinfo =
 // 19. Some features are not ready but implemented if you want to test them: zm_traps, zm_enable_jumpscare, zm_gnome.
 // 20. Fixed random Uncommons
 // 21. Survivors rescued bank added
-// 22. QuitZM no assign to player after round end -> TESTING NEEDED
-// 23. Make JoinZM send you to observer first -> TESTING NEEDED
-// 24. Stop Sound
+// 22. "Stop Sound" added to Other menu, makes background music and various looping sounds reset.
+// 23. ZM join makes you an alive Boomer for a split second to clear player state. This should remove vignettes and various looping sounds when you become ZM.
 
 // TO DO LIST:
 // 15. Performance bottlenecks.
@@ -2201,6 +2200,8 @@ public void OnPluginEnd()
     ResetTimer();
     ResetCvars();
     reset_time_of_day();
+    unmute_zm();
+    set_force_start(false);
     zm_stage = ZM_END;
 }
 

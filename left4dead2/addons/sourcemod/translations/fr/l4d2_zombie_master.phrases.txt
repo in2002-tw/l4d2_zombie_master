@@ -718,5 +718,10 @@
 	{
 		"fr"			"Survivors rescued: bank added, cooldowns reset."
 	}
+
+	"Stop sound"
+	{
+		"fr"			"Stop sound"
+	}
 	
 }

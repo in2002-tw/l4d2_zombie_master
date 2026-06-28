@@ -85,6 +85,7 @@ static float HULL_MAXS[3] = {HULL_DX_STRICT,HULL_DX_STRICT,HULL_DZ_MAX_STRICT};
 
 #define DISTANCE_LAST_SAFEROOM 100.0 // minimum distance to saferoom for valid zombie spawns
 
+#define SIDE_COMMON 32.0
 #define AREA_COMMON 1024.0 // how much surface area a Common Infected is going to take up; 32x32
 
 #define HULL_DX 20.0
@@ -448,7 +449,9 @@ bool zm_win_announced;
 float clients_t_join[MAXPLAYERS+1] = {0.0,...};
 Handle fq_timer;
 Handle ems_hud_timer;
-bool recordpos = true; // for tank stutter fix
+bool recordpos = true; // for ZM_ClientCleanup
+bool zm_just_joined = false; // for printing hints, playing intro sound
+
 
 bool zm_draw_path;
 
@@ -2492,12 +2495,14 @@ Action Unfreeze_ZM(Handle timer=null)
 void ZM_FixCamera(bool freeze = true)
 {
     if (!IsValidClientZM()) return;
+
+    L4D_CleanupPlayerState(zm_client);
     
     // Fix camera stutter
     if (GetEntProp(zm_client,Prop_Send,"m_zombieClass")==ZOMBIECLASS_TANK)
     {
         if (IsPlayerAlive(zm_client)) ForcePlayerSuicide(zm_client);
-        RequestFrame(ZM_FixTankStutter,freeze);
+        RequestFrame(ZM_FixTankStutter);
         return;
     }
     
@@ -2819,6 +2824,7 @@ void JoinZM(int client)
        if (client==zm_client)
        {
           L4D_CleanupPlayerState(zm_client);
+          unmute_zm();
           if (GetClientTeam(zm_client)!=TEAM_ZM)
           {
               ChangeClientTeam(zm_client,TEAM_ZM);
@@ -2872,8 +2878,8 @@ void JoinZM(int client)
     ChangeClientTeam(client,TEAM_SPECTATOR);
     L4D_State_Transition(client, STATE_OBSERVER_MODE);
     SetEntProp(client, Prop_Data, "m_iObserverMode", 6);
+    stop_sound(client,true);
     L4D_CleanupPlayerState(client);
-    stop_sound(client,true); // stops survivor-related sounds
     RequestFrame(JoinZM_Post,client);
     
 }
@@ -2903,7 +2909,6 @@ void JoinZM_Post(int client)
     DispatchKeyValue(zm_client, "targetname", "zm_client");
     SetEntProp(client, Prop_Send, "m_zombieClass", 0);
     SetEntProp(client, Prop_Data, "m_iObserverMode", 6);
-    PrintHintText(client, "%t", "ZM join hint");
     L4D2_SetPlayerSurvivorGlowState(zm_client,false);
     L4D2_RemoveEntityGlow(zm_client);
     SetEntProp(zm_client, Prop_Send, "m_iGlowType", 0);
@@ -2949,11 +2954,43 @@ void JoinZM_Post(int client)
     }
 
     set_zm_stage(ZM_PREP);
-    EmitSoundToClient(zm_client,SOUND_VISION);
-
     GetClientAbsOrigin(zm_client, zm_deathPos);
-    GetClientEyeAngles(zm_client, zm_deathAngles); 
-    RequestFrame(ZM_FixTankStutter,true); // should clear vignettes, post processing effects, etc.
+    GetClientEyeAngles(zm_client, zm_deathAngles);
+    //stop_sound(zm_client,true); // stops survivor-related sounds
+    //L4D_CleanupPlayerState(zm_client);
+    //EmitSoundToClient(zm_client,SOUND_VISION);
+    //STATE_GHOST STATE_PICKINGCLASS STATE_PICKING_TEAM
+    //L4D_State_Transition(zm_client,STATE_PICKING_TEAM);
+    zm_just_joined = true;
+    RequestFrame(ZM_ClientCleanup); // should clear vignettes, post processing effects, etc.
+    //ZM_ClientCleanup(); // should clear vignettes, post processing effects, etc.
+}
+
+bool zm_muted = false;
+void mute_zm()
+{
+    if (!zm_muted) AddNormalSoundHook(SoundHook_MuteZM);
+    zm_muted = true;
+}
+void unmute_zm()
+{
+    if (zm_muted) RemoveNormalSoundHook(SoundHook_MuteZM);
+    zm_muted = false;
+    if (zm_just_joined && IsValidClientZM())
+    {
+        PrintHintText(zm_client, "%t", "ZM join hint");
+        EmitSoundToClient(zm_client,SOUND_VISION);
+        zm_just_joined = false;
+    }
+}
+
+// Cancel all sounds emitted by zm_client
+Action SoundHook_MuteZM(int clients[MAXPLAYERS], int &numClients, char sample[PLATFORM_MAX_PATH],
+                    	  int &entity, int &channel, float &volume, int &level, int &pitch, int &flags,
+                    	  char soundEntry[PLATFORM_MAX_PATH], int &seed)
+{
+    if (entity==zm_client && g_bCvarAllow && zm_client>0) return Plugin_Handled;
+    return Plugin_Continue;
 }
 
 void QuitZM_Force(int client)

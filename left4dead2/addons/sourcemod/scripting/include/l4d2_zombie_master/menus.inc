@@ -796,7 +796,7 @@ void create_other_menu()
     //if (!g_hJumpscare.BoolValue) buffer_add_rawline(buffer);
     AddMenuItem(menu_other, "item_5", buffer);
 
-    Format(buffer, sizeof(buffer), "Stop Sound");
+    Format(buffer, sizeof(buffer), "%T", "Stop sound", zm_language);
     if (!g_hJumpscare.BoolValue) buffer_add_rawline(buffer);
     AddMenuItem(menu_other, "item_6", buffer);
 

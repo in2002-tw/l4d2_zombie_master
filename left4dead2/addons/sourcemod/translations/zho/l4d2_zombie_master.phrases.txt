@@ -717,6 +717,11 @@
 	{
 		"zho"			"Survivors rescued: bank added, cooldowns reset."
 	}
+
+	"Stop sound"
+	{
+		"zho"			"Stop sound"
+	}
 	
 
 }
