@@ -882,9 +882,13 @@ void stop_sound(int client, bool zm_joined = false)
     EmitSoundToClient(client,SOUND_READY,zm_client,SNDCHAN_VOICE,SNDLEVEL_RUSTLE,_,0.00);
     ClientCommand(client,"cl_soundscape_flush");
 
+    // Future: https://github.com/LuxLuma/L4DMusic_stuff/tree/master/MusicCmdFilter
+
     // Below full credit to HarryPotter l4dinfectedbots.sp
     // https://github.com/fbef0102/L4D1_2-Plugins/blob/master/l4dinfectedbots/scripting/l4dinfectedbots.sp
-    
+
+
+
     // Zombat
     L4D_StopMusic(client, "Event.Zombat_1");
     L4D_StopMusic(client, "Event.Zombat_A_1");
@@ -919,8 +923,35 @@ void stop_sound(int client, bool zm_joined = false)
     L4D_StopMusic(client, "Event.Zombat_11");
     L4D_StopMusic(client, "Event.Zombat_A_11");
     L4D_StopMusic(client, "Event.Zombat_B_11");
-    
-    // Zombat specific maps
+
+    L4D_StopMusic(client, "Event.Zombat_L4D1");
+    L4D_StopMusic(client, "Event.Zombat_A_L4D1");
+    L4D_StopMusic(client, "Event.Zombat_B_L4D1");
+    L4D_StopMusic(client, "Event.Zombat2_L4D1");
+    L4D_StopMusic(client, "Event.Zombat3_L4D1");
+    L4D_StopMusic(client, "Event.ZombatIntro_L4D1");
+
+    L4D_StopMusic(client, "Event.Zombat_ThePassing");
+    L4D_StopMusic(client, "Event.Zombat_A_1_ThePassing");
+    L4D_StopMusic(client, "Event.Zombat_B_1_ThePassing");
+    L4D_StopMusic(client, "Event.Zombat3_Intro_ThePassing");
+    L4D_StopMusic(client, "Event.Zombat2_Intro_ThePassing");
+
+    L4D_StopMusic(client, "Event.Zombat2_Intro_Survival");
+    L4D_StopMusic(client, "Event.Zombat3_Intro_Survival");
+
+    L4D_StopMusic(client, "Event.Zombat2_Intro_NoMercy");
+    L4D_StopMusic(client, "Event.Zombat3_Intro_NoMercy");
+
+    L4D_StopMusic(client, "Event.Zombat2_Intro_Airport");
+    L4D_StopMusic(client, "Event.Zombat3_Intro_Airport");
+
+    L4D_StopMusic(client, "Event.Zombat2_Intro_Farm");
+    L4D_StopMusic(client, "Event.Zombat3_Intro_Farm");
+
+    L4D_StopMusic(client, "Event.Zombat2_Intro_coldstream");
+    L4D_StopMusic(client, "Event.Zombat3_Intro_coldstream");
+    L4D_StopMusic(client, "Event.Zombat3_Intro_Sacrifice");
     
     // C1 Mall
     L4D_StopMusic(client, "Event.Zombat2_Intro_Mall");
@@ -932,7 +963,6 @@ void stop_sound(int client, bool zm_joined = false)
     L4D_StopMusic(client, "Event.Zombat_Intro_Fairgrounds");
     L4D_StopMusic(client, "Event.Zombat_Fairgrounds");
     L4D_StopMusic(client, "Event.Zombat_A_Fairgrounds");
-    L4D_StopMusic(client, "Event.Zombat_B_Fairgrounds");
     L4D_StopMusic(client, "Event.Zombat_B_Fairgrounds");
     L4D_StopMusic(client, "Event.Zombat2_Intro_Fairgrounds");
     L4D_StopMusic(client, "Event.Zombat3_Intro_Fairgrounds");
@@ -959,6 +989,14 @@ void stop_sound(int client, bool zm_joined = false)
     L4D_StopMusic(client, "Event.Zombat3_Intro_BigEasy");
     L4D_StopMusic(client, "Event.Zombat3_A_BigEasy");
     L4D_StopMusic(client, "Event.Zombat3_B_BigEasy");
+
+    // Garage
+    L4D_StopMusic(client, "Event.Zombat2_Intro_Garage");
+    L4D_StopMusic(client, "Event.Zombat3_Intro_Garage");
+
+    // Smalltown
+    L4D_StopMusic(client, "Event.Zombat2_Intro_SmallTown");
+    L4D_StopMusic(client, "Event.Zombat3_Intro_SmallTown");
     
     // A2 Clown
     L4D_StopMusic(client, "Event.Zombat3_Intro_Clown");
@@ -974,13 +1012,17 @@ void stop_sound(int client, bool zm_joined = false)
     // Survivor is down and being beaten by infected
     
     L4D_StopMusic(client, "Event.Down");
+    L4D_StopMusic(client, "Event.Down_L4D1");
     L4D_StopMusic(client, "Event.BleedingOut");
+    L4D_StopMusic(client, "Event.BleedingOut_L4D1");
     
     // Survivor death
     // This is for the death of an individual survivor to be played after the health meter has reached zero
     
     L4D_StopMusic(client, "Event.SurvivorDeath");
+    L4D_StopMusic(client, "Event.SurvivorDeath_L4D1");
     L4D_StopMusic(client, "Event.ScenarioLose");
+    L4D_StopMusic(client, "Event.ScenarioLose_L4D1");
     
     // Bosses
     
