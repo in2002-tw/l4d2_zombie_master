@@ -9,3 +9,5 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=3660216145
 Download the latest stable version here:
 https://forums.alliedmods.net/showthread.php?t=352060
 https://github.com/gvazdas/l4d2_zombie_master/releases
+
+// Rename to motd.txt to render this file.
