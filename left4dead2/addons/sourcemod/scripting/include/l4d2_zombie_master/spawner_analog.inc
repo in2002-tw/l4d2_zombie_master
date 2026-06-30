@@ -29,7 +29,7 @@ void update_ZM_spawner(const float target_pos[3], const float spawner_pos[3], co
 {
     if (draw && IsValidClientZM() && g_iLaser>0 && g_iHalo>0)
     {
-        int color[4];
+        static int color[4];
         if (state==SPAWNER_OK) color = color_allowed;
         else if (state>SPAWNER_NAV) color = color_conditional;
         else color = color_blocked;
@@ -52,7 +52,7 @@ void update_ZM_spawner(const float target_pos[3], const float spawner_pos[3], co
             if (state==SPAWNER_OK) sound_name = "";
             else if (state>SPAWNER_NAV) sound_name = SOUND_CONDITIONAL;
             else sound_name = SOUND_BLOCKED;
-            if (sound_name[0]!=0) EmitSoundToClient(zm_client,sound_name,zm_client,ATTN_TO_SNDLEVEL(SNDATTN_NORMAL),_,_,0.09,_,_,draw_pos,_,true);
+            if (sound_name[0]!=0) EmitSoundToClient(zm_client,sound_name,zm_client,ATTN_TO_SNDLEVEL(SNDATTN_NORMAL),_,_,0.05,_,_,draw_pos,_,true);
             t_last_spawner_sound = t_now;
         }
         t_last_spawner_update = t_now;

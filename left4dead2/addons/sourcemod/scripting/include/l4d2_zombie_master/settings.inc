@@ -373,5 +373,6 @@ void ResetCvars()
 	if (shoot_alert_enable && GetConVarInt(shoot_alert_enable)<=0) ServerCommand("sm plugins reload l4d2_shoot_alert_common");
 	if (infectedbots_enable && GetConVarInt(infectedbots_enable)<=0) ServerCommand("sm plugins reload l4dinfectedbots");
 	if (jukebox_horde && GetConVarInt(jukebox_horde)<=0) ServerCommand("sm plugins reload l4d2_jukebox_spawner");
+    if (ptg_enable) ServerCommand("sm plugins reload l4d_path_to_goal");
 	SetConVarInt(FindConVar("mp_restartgame"), 1);
 }

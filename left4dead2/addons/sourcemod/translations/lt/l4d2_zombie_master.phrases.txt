@@ -721,7 +721,7 @@
 
 	"Stop sound"
 	{
-		"lt"			"Sustabdyti garsą"
+		"lt"			"Sustabdyti Garsą"
 	}
 	
 }

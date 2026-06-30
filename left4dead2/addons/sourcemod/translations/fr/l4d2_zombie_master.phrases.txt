@@ -721,7 +721,7 @@
 
 	"Stop sound"
 	{
-		"fr"			"Stop sound"
+		"fr"			"Stop Sound"
 	}
 	
 }

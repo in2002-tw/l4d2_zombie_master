@@ -887,8 +887,6 @@ void stop_sound(int client, bool zm_joined = false)
     // Below full credit to HarryPotter l4dinfectedbots.sp
     // https://github.com/fbef0102/L4D1_2-Plugins/blob/master/l4dinfectedbots/scripting/l4dinfectedbots.sp
 
-
-
     // Zombat
     L4D_StopMusic(client, "Event.Zombat_1");
     L4D_StopMusic(client, "Event.Zombat_A_1");

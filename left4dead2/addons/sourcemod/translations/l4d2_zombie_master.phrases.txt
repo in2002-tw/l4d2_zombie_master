@@ -722,7 +722,7 @@
 
 	"Stop sound"
 	{
-		"en"			"Stop sound"
+		"en"			"Stop Sound"
 	}
 
 }

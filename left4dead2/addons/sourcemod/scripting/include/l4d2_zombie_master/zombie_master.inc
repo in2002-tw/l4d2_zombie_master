@@ -385,7 +385,7 @@ int g_iPistol, g_iMagnum, g_iMelee, g_iSMG, g_iShotgunT1, g_iRifle, g_iShotgunT2
 bool g_bInventory,g_bWeapons;
 
 bool l4dhooks_updated, getz_available = false; // check version of l4dhooks
-ConVar g_hCvarDebug, g_hCvarAllow, z_max_player_zombies, infectedbots_enable, jukebox_horde, shoot_alert_enable, clown_world_enable;
+ConVar g_hCvarDebug, g_hCvarAllow, z_max_player_zombies, infectedbots_enable, jukebox_horde, shoot_alert_enable, clown_world_enable, ptg_enable;
 bool g_bCvarAllow;
 bool g_bSpawnWitchBride = false; // avoid crash
 
@@ -2881,7 +2881,7 @@ void JoinZM(int client)
     SetEntProp(client, Prop_Data, "m_iObserverMode", 6);
     stop_sound(client,true);
     L4D_CleanupPlayerState(client);
-    RequestFrame(JoinZM_Post,client);
+    if (GetClientTeam(client)==TEAM_ZM) RequestFrame(JoinZM_Post,client);
     
 }
 
@@ -2963,7 +2963,7 @@ void JoinZM_Post(int client)
     //STATE_GHOST STATE_PICKINGCLASS STATE_PICKING_TEAM
     //L4D_State_Transition(zm_client,STATE_PICKING_TEAM);
     zm_just_joined = true;
-    RequestFrame(ZM_ClientCleanup); // should clear vignettes, post processing effects, etc.
+    if (GetClientTeam(client)==TEAM_ZM) RequestFrame(ZM_ClientCleanup); // should clear vignettes, post processing effects, etc.
     //ZM_ClientCleanup(); // should clear vignettes, post processing effects, etc.
 }
 

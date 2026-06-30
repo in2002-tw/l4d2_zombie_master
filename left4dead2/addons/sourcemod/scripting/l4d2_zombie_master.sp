@@ -34,7 +34,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.31 2026-06-28"
+#define PLUGIN_VERSION 			"0.9.32 2026-06-29"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -74,7 +74,7 @@ public Plugin myinfo =
 {
 	name = "[L4D2] Zombie Master",
 	author = "gvazdas, zyiks, Skerion",
-	description = "[coop,survival] An infected player, the Zombie Master, must stop the Survivors instead of the AI Director.",
+	description = "[coop,survival] An infected player, the Zombie Master, replaces the AI Director and must stop the Survivors.",
 	version = PLUGIN_VERSION,
 	url = "https://forums.alliedmods.net/showthread.php?t=352060, https://github.com/gvazdas/l4d2_zombie_master"
 }
@@ -99,7 +99,7 @@ public Plugin myinfo =
 // 17. Better tank run balance.
 // 18. Fix finale softlock for custom gamemodes. Finale stage will now correctly advance if ZM has >0 bank but not enough to spawn anything.
 // 19. Some features are not ready but implemented if you want to test them: zm_traps, zm_enable_jumpscare, zm_gnome.
-// 20. Fixed random Uncommons
+// 20. Fixed random Uncommons not spawning as expected.
 // 21. Survivors rescued bank added
 // 22. "Stop Sound" added to Other menu, makes background music and various looping sounds reset.
 // 23. ZM join makes you an alive Boomer for a split second to clear player state. This should remove vignettes and various looping sounds when you become ZM.
@@ -1119,6 +1119,7 @@ Action zm_new_round(Handle timer = null)
     if (shoot_alert_enable) SetConVarInt(shoot_alert_enable, 0);
     if (clown_world_enable && strcmp(g_sZMGamemode,"zm_clowns",false)==0) SetConVarInt(clown_world_enable, 1);
     if (jukebox_horde) SetConVarInt(jukebox_horde, 0);
+    if (ptg_enable) SetConVarInt(ptg_enable, 1);
     
     safezone_navAreaId = -1;
     
@@ -1562,6 +1563,8 @@ public void OnAllPluginsLoaded()
 	if (shoot_alert_enable) SetConVarFlags(shoot_alert_enable, GetConVarFlags(shoot_alert_enable) & ~FCVAR_NOTIFY);
 	clown_world_enable = FindConVar("clown_world_enable"); // CLOWN WORLD - https://forums.alliedmods.net/showthread.php?t=352413
 	if (clown_world_enable) SetConVarFlags(clown_world_enable, GetConVarFlags(clown_world_enable) & ~FCVAR_NOTIFY);
+    ptg_enable = FindConVar("l4d_path_to_goal_enable"); // Path to Goal - https://forums.alliedmods.net/showthread.php?t=352685
+    if (ptg_enable) SetConVarFlags(ptg_enable, GetConVarFlags(ptg_enable) & ~FCVAR_NOTIFY);
     getz_available = GetFeatureStatus(FeatureType_Native,"L4D_NavArea_GetZ")==FeatureStatus_Available;
 	SetCvarsZM();
 }
