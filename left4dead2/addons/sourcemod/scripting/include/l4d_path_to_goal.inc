@@ -115,7 +115,7 @@ bool g_bFlowRecomputeHooked;
 bool finale_stitched; // finale guide was drawn
 bool finale_backwards; // rescue vehicle is not at max flow -> flow cannot be used for guiding
 
-bool elevator_available; // check fi l4dhooks is up to date
+bool elevator_available, blocked_available; // check fi l4dhooks is up to date
 
 ConVar g_hCvarFinale;
 #define FINALE_ALWAYS 0 
@@ -681,7 +681,7 @@ int detour_join(int client, Address navArea, float pos[3], float flow, float dur
             if (nav_connection.navArea == navArea_curr) continue;
             if (explored.FindValue(nav_connection.navArea)>=0) continue;
             explored.Push(nav_connection.navArea);
-            if (L4D_NavArea_IsBlocked(nav_connection.navArea,team,true)) continue;
+            if (blocked_available && L4D_NavArea_IsBlocked(nav_connection.navArea,team,true)) continue;
             flow_temp =  L4D2Direct_GetTerrorNavAreaFlow(nav_connection.navArea);
             d_flow_temp = FloatAbs(flow_temp-flow_target);
             #if DEBUG>1
@@ -1137,7 +1137,7 @@ void OnFramePrep(bool new_frame = true)
                     }
                 }
 
-                if (L4D_NavArea_IsBlocked(navArea,TEAM_SURVIVOR,true))
+                if (blocked_available && L4D_NavArea_IsBlocked(navArea,TEAM_SURVIVOR,true))
                 {
                     #if DEBUG
                     g_iNavBlocked += 1;
@@ -1355,7 +1355,7 @@ void OnFramePrep(bool new_frame = true)
                         ConAdj.GetArray(i,nav_connection,sizeof(NavConnection));
                         if (nav_connection.navArea == Address_Null || nav_connection.connectiontype <= CONNECTED_NOT) continue;
                         if (nav_connection.navArea == navArea_curr) continue;
-                        if (L4D_NavArea_IsBlocked(nav_connection.navArea,TEAM_SURVIVOR,true)) continue;
+                        if (blocked_available && L4D_NavArea_IsBlocked(nav_connection.navArea,TEAM_SURVIVOR,true)) continue;
                         flow_temp = L4D2Direct_GetTerrorNavAreaFlow(nav_connection.navArea);
                         #if DEBUG>1
                             LogMessage("STAGE_FINALE (%d %.1f) try %d %d %.1f", navArea_curr, flow_curr, nav_connection.connectiontype, nav_connection.navArea, flow_temp);
@@ -1817,7 +1817,7 @@ stock bool explore_stitch(ArrayList cells, int &i_start, int max_steps = 50)
             ConAdj.GetArray(i,nav_connection,sizeof(NavConnection));
             if (nav_connection.navArea == Address_Null || nav_connection.connectiontype <= CONNECTED_NOT) continue;
             if (nav_connection.navArea == navArea_curr) continue;
-            if (L4D_NavArea_IsBlocked(nav_connection.navArea,TEAM_SURVIVOR,true)) continue;
+            if (blocked_available && L4D_NavArea_IsBlocked(nav_connection.navArea,TEAM_SURVIVOR,true)) continue;
             flow_temp = L4D2Direct_GetTerrorNavAreaFlow(nav_connection.navArea);
             int count2 = navArea_ladder_navAreas(nav_connection.navArea,AdjNN,TEAM_SURVIVOR); // ladder intervention. flow dips when stepping onto ladder navmeshes...
             for (int i2 = 0; i2 < count2; i2++)
@@ -2135,7 +2135,7 @@ bool cell_rescue(ArrayList cells, Cell cell_old, Cell cell_new, Cell cell_prev2,
             {
                 Address adjArea = adjAreas.Get(i);
                 if (adjArea == Address_Null) continue;
-                if (L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
+                if (blocked_available && L4D_NavArea_IsBlocked(adjArea,TEAM_SURVIVOR,true)) continue;
                 for (int i_try = 0; i_try < 2; i_try++)
                 {
                     if (i_try == 0) L4D_GetNavAreaCenter(adjArea,pos_candidate);

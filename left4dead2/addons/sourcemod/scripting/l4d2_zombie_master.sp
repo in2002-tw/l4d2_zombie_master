@@ -1548,6 +1548,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	}
     MarkNativeAsOptional("L4D_NavArea_GetZ");
     MarkNativeAsOptional("L4D_NavArea_IsBlocked");
+    MarkNativeAsOptional("L4D_FindEntityByClassnameWithin");
+    MarkNativeAsOptional("L4D_FindEntityByClassnameNearest");
 	RegPluginLibrary("l4d2_zombie_master");
 	return APLRes_Success;
 }

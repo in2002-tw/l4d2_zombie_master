@@ -44,6 +44,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 		return APLRes_SilentFailure;
 	}
     MarkNativeAsOptional("L4D_GetClusterForOrigin");
+    MarkNativeAsOptional("L4D_GetPVSForCluster");
+    MarkNativeAsOptional("L4D_CheckOriginInPVS");
 	return APLRes_Success;
 }
 

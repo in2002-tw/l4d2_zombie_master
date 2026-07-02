@@ -119,6 +119,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	}
     MarkNativeAsOptional("L4D_NavArea_GetZ");
     MarkNativeAsOptional("L4D_NavArea_GetElevator");
+    MarkNativeAsOptional("L4D_NavArea_IsBlocked");
+    MarkNativeAsOptional("L4D_NavArea_GetCorner");
     CreateNative("L4D_Path_To_Goal", Native_RequestGuide);
 	return APLRes_Success;
 }
@@ -126,7 +128,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 public void OnAllPluginsLoaded()
 {
     elevator_available = GetFeatureStatus(FeatureType_Native,"L4D_NavArea_GetElevator")==FeatureStatus_Available;
-    if (!elevator_available) LogMessage("Please update l4dhooks for better performance.");
+    blocked_available = GetFeatureStatus(FeatureType_Native,"L4D_NavArea_IsBlocked")==FeatureStatus_Available;
+    if (!elevator_available || !blocked_available) LogMessage("Please update l4dhooks for better performance.");
     if (g_bL4D2) g_hCvarZM = FindConVar("zm_enable"); // check if zombie master is active
 }
 

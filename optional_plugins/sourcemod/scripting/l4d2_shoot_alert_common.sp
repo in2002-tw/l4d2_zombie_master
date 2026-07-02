@@ -88,6 +88,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 		return APLRes_SilentFailure;
 	}
     MarkNativeAsOptional("L4D_FindEntityByClassnameNearest");
+    MarkNativeAsOptional("L4D_FindEntityByClassnameWithin");
     CreateNative("L4D2_Infected_Alert_Constructor", Native_alert_constructor);
 	return APLRes_Success;
 }
