@@ -4,7 +4,7 @@
 #include <left4dhooks>
 
 #define PLUGIN_NAME			    "l4d_common_lagfix"
-#define PLUGIN_VERSION 			"1.04"
+#define PLUGIN_VERSION 			"1.05"
 #define CONFIG_FILENAME         PLUGIN_NAME
 #define DEBUG 0
 
@@ -34,6 +34,17 @@ public void OnPluginStart()
 	g_hCvarGibs = CreateConVar("l4d_common_lagfix_gibs","0","Include gib models in cycle. Probably not needed.",FCVAR_NOTIFY,true,0.0,true,1.0);
 	g_hCvarNotify = CreateConVar("l4d_common_lagfix_notify","1","Print info to clients.",FCVAR_NOTIFY,true,0.0,true,1.0);
     RegAdminCmd("l4d_common_lagfix_reload", CmdReload, ADMFLAG_ROOT,"Reload modelprecache and force cycle on all clients. For debugging.");
+}
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    if(GetEngineVersion()!=Engine_Left4Dead2 && GetEngineVersion()!=Engine_Left4Dead)
+	{
+		strcopy(error,err_max,"Plugin only supports L4D1/L4D2.");
+		return APLRes_SilentFailure;
+	}
+    MarkNativeAsOptional("L4D_GetClusterForOrigin");
+	return APLRes_Success;
 }
 
 public void OnAllPluginsLoaded()

@@ -34,7 +34,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.32 2026-06-29"
+#define PLUGIN_VERSION 			"0.9.33 2026-07-02"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -126,9 +126,6 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
 	if (DEBUG) LogMessage("[zm] OnPluginStart");
-
-	l4dhooks_updated = GetFeatureStatus(FeatureType_Native,"L4D_NavArea_IsBlocked")==FeatureStatus_Available;
-    if (!l4dhooks_updated) LogMessage("Please update l4dhooks to improve performance.");
 	load_gamemodes();
 	zm_stage = ZM_END;
 	CreateTimer(1.0,Timer_load_zm_global_settings);
@@ -1549,6 +1546,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 		strcopy(error,err_max,"Plugin only supports Left 4 Dead 2.");
 		return APLRes_SilentFailure;
 	}
+    MarkNativeAsOptional("L4D_NavArea_GetZ");
+    MarkNativeAsOptional("L4D_NavArea_IsBlocked");
 	RegPluginLibrary("l4d2_zombie_master");
 	return APLRes_Success;
 }
@@ -1565,7 +1564,9 @@ public void OnAllPluginsLoaded()
 	if (clown_world_enable) SetConVarFlags(clown_world_enable, GetConVarFlags(clown_world_enable) & ~FCVAR_NOTIFY);
     ptg_enable = FindConVar("l4d_path_to_goal_enable"); // Path to Goal - https://forums.alliedmods.net/showthread.php?t=352685
     if (ptg_enable) SetConVarFlags(ptg_enable, GetConVarFlags(ptg_enable) & ~FCVAR_NOTIFY);
+    l4dhooks_updated = GetFeatureStatus(FeatureType_Native,"L4D_NavArea_IsBlocked")==FeatureStatus_Available;
     getz_available = GetFeatureStatus(FeatureType_Native,"L4D_NavArea_GetZ")==FeatureStatus_Available;
+    if (!l4dhooks_updated || !getz_available) LogMessage("Please update l4dhooks to improve performance.");
 	SetCvarsZM();
 }
 

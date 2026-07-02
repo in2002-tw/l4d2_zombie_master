@@ -17,7 +17,7 @@
 #include <dhooks>
 #include <l4d_path_to_goal>
 
-#define PLUGIN_VERSION 			"1.50 2026-06-25"
+#define PLUGIN_VERSION 			"1.51 2026-07-02"
 
 public Plugin myinfo =
 {
@@ -108,6 +108,19 @@ public void OnPluginStart()
     HookEvent("finale_vehicle_incoming",  evtFinaleVehicle,  EventHookMode_PostNoCopy);
     }
 
+}
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    if(GetEngineVersion()!=Engine_Left4Dead2 && GetEngineVersion()!=Engine_Left4Dead)
+	{
+		strcopy(error,err_max,"Plugin only supports L4D1/L4D2.");
+		return APLRes_SilentFailure;
+	}
+    MarkNativeAsOptional("L4D_NavArea_GetZ");
+    MarkNativeAsOptional("L4D_NavArea_GetElevator");
+    CreateNative("L4D_Path_To_Goal", Native_RequestGuide);
+	return APLRes_Success;
 }
 
 public void OnAllPluginsLoaded()
@@ -508,12 +521,6 @@ public void OnClientPutInServer(int client)
 }
 
 // NATIVE //
-
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
-{
-	CreateNative("L4D_Path_To_Goal", Native_RequestGuide);
-	return APLRes_Success;
-}
 
 void Native_RequestGuide(Handle plugin, int numParams)
 {

@@ -7,7 +7,7 @@
 #include <left4dhooks>
 #include <l4d2_shoot_alert_common>
 
-#define PLUGIN_VERSION 		"2.17 2026-05-08"
+#define PLUGIN_VERSION 		"2.18 2026-07-02"
 public Plugin myinfo =
 {
 	name = "[L4D2] Weapon Fire Alert Common",
@@ -21,9 +21,6 @@ public void OnPluginStart()
 {   
     AutoExecConfig(true, CONFIG_FILENAME);
     RegAdminCmd("l4d2_shoot_alert_common_resetcvars", request_reset, ADMFLAG_ROOT, "Reload default cfg. Admins only.");
-    
-    l4dhooks_updated = GetFeatureStatus(FeatureType_Native,"L4D_FindEntityByClassnameNearest")==FeatureStatus_Available;
-    if (!l4dhooks_updated) LogMessage("WARNING: update l4dhooks for better performance.");
 
     populate_multipliers(); // Populate table of weaponid range multipliers.
     
@@ -81,6 +78,24 @@ public void OnPluginStart()
     HookEvent("triggered_car_alarm",    evtCarAlarm,       EventHookMode_PostNoCopy);
     CheckSurvival();
     GetCvars();
+}
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	if(GetEngineVersion()!=Engine_Left4Dead2)
+	{
+		strcopy(error,err_max,"Plugin only supports Left 4 Dead 2.");
+		return APLRes_SilentFailure;
+	}
+    MarkNativeAsOptional("L4D_FindEntityByClassnameNearest");
+    CreateNative("L4D2_Infected_Alert_Constructor", Native_alert_constructor);
+	return APLRes_Success;
+}
+
+public void OnAllPluginsLoaded()
+{
+	l4dhooks_updated = GetFeatureStatus(FeatureType_Native,"L4D_FindEntityByClassnameNearest")==FeatureStatus_Available;
+    if (!l4dhooks_updated) LogMessage("WARNING: update l4dhooks for better performance.");
 }
 
 void ConVarChanged_Gamemode(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -236,12 +251,6 @@ public void OnClientPutInServer(int client)
     if (!weapon_fire_hooked || client<=0 || client>MaxClients) return;
     timers[client] = null;
     spoken[client] = false;
-}
-
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
-{
-	CreateNative("L4D2_Infected_Alert_Constructor", Native_alert_constructor);
-	return APLRes_Success;
 }
 
 void Native_alert_constructor(Handle plugin, int numParams)
