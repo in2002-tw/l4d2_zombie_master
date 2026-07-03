@@ -411,7 +411,7 @@ int change_special_max(int ZOMBIECLASS, int new_max, bool draw = true)
 
 Action OnTakeDamageWitch(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3])
 {
-    if (damage>32.0)
+    if (damage>32.0 && IsValidEntity(inflictor))
     {
         char class[32];
         GetEntityClassname(inflictor, class, sizeof(class));
@@ -427,7 +427,7 @@ Action OnTakeDamageWitch(int victim, int &attacker, int &inflictor, float &damag
             }
         }
     }
-    request_update_glow(victim);
+    if (IsValidEntity(victim)) request_update_glow(victim);
     return Plugin_Continue;
 }
 

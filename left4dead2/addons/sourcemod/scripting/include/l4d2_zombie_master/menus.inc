@@ -497,7 +497,8 @@ void create_special_menu()
     else buffer = "-";
     AddMenuItem(menu_special, "item_7", buffer);
 
-    Format(buffer, sizeof(buffer), "%T", "Control (USE)", zm_language);
+    if (g_hCvarControl) Format(buffer, sizeof(buffer), "%T", "Control (USE)", zm_language);
+    else buffer = "-";
     buffer_add_rawline(buffer);
     AddMenuItem(menu_special, "item_8", buffer);
 	

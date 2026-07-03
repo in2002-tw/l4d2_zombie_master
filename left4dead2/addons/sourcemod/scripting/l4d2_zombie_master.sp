@@ -34,7 +34,7 @@
 bool DEBUG = false;
 
 #define PLUGIN_NAME			    "l4d2_zombie_master"
-#define PLUGIN_VERSION 			"0.9.33 2026-07-02"
+#define PLUGIN_VERSION 			"0.9.34 2026-07-03"
 #define GAMEDATA_FILE           PLUGIN_NAME
 #define CONFIG_FILENAME         PLUGIN_NAME
 
@@ -79,30 +79,10 @@ public Plugin myinfo =
 	url = "https://forums.alliedmods.net/showthread.php?t=352060, https://github.com/gvazdas/l4d2_zombie_master"
 }
 
-// Changelog for 0.9.3
-// 1. Fixed Specials not refunding if deleted immediately on spawn due to ability cooldown checks
-// 2. Ambush system: Specials that are vomited on, fighting Survivors, or burning, are not included in Freeze/Unfreeze commands.
-// 3. Other -> Give Up now asks for confirmation to avoid accidents.
-// 4. Traditional Chinese localization updated (thanks in2002)
-// 5. Major optimization to how start area navmeshes are collected + improved compatibility with custom maps.
-// 6. Common flow spawns fixed. Should fail less.
-// 7. PTG
-// 8. Menu overhaul.
-// 9. Items, weapons menus.
-// 10. Clientprefs.
-// 11. Spitter is more expensive and has 2x cooldown compared to other Specials.
-// 12. zm_hud_per_element
-// 13. Commons, spawner visible when inside walls
-// 14. l4dhooks native GetZ implemented. Spawner z position is always verified if on a valid navmesh.
-// 15. Glow fixes.
-// 16. ZM player name is now printed if you type /zm.
-// 17. Better tank run balance.
-// 18. Fix finale softlock for custom gamemodes. Finale stage will now correctly advance if ZM has >0 bank but not enough to spawn anything.
-// 19. Some features are not ready but implemented if you want to test them: zm_traps, zm_enable_jumpscare, zm_gnome.
-// 20. Fixed random Uncommons not spawning as expected.
-// 21. Survivors rescued bank added
-// 22. "Stop Sound" added to Other menu, makes background music and various looping sounds reset.
-// 23. ZM join makes you an alive Boomer for a split second to clear player state. This should remove vignettes and various looping sounds when you become ZM.
+// Changelog for 0.9.4
+// 1. Riot cost to 50
+// 2. Fix re1 maps - start and end saferoom may be the same one.
+// 3. New cvar: zm_enable_control
 
 // TO DO LIST:
 // 15. Performance bottlenecks.
@@ -396,8 +376,10 @@ public void OnPluginStart()
 	g_hNoZMWarn = CreateConVar("zm_nozm_warning", "1.0", "Warn players when there is no ZM.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 	
 	g_hCursed = CreateConVar("zm_cursed", "0", "Enable dumb stuff.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
-    g_hJumpscare = CreateConVar("zm_enable_jumpscare", "0", "Enable jumpscare.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
+    g_hJumpscare = CreateConVar("zm_enable_jumpscare", "0", "Enable audio jumpscare.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
     g_hGnome = CreateConVar("zm_enable_gnome", "1", "Gnome effect from the ZM weapons menu. 0 = off, 1 = all alive survivors, 2 = only survivors holding a gnome.",FCVAR_PROTECTED, true, 0.0, true, 2.0);
+
+    g_hCvarControl = CreateConVar("zm_enable_control", "1", "Allow ZM to control Special Infected.",FCVAR_PROTECTED, true, 0.0, true, 1.0);
 
     // r_screenoverlay is cheat-flagged by default; strip the flag so the gnome
     // effect can push a per-client overlay without sv_cheats.

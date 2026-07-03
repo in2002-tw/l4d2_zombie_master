@@ -385,7 +385,7 @@ int g_iPistol, g_iMagnum, g_iMelee, g_iSMG, g_iShotgunT1, g_iRifle, g_iShotgunT2
 bool g_bInventory,g_bWeapons;
 
 bool l4dhooks_updated, getz_available = false; // check version of l4dhooks
-ConVar g_hCvarDebug, g_hCvarAllow, z_max_player_zombies, infectedbots_enable, jukebox_horde, shoot_alert_enable, clown_world_enable, ptg_enable;
+ConVar g_hCvarDebug, g_hCvarAllow, z_max_player_zombies, infectedbots_enable, jukebox_horde, shoot_alert_enable, clown_world_enable, ptg_enable, g_hCvarControl;
 bool g_bCvarAllow;
 bool g_bSpawnWitchBride = false; // avoid crash
 
@@ -2401,6 +2401,8 @@ Action ZMControlSI(int client, int args)
         return Plugin_Continue;
         
     }
+
+    if (!g_hCvarControl.BoolValue) return Plugin_Continue;
     
     update_ZM_looktarget(false);
     if (!IsValidEntRef(entref_control))
