@@ -121,6 +121,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
     MarkNativeAsOptional("L4D_NavArea_GetElevator");
     MarkNativeAsOptional("L4D_NavArea_IsBlocked");
     MarkNativeAsOptional("L4D_NavArea_GetCorner");
+    MarkNativeAsOptional("L4D_NavArea_GetLadder");
     CreateNative("L4D_Path_To_Goal", Native_RequestGuide);
 	return APLRes_Success;
 }
