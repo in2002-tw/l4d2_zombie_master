@@ -552,175 +552,175 @@
 
 	"Inventory"
 	{
-		"zho"			"Inventory"
+		"zho"			"物品清單"
 	}
 
 	"Survivors"
 	{
-		"zho"			"Survivors"
+		"zho"			"倖存者"
 	}
 
 	"Molotov"
 	{
-		"zho"			"Molotov"
+		"zho"			"汽油彈"
 	}
 
 	"Pipe Bomb"
 	{
-		"zho"			"Pipe Bomb"
+		"zho"			"土製炸彈"
 	}
 
 	"Bile Jar"
 	{
-		"zho"			"Bile Jar"
+		"zho"			"膽汁罐"
 	}
 
 	"Medkit"
 	{
-		"zho"			"Medkit"
+		"zho"			"醫療包"
 	}
 
 	"Defib"
 	{
-		"zho"			"Defib"
+		"zho"			"電擊器"
 	}
 
 	"Incendiary"
 	{
-		"zho"			"Incendiary"
+		"zho"			"燃燒彈藥箱"
 	}
 
 	"Explosive"
 	{
-		"zho"			"Explosive"
+		"zho"			"高爆彈藥箱"
 	}
 
 	"Pills"
 	{
-		"zho"			"Pills"
+		"zho"			"止痛藥"
 	}
 
 	"Adrenaline"
 	{
-		"zho"			"Adrenaline"
+		"zho"			"腎上腺素"
 	}
 
 	"Traps"
 	{
-		"zho"		"Traps"
+		"zho"		"陷阱"
 	}
 	"Trap Panic Door"
 	{
-		"zho"		"Panic Door"
+		"zho"		"暴走警報門"
 	}
 	"Trap Alarm Car"
 	{
-		"zho"		"Alarm Car"
+		"zho"		"警報車陷阱"
 	}
 	"Trap armed door"
 	{
-		"zho"		"Panic door armed. Survivors who open it trigger a horde."
+		"zho"		"暴走警報門已設定。開門的倖存者將會觸發暴走屍潮。"
 	}
 	"Trap invalid door"
 	{
-		"zho"		"Aim at a normal door to arm it."
+		"zho"		"請瞄準一扇普通的門來設定陷阱。"
 	}
 	"Trap max reached"
 	{
-		"zho"		"Maximum traps of this type already armed."
+		"zho"		"此類型的陷阱已達設定上限。"
 	}
 	"Trap on cooldown"
 	{
-		"zho"		"Traps are on cooldown."
+		"zho"		"陷阱正在冷卻中。"
 	}
 	"Trap armed car"
 	{
-		"zho"		"Alarm car armed. If survivors set it off, the horde comes."
+		"zho"		"警報車已設定。若倖存者觸發警報，將會引來屍潮。"
 	}
 	"Trap invalid car"
 	{
-		"zho"		"Aim at a car to arm it."
+		"zho"		"請瞄準一輛汽車來設定陷阱。"
 	}
 	"Trap disabled"
 	{
-		"zho"		"Trap type disabled."
+		"zho"		"此陷阱類型已被禁用。"
 	}
 	"Trap Tornado"
 	{
-		"zho"		"Tornado"
+		"zho"		"龍捲風"
 	}
 	"Trap placed tornado"
 	{
-		"zho"		"Tornado placed."
+		"zho"		"龍捲風已放置。"
 	}
 	"Trap invalid tornado"
 	{
-		"zho"		"Aim at solid ground to place a tornado."
+		"zho"		"請瞄準堅固的地面來放置龍捲風。"
 	}
 
 	"Weapons"
 	{
-		"zho"			"Weapons"
+		"zho"			"武器"
 	}
 
 	"Pistol"
 	{
-		"zho"			"Pistol"
+		"zho"			"手槍"
 	}
 
 	"Magnum"
 	{
-		"zho"			"Magnum"
+		"zho"			"麥格農手槍"
 	}
 
 	"Melee"
 	{
-		"zho"			"Melee"
+		"zho"			"近戰武器"
 	}
 
 	"SMG"
 	{
-		"zho"			"SMG"
+		"zho"			"衝鋒槍"
 	}
 
 	"T1 Shotgun"
 	{
-		"zho"			"T1 Shotgun"
+		"zho"			"T1 散彈槍"
 	}
 
 	"Rifle"
 	{
-		"zho"			"Rifle"
+		"zho"			"突擊步槍"
 	}
 
 	"T2 Shotgun"
 	{
-		"zho"			"T2 Shotgun"
+		"zho"			"T2 散彈槍"
 	}
 
 	"Chainsaw"
 	{
-		"zho"			"Chainsaw"
+		"zho"			"電鋸"
 	}
 
 	"Gnome"
 	{
-		"zho"			"Gnome"
+		"zho"			"侏儒"
 	}
 
 	"Survivors rescued short"
 	{
-		"zho"			"Survivors rescued"
+		"zho"			"倖存者獲救"
 	}
 
 	"Survivors rescued"
 	{
-		"zho"			"Survivors rescued: bank added, cooldowns reset."
+		"zho"			"倖存者已獲救：點數銀行已增加，冷卻時間已重設。"
 	}
 
 	"Stop sound"
 	{
-		"zho"			"Stop Sound"
+		"zho"			"停止聲音"
 	}
 	
 
